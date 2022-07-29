@@ -13,6 +13,7 @@ import (
 	"time"
 
 	input "github.com/cosmos/cosmos-sdk/client/input"
+	"github.com/ignite-hq/cli/ignite/pkg/cosmoscmd"
 	"github.com/mitchellh/mapstructure"
 
 	"github.com/gorilla/mux"
@@ -102,6 +103,8 @@ func priceFeederCmdHandler(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+
+	cosmoscmd.SetPrefixes(cfg.Account.Prefix)
 
 	ctx, cancel := context.WithCancel(cmd.Context())
 	g, ctx := errgroup.WithContext(ctx)

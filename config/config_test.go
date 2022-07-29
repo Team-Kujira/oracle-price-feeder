@@ -28,7 +28,7 @@ func TestValidate(t *testing.T) {
 			},
 			Keyring: config.Keyring{
 				Backend: "test",
-				Dir:     "/Users/username/.umee",
+				Dir:     "/Users/username/.kujira",
 			},
 			RPC: config.RPC{
 				TMRPCEndpoint: "http://localhost:26657",

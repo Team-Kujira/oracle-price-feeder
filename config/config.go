@@ -110,6 +110,7 @@ type (
 		ChainID   string `toml:"chain_id" validate:"required"`
 		Address   string `toml:"address" validate:"required"`
 		Validator string `toml:"validator" validate:"required"`
+		Prefix    string `toml:"prefix" validate:"required"`
 	}
 
 	// Keyring defines the required Umee keyring configuration.

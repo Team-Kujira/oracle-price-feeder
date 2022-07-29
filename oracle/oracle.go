@@ -381,7 +381,7 @@ func (o *Oracle) GetParamCache(ctx context.Context, currentBlockHeigh int64) (or
 		return oracletypes.Params{}, err
 	}
 
-	o.checkAcceptList(params)
+	o.checkWhitelist(params)
 	o.paramCache.Update(currentBlockHeigh, params)
 	return params, nil
 }
@@ -404,7 +404,7 @@ func (o *Oracle) GetParams(ctx context.Context) (oracletypes.Params, error) {
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
-	queryResponse, err := queryClient.Params(ctx, &oracletypes.QueryParams{})
+	queryResponse, err := queryClient.Params(ctx, &oracletypes.QueryParamsRequest{})
 	if err != nil {
 		return oracletypes.Params{}, fmt.Errorf("failed to get x/oracle params: %w", err)
 	}
@@ -474,9 +474,9 @@ func NewProvider(
 	return nil, fmt.Errorf("provider %s not found", providerName)
 }
 
-func (o *Oracle) checkAcceptList(params oracletypes.Params) {
-	for _, denom := range params.AcceptList {
-		symbol := strings.ToUpper(denom.SymbolDenom)
+func (o *Oracle) checkWhitelist(params oracletypes.Params) {
+	for _, denom := range params.Whitelist {
+		symbol := strings.ToUpper(denom.Name)
 		if _, ok := o.prices[symbol]; !ok {
 			o.logger.Warn().Str("denom", symbol).Msg("price missing for required denom")
 		}
@@ -634,7 +634,7 @@ func GenerateExchangeRatesString(prices map[string]sdk.Dec) string {
 
 	// aggregate exchange rates as "<base>:<price>"
 	for base, avgPrice := range prices {
-		exchangeRates[i] = fmt.Sprintf("%s:%s", base, avgPrice.String())
+		exchangeRates[i] = fmt.Sprintf("%s%s", avgPrice.String(), base)
 		i++
 	}
 
