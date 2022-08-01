@@ -1,26 +1,13 @@
 # Oracle Price Feeder
 
-The `price-feeder` tool is an extension of Umee's `x/oracle` module, both of
-which are based on Terra's [x/oracle](https://github.com/terra-money/classic-core/tree/main/x/oracle)
-module and [oracle-feeder](https://github.com/terra-money/oracle-feeder). The
-core differences are as follows:
+This is a standalone version of [Umee's fantastic work](https://github.com/umee-network/umee/tree/main/price-feeder) migrating [Terra's oracle-feeder](https://github.com/terra-money/oracle-feeder) app to Go, and integrating it more closely with the Cosmos SDK.
 
-- All exchange rates must be quoted in USD or USD stablecoins.
-- No need or use of reference exchange rates (e.g. Luna).
-- No need or use of Tobin tax.
-- The `price-feeder` combines both `feeder` and `price-server` into a single
-  Golang-based application for better UX, testability, and integration.
+## Changes
 
-## Background
+- `exchange_rates` when broadcasting votes has been reverted to the Cosmos SDK denom string, as is used in Terra's Oracle module
+- `config.toml` supports an `account.prefix` propoerty, to provide compatibility across multiple networks
 
-The `price-feeder` tool is responsible for performing the following:
-
-1. Fetching and aggregating exchange rate price data from various providers, e.g.
-   Binance and Osmosis, based on operator configuration. These exchange rates
-   are exposed via an API and are used to feed into the main oracle process.
-2. Taking aggregated exchange rate price data and submitting those exchange rates
-   on-chain to Umee's `x/oracle` module following Umee's [Oracle](https://github.com/umee-network/umee/tree/main/x/oracle/spec)
-   specification.
+---
 
 ## Providers
 
