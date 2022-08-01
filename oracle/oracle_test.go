@@ -232,10 +232,10 @@ func (ots *OracleTestSuite) TestPrices() {
 
 	prices = ots.oracle.GetPrices()
 	ots.Require().Len(prices, 4)
-	ots.Require().Equal(sdk.MustNewDecFromStr("3.710916056220858266"), prices["UMEE"])
-	ots.Require().Equal(sdk.MustNewDecFromStr("3.717"), prices["XBT"])
-	ots.Require().Equal(sdk.MustNewDecFromStr("1"), prices["USDC"])
-	ots.Require().Equal(sdk.MustNewDecFromStr("1"), prices["USDT"])
+	ots.Require().Equal(sdk.MustNewDecFromStr("3.710916056220858266"), prices.AmountOf("UMEE"))
+	ots.Require().Equal(sdk.MustNewDecFromStr("3.717"), prices.AmountOf("XBT"))
+	ots.Require().Equal(sdk.MustNewDecFromStr("1"), prices.AmountOf("USDC"))
+	ots.Require().Equal(sdk.MustNewDecFromStr("1"), prices.AmountOf("USDT"))
 
 	// use one working provider and one provider with an incorrect exchange rate
 	ots.oracle.priceProviders = map[string]provider.Provider{
@@ -284,10 +284,10 @@ func (ots *OracleTestSuite) TestPrices() {
 	ots.Require().NoError(ots.oracle.SetPrices(context.TODO()))
 	prices = ots.oracle.GetPrices()
 	ots.Require().Len(prices, 4)
-	ots.Require().Equal(sdk.MustNewDecFromStr("3.70"), prices["UMEE"])
-	ots.Require().Equal(sdk.MustNewDecFromStr("3.717"), prices["XBT"])
-	ots.Require().Equal(sdk.MustNewDecFromStr("1"), prices["USDC"])
-	ots.Require().Equal(sdk.MustNewDecFromStr("1"), prices["USDT"])
+	ots.Require().Equal(sdk.MustNewDecFromStr("3.70"), prices.AmountOf("UMEE"))
+	ots.Require().Equal(sdk.MustNewDecFromStr("3.717"), prices.AmountOf("XBT"))
+	ots.Require().Equal(sdk.MustNewDecFromStr("1"), prices.AmountOf("USDC"))
+	ots.Require().Equal(sdk.MustNewDecFromStr("1"), prices.AmountOf("USDT"))
 
 	// use one working provider and one provider that fails
 	ots.oracle.priceProviders = map[string]provider.Provider{
@@ -336,10 +336,10 @@ func (ots *OracleTestSuite) TestPrices() {
 	ots.Require().NoError(ots.oracle.SetPrices(context.TODO()))
 	prices = ots.oracle.GetPrices()
 	ots.Require().Len(prices, 4)
-	ots.Require().Equal(sdk.MustNewDecFromStr("3.71"), prices["UMEE"])
-	ots.Require().Equal(sdk.MustNewDecFromStr("3.717"), prices["XBT"])
-	ots.Require().Equal(sdk.MustNewDecFromStr("1"), prices["USDC"])
-	ots.Require().Equal(sdk.MustNewDecFromStr("1"), prices["USDT"])
+	ots.Require().Equal(sdk.MustNewDecFromStr("3.71"), prices.AmountOf("UMEE"))
+	ots.Require().Equal(sdk.MustNewDecFromStr("3.717"), prices.AmountOf("XBT"))
+	ots.Require().Equal(sdk.MustNewDecFromStr("1"), prices.AmountOf("USDC"))
+	ots.Require().Equal(sdk.MustNewDecFromStr("1"), prices.AmountOf("USDT"))
 }
 
 func TestGenerateSalt(t *testing.T) {
@@ -354,26 +354,23 @@ func TestGenerateSalt(t *testing.T) {
 
 func TestGenerateExchangeRatesString(t *testing.T) {
 	testCases := map[string]struct {
-		input    map[string]sdk.Dec
+		input    sdk.DecCoins
 		expected string
 	}{
 		"empty input": {
-			input:    make(map[string]sdk.Dec),
+			input:    sdk.NewDecCoins(),
 			expected: "",
 		},
 		"single denom": {
-			input: map[string]sdk.Dec{
-				"UMEE": sdk.MustNewDecFromStr("3.72"),
-			},
-			expected: "UMEE:3.720000000000000000",
+			input:    sdk.NewDecCoins(sdk.NewDecCoinFromDec("UMEE", sdk.MustNewDecFromStr("3.72"))),
+			expected: "3.720000000000000000UMEE",
 		},
 		"multi denom": {
-			input: map[string]sdk.Dec{
-				"UMEE": sdk.MustNewDecFromStr("3.72"),
-				"ATOM": sdk.MustNewDecFromStr("40.13"),
-				"OSMO": sdk.MustNewDecFromStr("8.69"),
-			},
-			expected: "ATOM:40.130000000000000000,OSMO:8.690000000000000000,UMEE:3.720000000000000000",
+			input: sdk.NewDecCoins(sdk.NewDecCoinFromDec("UMEE", sdk.MustNewDecFromStr("3.72")),
+				sdk.NewDecCoinFromDec("ATOM", sdk.MustNewDecFromStr("40.13")),
+				sdk.NewDecCoinFromDec("OSMO", sdk.MustNewDecFromStr("8.69")),
+			),
+			expected: "40.130000000000000000ATOM,8.690000000000000000OSMO,3.720000000000000000UMEE",
 		},
 	}
 

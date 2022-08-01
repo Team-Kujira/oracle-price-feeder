@@ -104,7 +104,7 @@ type (
 		Threshold string `toml:"threshold" validate:"required"`
 	}
 
-	// Account defines account related configuration that is related to the Umee
+	// Account defines account related configuration that is related to the
 	// network and transaction signing functionality.
 	Account struct {
 		ChainID   string `toml:"chain_id" validate:"required"`
@@ -113,13 +113,13 @@ type (
 		Prefix    string `toml:"prefix" validate:"required"`
 	}
 
-	// Keyring defines the required Umee keyring configuration.
+	// Keyring defines the required keyring configuration.
 	Keyring struct {
 		Backend string `toml:"backend" validate:"required"`
 		Dir     string `toml:"dir" validate:"required"`
 	}
 
-	// RPC defines RPC configuration of both the Umee gRPC and Tendermint nodes.
+	// RPC defines RPC configuration of both the gRPC and Tendermint nodes.
 	RPC struct {
 		TMRPCEndpoint string `toml:"tmrpc_endpoint" validate:"required"`
 		GRPCEndpoint  string `toml:"grpc_endpoint" validate:"required"`

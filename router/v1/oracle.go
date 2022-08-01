@@ -9,5 +9,5 @@ import (
 // Oracle defines the Oracle interface contract that the v1 router depends on.
 type Oracle interface {
 	GetLastPriceSyncTimestamp() time.Time
-	GetPrices() map[string]sdk.Dec
+	GetPrices() sdk.DecCoins
 }

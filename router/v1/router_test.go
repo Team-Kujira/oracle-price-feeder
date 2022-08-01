@@ -21,9 +21,9 @@ import (
 var (
 	_ v1.Oracle = (*mockOracle)(nil)
 
-	mockPrices = map[string]sdk.Dec{
-		"ATOM": sdk.MustNewDecFromStr("34.84"),
-		"UMEE": sdk.MustNewDecFromStr("4.21"),
+	mockPrices = sdk.DecCoins{
+		sdk.NewDecCoinFromDec("ATOM", sdk.MustNewDecFromStr("34.84")),
+		sdk.NewDecCoinFromDec("UMEE", sdk.MustNewDecFromStr("4.21")),
 	}
 )
 
@@ -33,7 +33,7 @@ func (m mockOracle) GetLastPriceSyncTimestamp() time.Time {
 	return time.Now()
 }
 
-func (m mockOracle) GetPrices() map[string]sdk.Dec {
+func (m mockOracle) GetPrices() sdk.DecCoins {
 	return mockPrices
 }
 
@@ -99,7 +99,7 @@ func (rts *RouterTestSuite) TestPrices() {
 
 	var respBody v1.PricesResponse
 	rts.Require().NoError(json.Unmarshal(response.Body.Bytes(), &respBody))
-	rts.Require().Equal(respBody.Prices["ATOM"], mockPrices["ATOM"])
-	rts.Require().Equal(respBody.Prices["UMEE"], mockPrices["UMEE"])
+	rts.Require().Equal(respBody.Prices["ATOM"], mockPrices.AmountOf("ATOM"))
+	rts.Require().Equal(respBody.Prices["UMEE"], mockPrices.AmountOf("UMEE"))
 	rts.Require().Equal(respBody.Prices["FOO"], sdk.Dec{})
 }

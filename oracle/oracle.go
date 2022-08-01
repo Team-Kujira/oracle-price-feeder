@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -150,15 +149,14 @@ func (o *Oracle) GetLastPriceSyncTimestamp() time.Time {
 
 // GetPrices returns a copy of the current prices fetched from the oracle's
 // set of exchange rate providers.
-func (o *Oracle) GetPrices() map[string]sdk.Dec {
+func (o *Oracle) GetPrices() sdk.DecCoins {
 	o.mtx.RLock()
 	defer o.mtx.RUnlock()
-
 	// Creates a new array for the prices in the oracle
-	prices := make(map[string]sdk.Dec, len(o.prices))
+	prices := sdk.NewDecCoins()
 	for k, v := range o.prices {
 		// Fills in the prices with each value in the oracle
-		prices[k] = v
+		prices = prices.Add(sdk.NewDecCoinFromDec(k, v))
 	}
 
 	return prices
@@ -548,7 +546,7 @@ func (o *Oracle) tick(ctx context.Context) error {
 		return err
 	}
 
-	exchangeRatesStr := GenerateExchangeRatesString(o.prices)
+	exchangeRatesStr := GenerateExchangeRatesString(o.GetPrices())
 	hash := oracletypes.GetAggregateVoteHash(salt, exchangeRatesStr, valAddr)
 	preVoteMsg := &oracletypes.MsgAggregateExchangeRatePrevote{
 		Hash:      hash.String(), // hash of prices from the oracle
@@ -628,17 +626,7 @@ func GenerateSalt(length int) (string, error) {
 
 // GenerateExchangeRatesString generates a canonical string representation of
 // the aggregated exchange rates.
-func GenerateExchangeRatesString(prices map[string]sdk.Dec) string {
-	exchangeRates := make([]string, len(prices))
-	i := 0
-
-	// aggregate exchange rates as "<base>:<price>"
-	for base, avgPrice := range prices {
-		exchangeRates[i] = fmt.Sprintf("%s%s", avgPrice.String(), base)
-		i++
-	}
-
-	sort.Strings(exchangeRates)
-
-	return strings.Join(exchangeRates, ",")
+func GenerateExchangeRatesString(prices sdk.DecCoins) string {
+	prices.Sort()
+	return prices.String()
 }

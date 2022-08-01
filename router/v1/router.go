@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/gorilla/mux"
 	"github.com/rs/zerolog"
 
@@ -91,8 +92,12 @@ func (r *Router) healthzHandler() http.HandlerFunc {
 
 func (r *Router) pricesHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
+		prices := make(map[string]sdk.Dec, len(r.oracle.GetPrices()))
+		for _, price := range r.oracle.GetPrices() {
+			prices[price.Denom] = price.Amount
+		}
 		resp := PricesResponse{
-			Prices: r.oracle.GetPrices(),
+			Prices: prices,
 		}
 
 		httputil.RespondWithJSON(w, http.StatusOK, resp)
