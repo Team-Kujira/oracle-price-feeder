@@ -5,7 +5,7 @@ This is a standalone version of [Umee's fantastic work](https://github.com/umee-
 ## Changes
 
 - `exchange_rates` when broadcasting votes has been reverted to the Cosmos SDK denom string, as is used in Terra's Oracle module
-- `config.toml` supports an `account.prefix` propoerty, to provide compatibility across multiple networks
+- `config.toml` supports an `account.prefix` property, to provide compatibility across multiple networks
 
 ---
 
