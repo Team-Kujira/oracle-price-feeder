@@ -267,6 +267,7 @@ require (
 	github.com/tendermint/crypto v0.0.0-20191022145703-50d29ede1e15 // indirect
 	github.com/tendermint/fundraising v0.3.0 // indirect
 	github.com/tendermint/go-amino v0.16.0 // indirect
+	github.com/tendermint/spm v0.1.8 // indirect
 	github.com/tendermint/spn v0.2.1-0.20220609194312-7833ecf4454a // indirect
 	github.com/tendermint/tm-db v0.6.7 // indirect
 	github.com/tetafro/godot v1.4.11 // indirect

@@ -34,15 +34,24 @@ providers = [
 ]
 quote = "USD"
 
+[[currency_pairs]]
+base = "USDC"
+providers = [
+  "binance",
+  "kraken",
+  "huobi"
+]
+quote = "USDT"
+
 [account]
-address = "cosmos15nejfgcaanqpw25ru4arvfd0fwy6j8clccvwx4"
-chain_id = "cosmos-local-testnet"
-validator = "cosmosvaloper12tysz6mzrawenca2t3t7ltym4hfjj8a5upsn2k"
+address = "kujira..."
+chain_id = "kaiyo-1"
+validator = "kujiravaloper..."
+prefix = "kujira"
 
 [keyring]
-backend = "test"
-dir = "/Users/username/.cosmos"
-prefix = "cosmos"
+backend = "pass"
+dir = "~/.password-store/keyring-kujra"
 
 [rpc]
 grpc_endpoint = "localhost:9090"
@@ -54,7 +63,7 @@ enable_hostname = true
 enable_hostname_label = true
 enable_service_label = true
 enabled = true
-global_labels = [["chain-id", "cosmos-local-testnet"]]
+global_labels = [["chain-id", "kaiyo-1"]]
 service_name = "price-feeder"
 type = "prometheus"
 
