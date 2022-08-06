@@ -78,6 +78,8 @@ type (
 		GasAdjustment     float64            `toml:"gas_adjustment" validate:"required"`
 		ProviderTimeout   string             `toml:"provider_timeout"`
 		ProviderEndpoints []ProviderEndpoint `toml:"provider_endpoints" validate:"dive"`
+		EnableServer      bool               `toml:"enable_server"`
+		EnableVoter       bool               `toml:"enable_voter"`
 	}
 
 	// Server defines the API server configuration.

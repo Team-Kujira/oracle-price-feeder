@@ -1,4 +1,6 @@
 gas_adjustment = 1.5
+enable_server = true
+enable_voter = true
 
 [server]
 listen_addr = "0.0.0.0:7171"

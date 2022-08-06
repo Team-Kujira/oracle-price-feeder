@@ -43,9 +43,9 @@ const (
 var rootCmd = &cobra.Command{
 	Use:   "price-feeder [config-file]",
 	Args:  cobra.ExactArgs(1),
-	Short: "price-feeder is a side-car process for providing Umee's on-chain oracle with price data",
-	Long: `A side-car process that Umee validators must run in order to provide
-Umee's on-chain price oracle with price information. The price-feeder performs
+	Short: "price-feeder is a side-car process for providing an on-chain oracle with price data",
+	Long: `A side-car process that validators must run in order to provide
+an on-chain price oracle with price information. The price-feeder performs
 two primary functions. First, it is responsible for obtaining price information
 from various reliable data sources, e.g. exchanges, and exposing this data via
 an API. Secondly, the price-feeder consumes this data and periodically submits
@@ -179,14 +179,19 @@ func priceFeederCmdHandler(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	g.Go(func() error {
-		// start the process that observes and publishes exchange prices
-		return startPriceFeeder(ctx, logger, cfg, oracle, metrics)
-	})
-	g.Go(func() error {
-		// start the process that calculates oracle prices and votes
-		return startPriceOracle(ctx, logger, oracle)
-	})
+	if cfg.EnableServer {
+		g.Go(func() error {
+			// start the process that observes and publishes exchange prices
+			return startPriceFeeder(ctx, logger, cfg, oracle, metrics)
+		})
+	}
+
+	if cfg.EnableVoter {
+		g.Go(func() error {
+			// start the process that calculates oracle prices and votes
+			return startPriceOracle(ctx, logger, oracle)
+		})
+	}
 
 	// Block main process until all spawned goroutines have gracefully exited and
 	// signal has been captured in the main process or if an error occurs.
