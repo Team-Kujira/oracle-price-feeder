@@ -76,6 +76,7 @@ type (
 		RPC               RPC                `toml:"rpc" validate:"required,gt=0,dive,required"`
 		Telemetry         Telemetry          `toml:"telemetry"`
 		GasAdjustment     float64            `toml:"gas_adjustment" validate:"required"`
+		GasPrices         string             `toml:"gas_prices" validate:"required"`
 		ProviderTimeout   string             `toml:"provider_timeout"`
 		ProviderEndpoints []ProviderEndpoint `toml:"provider_endpoints" validate:"dive"`
 		EnableServer      bool               `toml:"enable_server"`

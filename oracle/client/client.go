@@ -67,6 +67,7 @@ func NewOracleClient(
 	validatorAddrString string,
 	grpcEndpoint string,
 	gasAdjustment float64,
+	gasPrices string,
 ) (OracleClient, error) {
 	oracleAddr, err := sdk.AccAddressFromBech32(oracleAddrString)
 	if err != nil {
@@ -88,6 +89,7 @@ func NewOracleClient(
 		Encoding:            cosmoscmd.MakeEncodingConfig(app.ModuleBasics),
 		GasAdjustment:       gasAdjustment,
 		GRPCEndpoint:        grpcEndpoint,
+		GasPrices:           gasPrices,
 	}
 
 	clientCtx, err := oracleClient.CreateClientContext()
