@@ -17,34 +17,10 @@ threshold = "2"
 base = "ATOM"
 providers = [
   "binance",
-]
-quote = "USDT"
-
-[[currency_pairs]]
-base = "ATOM"
-providers = [
   "kraken",
   "osmosis",
 ]
 quote = "USD"
-
-[[currency_pairs]]
-base = "USDT"
-providers = [
-  "kraken",
-  "gate",
-  "coinbase"
-]
-quote = "USD"
-
-[[currency_pairs]]
-base = "USDC"
-providers = [
-  "binance",
-  "kraken",
-  "huobi"
-]
-quote = "USDT"
 
 [account]
 address = "kujira..."
@@ -53,8 +29,8 @@ validator = "kujiravaloper..."
 prefix = "kujira"
 
 [keyring]
-backend = "pass"
-dir = "~/.password-store/keyring-kujra"
+backend = "file"
+dir = "/home/<user>/.kujira"
 
 [rpc]
 grpc_endpoint = "localhost:9090"
