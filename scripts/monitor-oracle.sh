@@ -9,10 +9,10 @@ SLACK_WEBHOOK="<http://YOUR-SLACK-WEBHOOK-ENDPOINT>"
 NOW=`date '+%F_%H:%M:%S'`;
 echo "$NOW Starting oracle-monitoring script..."
 
-# Check every 60 seconds if the missing vote count increases. If more than 3 misses votes in 60 sec, alert
+# Check every 120 seconds if the missing vote count increases. If more than 3 misses votes in 2min, alert
 while (true); do
     missed_votes=$(curl -s $LCD/oracle/validators/$VALIDATOR/miss  | jq ".miss_counter" | sed s/\"//g)
-    sleep 60
+    sleep 120
 
     last_missed_votes=$(curl -s $LCD/oracle/validators/$VALIDATOR/miss  | jq ".miss_counter" | sed s/\"//g)
     difference=$(expr $last_missed_votes - $missed_votes)
@@ -21,7 +21,7 @@ while (true); do
 
     if [[ "$difference" -ge 3 ]] ; then
         NOW=`date '+%F_%H:%M:%S'`;
-		TEXT="$NOW ORACLE-MONITOR: 3 or more oracle votes missed during the past 1min! -> $difference"
+	TEXT="$NOW ORACLE-MONITOR: 3 or more oracle votes missed during the past 2min! -> $difference"
         echo $TEXT
 
         # restart service
