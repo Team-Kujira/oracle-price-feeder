@@ -444,6 +444,9 @@ func NewProvider(
 	providerPairs ...types.CurrencyPair,
 ) (provider.Provider, error) {
 	switch providerName {
+	case config.ProviderFin:
+		return provider.NewFinProvider(endpoint), nil
+
 	case config.ProviderBinance:
 		return provider.NewBinanceProvider(ctx, logger, endpoint, providerPairs...)
 
