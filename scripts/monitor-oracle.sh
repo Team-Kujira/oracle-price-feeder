@@ -17,7 +17,7 @@ while (true); do
     last_missed_votes=$(curl -s $LCD/oracle/validators/$VALIDATOR/miss  | jq ".miss_counter" | sed s/\"//g)
     difference=$(expr $last_missed_votes - $missed_votes)
     NOW=`date '+%F_%H:%M:%S'`;
-    echo "$NOW: current missed / slashing window: $last_missed_votes - diff (1min): $difference"
+    echo "$NOW: current missed / slashing window: $last_missed_votes - diff (2min): $difference"
 
     if [[ "$difference" -ge 3 ]] ; then
         NOW=`date '+%F_%H:%M:%S'`;
