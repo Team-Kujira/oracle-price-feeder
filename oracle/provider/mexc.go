@@ -78,9 +78,9 @@ type (
 
 	// MexcCandle candle Mexc websocket channel "kline_1m" response.
 	MexcCandle struct {
-		Channel  string             `json:"channel"` // expect "push.kline"
-		Symbol   string             `json:"symbol"`  // Symbol ex.: ATOM_USDT
-		Metadata MexcCandleMetadata `json:"data"`    // Metadata for candle
+		//Channel  string             `json:"channel"` // expect "push.kline"
+		Symbol   string             `json:"symbol"` // Symbol ex.: ATOM_USDT
+		Metadata MexcCandleMetadata `json:"data"`   // Metadata for candle
 	}
 
 	// MexcSubscribeMsg Msg to subscribe all the tickers channels.
