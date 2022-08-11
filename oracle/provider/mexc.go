@@ -327,7 +327,8 @@ func (p *MexcProvider) setTickerPair(symbol string, ticker MexcTickerData) {
 	mt.Symbol = symbol
 	mt.LastPrice = strconv.FormatFloat(ticker.LastPrice, 'f', 5, 64)
 	mt.Volume = strconv.FormatFloat(ticker.Volume, 'f', 5, 64)
-
+	msg := mt.Symbol + " - $" + mt.LastPrice + " - V: " + mt.Volume
+	p.logger.Warn().Msgf("mexc got price: %d", msg)
 	p.tickers[symbol] = mt
 
 }
@@ -344,6 +345,9 @@ func (p *MexcProvider) setCandlePair(candle MexcCandle) {
 			candleList = append(candleList, c)
 		}
 	}
+	msg := strconv.FormatInt(candle.Metadata.TimeStamp, 10) + " - " + candle.Symbol + " - C: $" + strconv.FormatFloat(candle.Metadata.Close, 'f', 5, 64) + " - V: " + strconv.FormatFloat(candle.Metadata.Volume, 'f', 5, 64)
+	p.logger.Warn().Msgf("mexc got candle: %d", msg)
+
 	p.candles[candle.Symbol] = candleList
 }
 
