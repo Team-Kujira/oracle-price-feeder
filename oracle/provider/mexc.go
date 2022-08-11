@@ -478,7 +478,7 @@ func (p *MexcProvider) GetAvailablePairs() (map[string]struct{}, error) {
 // currencyPairToMexcPair receives a currency pair and return mexc
 // ticker symbol atomusdt@ticker.
 func currencyPairToMexcPair(cp types.CurrencyPair) string {
-	return strings.ToLower(cp.Base + "_" + cp.Quote)
+	return strings.ToUpper(cp.Base + "_" + cp.Quote)
 }
 
 // newMexcCandleSubscriptionMsg returns a new candle subscription Msg.

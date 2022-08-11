@@ -98,5 +98,5 @@ func TestMexcProvider_SubscribeCurrencyPairs(t *testing.T) {
 func TestMexcCurrencyPairToMexcPair(t *testing.T) {
 	cp := types.CurrencyPair{Base: "ATOM", Quote: "USDT"}
 	MexcSymbol := currencyPairToMexcPair(cp)
-	require.Equal(t, MexcSymbol, "atom_usdt")
+	require.Equal(t, MexcSymbol, "ATOM_USDT")
 }
