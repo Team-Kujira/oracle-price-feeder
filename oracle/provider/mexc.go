@@ -43,8 +43,8 @@ type (
 		logger          zerolog.Logger
 		mtx             sync.RWMutex
 		endpoints       config.ProviderEndpoint
-		tickers         map[string]MexcTicker      // Symbol => MexcTicker
-		candles         map[string][]MexcCandle    // Symbol => MexcCandle
+		tickers         map[string]MexcTicker         // Symbol => MexcTicker
+		candles         map[string][]MexcCandle       // Symbol => MexcCandle
 		subscribedPairs map[string]types.CurrencyPair // Symbol => types.CurrencyPair
 	}
 
@@ -55,9 +55,9 @@ type (
 	// it avoids to implement specific UnmarshalJSON.
 	MexcTicker struct {
 		Symbol    string `json:"symbol"` // Symbol ex.: ATOM_USDT
-		LastPrice string `json:"last"` // Last price ex.: 0.0025
+		LastPrice string `json:"last"`   // Last price ex.: 0.0025
 		Volume    string `json:"volume"` // Total traded base asset volume ex.: 1000
-		C         uint64 `json:"C"` // Statistics close time
+		C         uint64 `json:"C"`      // Statistics close time
 	}
 
 	// MexcCandleMetadata candle metadata used to compute tvwap price.
@@ -70,26 +70,26 @@ type (
 	// MexcCandle candle Mexc websocket channel "kline_1m" response.
 	MexcCandle struct {
 		Symbol   string             `json:"symbol"` // Symbol ex.: BTCUSDT
-		Metadata MexcCandleMetadata `json:"data"` // Metadata for candle
+		Metadata MexcCandleMetadata `json:"data"`   // Metadata for candle
 	}
 
 	// MexcSubscribeMsg Msg to subscribe all the tickers channels.
 	MexcSubscriptionMsg struct {
-		Method string   `json:"op"` // SUBSCRIBE/UNSUBSCRIBE
-		Params []string `json:"symbol"` // streams to subscribe ex.: usdtatom@ticker
-		ID     uint16   `json:"channel"`     // identify messages going back and forth
+		Method string   `json:"op"`      // SUBSCRIBE/UNSUBSCRIBE
+		Params []string `json:"symbol"`  // streams to subscribe ex.: usdtatom@ticker
+		ID     uint16   `json:"channel"` // identify messages going back and forth
 	}
 
 	// MexcSubscribeMsg Msg to subscribe all the tickers channels.
 	MexcCandleSubscriptionMsg struct {
-		OP       string  `json:"op"` // kline
-		Symbol   string  `json:"symbol"` // streams to subscribe ex.: usdtatom@ticker
-		Interval string  `json:"interval"` // Min1、Min5、Min15、Min30
+		OP       string `json:"op"`       // kline
+		Symbol   string `json:"symbol"`   // streams to subscribe ex.: usdtatom@ticker
+		Interval string `json:"interval"` // Min1、Min5、Min15、Min30
 	}
 
 	// MexcSubscribeMsg Msg to subscribe all the tickers channels.
 	MexcTickerSubscriptionMsg struct {
-		OP string       `json:"op"` // kline
+		OP string `json:"op"` // kline
 	}
 
 	// MexcPairSummary defines the response structure for a Mexc pair
@@ -373,8 +373,8 @@ func (p *MexcProvider) handleWebSocketMsgs(ctx context.Context) {
 }
 
 // reconnect closes the last WS connection then create a new one and subscribe to
-// all subscribed pairs in the ticker and candle pairs. If no ping is received 
-// within 1 minute, the connection will be disconnected. It is recommended to 
+// all subscribed pairs in the ticker and candle pairs. If no ping is received
+// within 1 minute, the connection will be disconnected. It is recommended to
 // send a ping for 10-20 seconds
 func (p *MexcProvider) reconnect() error {
 	p.wsClient.Close()
@@ -478,26 +478,26 @@ func currencyPairToMexcPair(cp types.CurrencyPair) string {
 	return strings.ToLower(cp.Base + "_" + cp.Quote)
 }
 
-// newMexcSubscriptionMsg returns a new subscription Msg.
-func newMexcSubscriptionMsg(params ...string) MexcSubscriptionMsg {
-	return MexcSubscriptionMsg{
-		Method: "sub.kline",
-		Params: params,
-	}
-}
+// // newMexcSubscriptionMsg returns a new subscription Msg.
+// func newMexcSubscriptionMsg(params ...string) MexcSubscriptionMsg {
+// 	return MexcSubscriptionMsg{
+// 		Method: "sub.kline",
+// 		Params: params,
+// 	}
+// }
 
 // newMexcCandleSubscriptionMsg returns a new candle subscription Msg.
 func newMexcCandleSubscriptionMsg(param string) MexcCandleSubscriptionMsg {
-	return MexcSubscriptionMsg{
-		OP: "sub.kline",
-		Symbol: params,
+	return MexcCandleSubscriptionMsg{
+		OP:       "sub.kline",
+		Symbol:   param,
 		Interval: "Min1",
 	}
 }
 
 // newMexcTickerSubscriptionMsg returns a new ticker subscription Msg.
 func newMexcTickerSubscriptionMsg() MexcTickerSubscriptionMsg {
-	return MexcSubscriptionMsg{
+	return MexcTickerSubscriptionMsg{
 		OP: "sub.overview",
 	}
 }
