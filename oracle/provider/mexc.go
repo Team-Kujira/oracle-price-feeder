@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -59,8 +60,8 @@ type (
 	}
 
 	MexcTickerData struct {
-		LastPrice string `json:"p"` // Last price ex.: 0.0025
-		Volume    string `json:"v"` // Total traded base asset volume ex.: 1000
+		LastPrice float64 `json:"p"` // Last price ex.: 0.0025
+		Volume    float64 `json:"v"` // Total traded base asset volume ex.: 1000
 	}
 
 	MexcTickerResult struct {
@@ -70,9 +71,9 @@ type (
 
 	// MexcCandleMetadata candle metadata used to compute tvwap price.
 	MexcCandleMetadata struct {
-		Close     string `json:"c"` // Price at close
-		TimeStamp int64  `json:"t"` // Close time in unix epoch ex.: 1645756200000
-		Volume    string `json:"v"` // Volume during period
+		Close     float64 `json:"c"` // Price at close
+		TimeStamp int64   `json:"t"` // Close time in unix epoch ex.: 1645756200000
+		Volume    float64 `json:"v"` // Volume during period
 	}
 
 	// MexcCandle candle Mexc websocket channel "kline_1m" response.
@@ -281,7 +282,7 @@ func (p *MexcProvider) messageReceived(messageType int, bz []byte) {
 	}
 
 	for i := range subscribed_pairs {
-		if len(tickerResp.Symbol[subscribed_pairs[i]].LastPrice) != 0 {
+		if tickerResp.Symbol[subscribed_pairs[i]].LastPrice != 0 {
 			p.setTickerPair(subscribed_pairs[i], tickerResp.Symbol[subscribed_pairs[i]])
 			telemetry.IncrCounter(
 				1,
@@ -298,7 +299,7 @@ func (p *MexcProvider) messageReceived(messageType int, bz []byte) {
 
 	candleErr = json.Unmarshal(bz, &candleResp)
 	// TODO: Adjust for MEXC response format
-	if len(candleResp.Metadata.Close) != 0 {
+	if candleResp.Metadata.Close != 0 {
 		p.setCandlePair(candleResp)
 		telemetry.IncrCounter(
 			1,
@@ -324,8 +325,8 @@ func (p *MexcProvider) setTickerPair(symbol string, ticker MexcTickerData) {
 	defer p.mtx.Unlock()
 	var mt MexcTicker
 	mt.Symbol = symbol
-	mt.LastPrice = ticker.LastPrice
-	mt.Volume = ticker.Volume
+	mt.LastPrice = strconv.FormatFloat(ticker.LastPrice, 'f', 5, 64)
+	mt.Volume = strconv.FormatFloat(ticker.Volume, 'f', 5, 64)
 
 	p.tickers[symbol] = mt
 
@@ -351,7 +352,7 @@ func (ticker MexcTicker) toTickerPrice() (TickerPrice, error) {
 }
 
 func (candle MexcCandle) toCandlePrice() (CandlePrice, error) {
-	return newCandlePrice("Mexc", candle.Symbol, candle.Metadata.Close, candle.Metadata.Volume,
+	return newCandlePrice("Mexc", candle.Symbol, strconv.FormatFloat(candle.Metadata.Close, 'f', 5, 64), strconv.FormatFloat(candle.Metadata.Volume, 'f', 5, 64),
 		candle.Metadata.TimeStamp)
 }
 
