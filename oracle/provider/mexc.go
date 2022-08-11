@@ -23,10 +23,6 @@ const (
 	mexcWSPath   = "/raw/ws"
 	mexcRestHost = "https://www.mexc.com"
 	mexcRestPath = "/open/api/v2/market/ticker"
-	// mexcTicker   = "ticker"
-	// mexcCandle   = "kline"
-	// mexcCoins    = "coin/list"
-	// mexcSymbols  = "symbols"
 )
 
 var _ Provider = (*MexcProvider)(nil)
@@ -35,8 +31,9 @@ type (
 	// MexcProvider defines an Oracle provider implemented by the Mexc public
 	// API.
 	//
-	// REF: https://binance-docs.github.io/apidocs/spot/en/#individual-symbol-mini-ticker-stream
-	// REF: https://binance-docs.github.io/apidocs/spot/en/#kline-candlestick-streams
+	// REF: https://mxcdevelop.github.io/apidocs/spot_v2_en/#ticker-information
+	// REF: https://mxcdevelop.github.io/apidocs/spot_v2_en/#k-line
+	// REF: https://mxcdevelop.github.io/apidocs/spot_v2_en/#overview
 	MexcProvider struct {
 		wsURL           url.URL
 		wsClient        *websocket.Conn
@@ -53,11 +50,22 @@ type (
 	// struct field name or its tag), preferring an exact match but also accepting a
 	// case-insensitive match. C field which is Statistics close time is not used, but
 	// it avoids to implement specific UnmarshalJSON.
+
 	MexcTicker struct {
 		Symbol    string `json:"symbol"` // Symbol ex.: ATOM_USDT
-		LastPrice string `json:"last"`   // Last price ex.: 0.0025
-		Volume    string `json:"volume"` // Total traded base asset volume ex.: 1000
+		LastPrice string `json:"p"`      // Last price ex.: 0.0025
+		Volume    string `json:"v"`      // Total traded base asset volume ex.: 1000
 		C         uint64 `json:"C"`      // Statistics close time
+	}
+
+	MexcTickerData struct {
+		LastPrice string `json:"p"` // Last price ex.: 0.0025
+		Volume    string `json:"v"` // Total traded base asset volume ex.: 1000
+	}
+
+	MexcTickerResult struct {
+		Channel string                    `json:"channel"` // expect "push.overview"
+		Symbol  map[string]MexcTickerData `json:"data"`    // this key is the Symbol ex.: ATOM_USDT
 	}
 
 	// MexcCandleMetadata candle metadata used to compute tvwap price.
@@ -69,21 +77,15 @@ type (
 
 	// MexcCandle candle Mexc websocket channel "kline_1m" response.
 	MexcCandle struct {
-		Symbol   string             `json:"symbol"` // Symbol ex.: BTCUSDT
-		Metadata MexcCandleMetadata `json:"data"`   // Metadata for candle
-	}
-
-	// MexcSubscribeMsg Msg to subscribe all the tickers channels.
-	MexcSubscriptionMsg struct {
-		Method string   `json:"op"`      // SUBSCRIBE/UNSUBSCRIBE
-		Params []string `json:"symbol"`  // streams to subscribe ex.: usdtatom@ticker
-		ID     uint16   `json:"channel"` // identify messages going back and forth
+		Channel  string             `json:"channel"` // expect "push.kline"
+		Symbol   string             `json:"symbol"`  // Symbol ex.: ATOM_USDT
+		Metadata MexcCandleMetadata `json:"data"`    // Metadata for candle
 	}
 
 	// MexcSubscribeMsg Msg to subscribe all the tickers channels.
 	MexcCandleSubscriptionMsg struct {
 		OP       string `json:"op"`       // kline
-		Symbol   string `json:"symbol"`   // streams to subscribe ex.: usdtatom@ticker
+		Symbol   string `json:"symbol"`   // streams to subscribe ex.: atom_usdt
 		Interval string `json:"interval"` // Min1、Min5、Min15、Min30
 	}
 
@@ -266,26 +268,32 @@ func (p *MexcProvider) messageReceived(messageType int, bz []byte) {
 	}
 
 	var (
-		tickerResp MexcTicker
+		tickerResp MexcTickerResult
 		tickerErr  error
 		candleResp MexcCandle
 		candleErr  error
 	)
 
 	tickerErr = json.Unmarshal(bz, &tickerResp)
-	// TODO: Filter to only subscribed symbols
-	if len(tickerResp.LastPrice) != 0 {
-		p.setTickerPair(tickerResp)
-		telemetry.IncrCounter(
-			1,
-			"websocket",
-			"message",
-			"type",
-			"ticker",
-			"provider",
-			config.ProviderMexc,
-		)
-		return
+	subscribed_pairs := make([]string, 0, len(p.subscribedPairs))
+	for _, cp := range p.subscribedPairs {
+		subscribed_pairs = append(subscribed_pairs, currencyPairToMexcPair(cp))
+	}
+
+	for i := range subscribed_pairs {
+		if len(tickerResp.Symbol[subscribed_pairs[i]].LastPrice) != 0 {
+			p.setTickerPair(subscribed_pairs[i], tickerResp.Symbol[subscribed_pairs[i]])
+			telemetry.IncrCounter(
+				1,
+				"websocket",
+				"message",
+				"type",
+				"ticker",
+				"provider",
+				config.ProviderMexc,
+			)
+			return
+		}
 	}
 
 	candleErr = json.Unmarshal(bz, &candleResp)
@@ -311,10 +319,16 @@ func (p *MexcProvider) messageReceived(messageType int, bz []byte) {
 		Msg("Error on receive message")
 }
 
-func (p *MexcProvider) setTickerPair(ticker MexcTicker) {
+func (p *MexcProvider) setTickerPair(symbol string, ticker MexcTickerData) {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
-	p.tickers[ticker.Symbol] = ticker
+	var mt MexcTicker
+	mt.Symbol = symbol
+	mt.LastPrice = ticker.LastPrice
+	mt.Volume = ticker.Volume
+
+	p.tickers[symbol] = mt
+
 }
 
 func (p *MexcProvider) setCandlePair(candle MexcCandle) {
@@ -460,31 +474,11 @@ func (p *MexcProvider) GetAvailablePairs() (map[string]struct{}, error) {
 	return availablePairs, nil
 }
 
-// // currencyPairToMexcTickerPair receives a currency pair and return mexc
-// // ticker symbol atomusdt@ticker.
-// func currencyPairToMexcTickerPair(cp types.CurrencyPair) string {
-// 	return strings.ToLower(cp.Base + "_" + cp.Quote)
-// }
-
-// // currencyPairToMexcCandlePair receives a currency pair and return mexc
-// // candle symbol atomusdt@kline_1m.
-// func currencyPairToMexcCandlePair(cp types.CurrencyPair) string {
-// 	return strings.ToLower(cp.String() + "@kline_1m")
-// }
-
 // currencyPairToMexcPair receives a currency pair and return mexc
 // ticker symbol atomusdt@ticker.
 func currencyPairToMexcPair(cp types.CurrencyPair) string {
 	return strings.ToLower(cp.Base + "_" + cp.Quote)
 }
-
-// // newMexcSubscriptionMsg returns a new subscription Msg.
-// func newMexcSubscriptionMsg(params ...string) MexcSubscriptionMsg {
-// 	return MexcSubscriptionMsg{
-// 		Method: "sub.kline",
-// 		Params: params,
-// 	}
-// }
 
 // newMexcCandleSubscriptionMsg returns a new candle subscription Msg.
 func newMexcCandleSubscriptionMsg(param string) MexcCandleSubscriptionMsg {
