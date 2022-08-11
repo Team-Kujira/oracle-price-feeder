@@ -22,6 +22,7 @@ const (
 
 	ProviderKraken   = "kraken"
 	ProviderBinance  = "binance"
+	ProviderMexc     = "mexc"
 	ProviderOsmosis  = "osmosis"
 	ProviderHuobi    = "huobi"
 	ProviderOkx      = "okx"
@@ -41,6 +42,7 @@ var (
 	SupportedProviders = map[string]struct{}{
 		ProviderKraken:   {},
 		ProviderBinance:  {},
+		ProviderMexc:     {},
 		ProviderOsmosis:  {},
 		ProviderOkx:      {},
 		ProviderHuobi:    {},
