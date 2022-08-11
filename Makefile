@@ -26,13 +26,18 @@ ldflags = -X price-feeder/cmd.Version=$(VERSION) \
 
 BUILD_FLAGS := -ldflags '$(ldflags)'
 
+CGO_FLAG = CGO_ENABLED=0
+ifeq ($(shell uname),Linux)
+  CGO_FLAG = CGO_ENABLED=1
+endif
+
 build: go.sum
 	@echo "--> Building..."
-	CGO_ENABLED=0 go build -mod=readonly -o $(BUILD_DIR)/ $(BUILD_FLAGS) ./...
+	$(CGO_FLAG) go build -mod=readonly -o $(BUILD_DIR)/ $(BUILD_FLAGS) ./...
 
 install: go.sum
 	@echo "--> Installing..."
-	CGO_ENABLED=0 go install -mod=readonly $(BUILD_FLAGS) ./...
+	$(CGO_FLAG) go install -mod=readonly $(BUILD_FLAGS) ./...
 
 .PHONY: build install
 
