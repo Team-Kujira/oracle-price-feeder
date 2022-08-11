@@ -21,7 +21,7 @@ import (
 const (
 	mexcWSHost   = "wbs.mexc.com"
 	mexcWSPath   = "/raw/ws"
-	mexcRestHost = "https://www.mexc.com/"
+	mexcRestHost = "https://www.mexc.com"
 	mexcRestPath = "/open/api/v2/market/ticker"
 	// mexcTicker   = "ticker"
 	// mexcCandle   = "kline"
