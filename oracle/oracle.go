@@ -453,6 +453,9 @@ func NewProvider(
 	case config.ProviderKraken:
 		return provider.NewKrakenProvider(ctx, logger, endpoint, providerPairs...)
 
+	case config.ProviderMexc:
+		return provider.NewMexcProvider(ctx, logger, endpoint, providerPairs...)
+
 	case config.ProviderOsmosis:
 		return provider.NewOsmosisProvider(endpoint), nil
 
