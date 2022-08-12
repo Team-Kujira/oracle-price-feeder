@@ -1,0 +1,9 @@
+services:
+  feeder:
+    build: .
+    environment:
+      - PRICE_FEEDER_PASS=mypass
+    ports:
+      - "7171:7171"
+    volumes:
+      - ./.kujira:/root/.kujira
