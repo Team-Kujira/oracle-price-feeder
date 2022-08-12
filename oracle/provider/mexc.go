@@ -151,7 +151,7 @@ func (p *MexcProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[string]
 	tickerPrices := make(map[string]TickerPrice, len(pairs))
 
 	for _, cp := range pairs {
-		key := cp.String()
+		key := currencyPairToMexcPair(cp)
 		price, err := p.getTickerPrice(key)
 		if err != nil {
 			return nil, err
