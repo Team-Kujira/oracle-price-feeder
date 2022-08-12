@@ -298,7 +298,6 @@ func (p *MexcProvider) messageReceived(messageType int, bz []byte) {
 	}
 
 	candleErr = json.Unmarshal(bz, &candleResp)
-	// TODO: Adjust for MEXC response format
 	if candleResp.Metadata.Close != 0 {
 		p.setCandlePair(candleResp)
 		telemetry.IncrCounter(
@@ -317,7 +316,7 @@ func (p *MexcProvider) messageReceived(messageType int, bz []byte) {
 		Int("length", len(bz)).
 		AnErr("ticker", tickerErr).
 		AnErr("candle", candleErr).
-		Msg("Error on receive message")
+		Msg("mexc: Error on receive message")
 }
 
 func (p *MexcProvider) setTickerPair(symbol string, ticker MexcTickerData) {
@@ -327,8 +326,9 @@ func (p *MexcProvider) setTickerPair(symbol string, ticker MexcTickerData) {
 	mt.Symbol = symbol
 	mt.LastPrice = strconv.FormatFloat(ticker.LastPrice, 'f', 5, 64)
 	mt.Volume = strconv.FormatFloat(ticker.Volume, 'f', 5, 64)
-	msg := mt.Symbol + " - $" + mt.LastPrice + " - V: " + mt.Volume
-	p.logger.Warn().Msgf("mexc got price: %d", msg)
+	// Uncomment below two lines to log retrieved ticker prices
+	// msg := mt.Symbol + " - $" + mt.LastPrice + " - V: " + mt.Volume
+	// p.logger.Warn().Msgf("mexc got price: %d", msg)
 	p.tickers[symbol] = mt
 
 }
@@ -345,9 +345,9 @@ func (p *MexcProvider) setCandlePair(candle MexcCandle) {
 			candleList = append(candleList, c)
 		}
 	}
-	msg := strconv.FormatInt(candle.Metadata.TimeStamp, 10) + " - " + candle.Symbol + " - C: $" + strconv.FormatFloat(candle.Metadata.Close, 'f', 5, 64) + " - V: " + strconv.FormatFloat(candle.Metadata.Volume, 'f', 5, 64)
-	p.logger.Warn().Msgf("mexc got candle: %d", msg)
-
+	// Uncomment below two lines to log retrieved candle prices
+	// msg := strconv.FormatInt(candle.Metadata.TimeStamp, 10) + " - " + candle.Symbol + " - C: $" + strconv.FormatFloat(candle.Metadata.Close, 'f', 5, 64) + " - V: " + strconv.FormatFloat(candle.Metadata.Volume, 'f', 5, 64)
+	// p.logger.Warn().Msgf("mexc got candle: %d", msg)
 	p.candles[candle.Symbol] = candleList
 }
 
@@ -372,7 +372,7 @@ func (p *MexcProvider) handleWebSocketMsgs(ctx context.Context) {
 			messageType, bz, err := p.wsClient.ReadMessage()
 			if err != nil {
 				// if some error occurs continue to try to read the next message.
-				p.logger.Err(err).Msg("could not read message")
+				p.logger.Err(err).Msg("mexc: could not read message")
 				continue
 			}
 
@@ -384,7 +384,7 @@ func (p *MexcProvider) handleWebSocketMsgs(ctx context.Context) {
 
 		case <-reconnectTicker.C:
 			if err := p.reconnect(); err != nil {
-				p.logger.Err(err).Msg("error reconnecting")
+				p.logger.Err(err).Msg("mexc: error reconnecting")
 				p.keepReconnecting()
 			}
 		}
@@ -398,10 +398,10 @@ func (p *MexcProvider) handleWebSocketMsgs(ctx context.Context) {
 func (p *MexcProvider) reconnect() error {
 	p.wsClient.Close()
 
-	p.logger.Debug().Msg("reconnecting websocket")
+	p.logger.Debug().Msg("mexc: reconnecting websocket")
 	wsConn, _, err := websocket.DefaultDialer.Dial(p.wsURL.String(), nil)
 	if err != nil {
-		return fmt.Errorf("error reconnect to mexc websocket: %w", err)
+		return fmt.Errorf("mexc: error reconnect to mexc websocket: %w", err)
 	}
 	p.wsClient = wsConn
 
@@ -425,13 +425,13 @@ func (p *MexcProvider) keepReconnecting() {
 
 	for time := range reconnectTicker.C {
 		if err := p.reconnect(); err != nil {
-			p.logger.Err(err).Msgf("attempted to reconnect %d times at %s", connectionTries, time.String())
+			p.logger.Err(err).Msgf("mexc: attempted to reconnect %d times at %s", connectionTries, time.String())
 			connectionTries++
 			continue
 		}
 
 		if connectionTries > maxReconnectionTries {
-			p.logger.Warn().Msgf("failed to reconnect %d times", connectionTries)
+			p.logger.Warn().Msgf("mexc: failed to reconnect %d times", connectionTries)
 		}
 		return
 	}
