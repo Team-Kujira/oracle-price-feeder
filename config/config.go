@@ -20,6 +20,7 @@ const (
 	defaultSrvReadTimeout  = 15 * time.Second
 	defaultProviderTimeout = 100 * time.Millisecond
 
+	ProviderFin      = "fin"
 	ProviderKraken   = "kraken"
 	ProviderBinance  = "binance"
 	ProviderOsmosis  = "osmosis"
@@ -39,6 +40,7 @@ var (
 	// SupportedProviders defines a lookup table of all the supported currency API
 	// providers.
 	SupportedProviders = map[string]struct{}{
+		ProviderFin:      {},
 		ProviderKraken:   {},
 		ProviderBinance:  {},
 		ProviderOsmosis:  {},
@@ -56,12 +58,14 @@ var (
 	// SupportedQuotes defines a lookup table for which assets we support
 	// using as quotes.
 	SupportedQuotes = map[string]struct{}{
-		DenomUSD: {},
-		"USDC":   {},
-		"USDT":   {},
-		"DAI":    {},
-		"BTC":    {},
-		"ETH":    {},
+		DenomUSD:  {},
+		"AXLUSDC": {},
+		"USDC":    {},
+		"USDT":    {},
+		"DAI":     {},
+		"BTC":     {},
+		"ETH":     {},
+		"ATOM":    {},
 	}
 )
 

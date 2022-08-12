@@ -13,6 +13,7 @@ This is a standalone version of [Umee's fantastic work](https://github.com/umee-
 
 The list of current supported providers:
 
+- [FIN](https://fin.kujira.app)
 - [Binance](https://www.binance.com/en)
 - [Coinbase](https://www.coinbase.com/)
 - [Gate](https://www.gate.io/)

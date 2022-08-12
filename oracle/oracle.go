@@ -217,7 +217,7 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 				return err
 			case <-time.After(o.providerTimeout):
 				telemetry.IncrCounter(1, "failure", "provider", "type", "timeout")
-				return fmt.Errorf("provider timed out")
+				return fmt.Errorf("provider timed out: %s", providerName)
 			}
 
 			// flatten and collect prices based on the base currency per provider
@@ -444,6 +444,9 @@ func NewProvider(
 	providerPairs ...types.CurrencyPair,
 ) (provider.Provider, error) {
 	switch providerName {
+	case config.ProviderFin:
+		return provider.NewFinProvider(endpoint), nil
+
 	case config.ProviderBinance:
 		return provider.NewBinanceProvider(ctx, logger, endpoint, providerPairs...)
 
