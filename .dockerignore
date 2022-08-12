@@ -4,5 +4,6 @@
 build/
 config.toml
 .kujira
+.env
 Dockerfile
 docker-compose.yml
