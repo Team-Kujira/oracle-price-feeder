@@ -151,7 +151,7 @@ func (p *MexcProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[string]
 	tickerPrices := make(map[string]TickerPrice, len(pairs))
 
 	for _, cp := range pairs {
-		key := currencyPairToMexcPair(cp)
+		key := cp.String()
 		price, err := p.getTickerPrice(key)
 		if err != nil {
 			return nil, err
@@ -276,14 +276,14 @@ func (p *MexcProvider) messageReceived(messageType int, bz []byte) {
 	)
 
 	tickerErr = json.Unmarshal(bz, &tickerResp)
-	subscribed_pairs := make([]string, 0, len(p.subscribedPairs))
+	// subscribed_pairs := make([]string, 0, len(p.subscribedPairs))
 	for _, cp := range p.subscribedPairs {
-		subscribed_pairs = append(subscribed_pairs, currencyPairToMexcPair(cp))
-	}
+		// 	subscribed_pairs = append(subscribed_pairs, currencyPairToMexcPair(cp))
+		// }
 
-	for i := range subscribed_pairs {
-		if tickerResp.Symbol[subscribed_pairs[i]].LastPrice != 0 {
-			p.setTickerPair(subscribed_pairs[i], tickerResp.Symbol[subscribed_pairs[i]])
+		// for i := range subscribed_pairs {
+		if tickerResp.Symbol[currencyPairToMexcPair(cp)].LastPrice != 0 {
+			p.setTickerPair(cp.String(), tickerResp.Symbol[currencyPairToMexcPair(cp)])
 			telemetry.IncrCounter(
 				1,
 				"websocket",
