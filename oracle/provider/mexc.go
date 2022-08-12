@@ -278,10 +278,6 @@ func (p *MexcProvider) messageReceived(messageType int, bz []byte) {
 	tickerErr = json.Unmarshal(bz, &tickerResp)
 	// subscribed_pairs := make([]string, 0, len(p.subscribedPairs))
 	for _, cp := range p.subscribedPairs {
-		// 	subscribed_pairs = append(subscribed_pairs, currencyPairToMexcPair(cp))
-		// }
-
-		// for i := range subscribed_pairs {
 		if tickerResp.Symbol[currencyPairToMexcPair(cp)].LastPrice != 0 {
 			p.setTickerPair(cp.String(), tickerResp.Symbol[currencyPairToMexcPair(cp)])
 			telemetry.IncrCounter(
