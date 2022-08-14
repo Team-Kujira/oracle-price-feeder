@@ -134,6 +134,7 @@ func priceFeederCmdHandler(cmd *cobra.Command, args []string) error {
 		rpcTimeout,
 		cfg.Account.Address,
 		cfg.Account.Validator,
+		cfg.Account.FeeGranter,
 		cfg.RPC.GRPCEndpoint,
 		cfg.GasAdjustment,
 		cfg.GasPrices,

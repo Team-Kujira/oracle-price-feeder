@@ -40,6 +40,7 @@ type (
 		OracleAddrString    string
 		ValidatorAddr       sdk.ValAddress
 		ValidatorAddrString string
+		FeeGranterAddr      sdk.AccAddress
 		Encoding            cosmoscmd.EncodingConfig
 		GasPrices           string
 		GasAdjustment       float64
@@ -65,6 +66,7 @@ func NewOracleClient(
 	rpcTimeout time.Duration,
 	oracleAddrString string,
 	validatorAddrString string,
+	feeGranterAddrString string,
 	grpcEndpoint string,
 	gasAdjustment float64,
 	gasPrices string,
@@ -86,6 +88,7 @@ func NewOracleClient(
 		OracleAddrString:    oracleAddrString,
 		ValidatorAddr:       sdk.ValAddress(validatorAddrString),
 		ValidatorAddrString: validatorAddrString,
+		FeeGranterAddr:      sdk.AccAddress(feeGranterAddrString),
 		Encoding:            cosmoscmd.MakeEncodingConfig(app.ModuleBasics),
 		GasAdjustment:       gasAdjustment,
 		GRPCEndpoint:        grpcEndpoint,
@@ -260,6 +263,7 @@ func (oc OracleClient) CreateClientContext() (client.Context, error) {
 		GenerateOnly:      false,
 		Offline:           false,
 		SkipConfirm:       true,
+		FeeGranter:        oc.FeeGranterAddr,
 	}
 
 	return clientCtx, nil
