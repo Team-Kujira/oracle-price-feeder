@@ -3,8 +3,8 @@ package oracle
 import (
 	"testing"
 
+	oracletypes "github.com/Team-Kujira/core/x/oracle/types"
 	"github.com/stretchr/testify/require"
-	oracletypes "kujira/x/oracle/types"
 )
 
 func TestParamCacheIsOutdated(t *testing.T) {

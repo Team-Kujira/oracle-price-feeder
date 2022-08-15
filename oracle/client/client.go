@@ -9,7 +9,7 @@ import (
 	"os"
 	"time"
 
-	"kujira/app"
+	"github.com/Team-Kujira/core/app"
 
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/flags"
