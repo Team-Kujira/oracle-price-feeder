@@ -13,6 +13,8 @@ RUN ldd /go/bin/price-feeder | tr -s '[:blank:]' '\n' | grep '^/' | \
 
 FROM debian:buster
 
+RUN apt-get update && apt-get install ca-certificates -y
+
 COPY --from=build /go/bin/price-feeder /bin/price-feeder
 COPY --from=build /deps /
 
