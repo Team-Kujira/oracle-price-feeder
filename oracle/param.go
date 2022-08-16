@@ -1,6 +1,6 @@
 package oracle
 
-import oracletypes "kujira/x/oracle/types"
+import oracletypes "github.com/Team-Kujira/core/x/oracle/types"
 
 const (
 	// paramsCacheInterval represents the amount of blocks

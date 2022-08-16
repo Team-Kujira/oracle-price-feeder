@@ -15,11 +15,11 @@ import (
 )
 
 const (
-	finRestURL        = "https://api.kujira.app"
-	finPairsEndpoint  = "/api/coingecko/pairs"
-	finTickersEndpoint = "/api/coingecko/tickers"
-	finCandlesEndpoint = "/api/trades/candles"
-	finCandleBinSizeMinutes = 5
+	finRestURL               = "https://api.kujira.app"
+	finPairsEndpoint         = "/api/coingecko/pairs"
+	finTickersEndpoint       = "/api/coingecko/tickers"
+	finCandlesEndpoint       = "/api/trades/candles"
+	finCandleBinSizeMinutes  = 5
 	finCandleWindowSizeHours = 240
 )
 
@@ -36,9 +36,9 @@ type (
 	}
 
 	FinTicker struct {
-		Base string `json:"base_currency"`
+		Base   string `json:"base_currency"`
 		Target string `json:"target_currency"`
-		Symbol string  `json:"ticker_id"`
+		Symbol string `json:"ticker_id"`
 		Price  string `json:"last_price"`
 		Volume string `json:"base_volume"`
 	}
@@ -48,7 +48,7 @@ type (
 	}
 
 	FinCandle struct {
-		Bin   string  `json:"bin"`
+		Bin    string `json:"bin"`
 		Close  string `json:"close"`
 		Volume string `json:"volume"`
 	}
@@ -58,9 +58,9 @@ type (
 	}
 
 	FinPair struct {
-		Base  string `json:"base"`
-		Target string `json:"target"`
-		Symbol string `json:"ticker_id"`
+		Base    string `json:"base"`
+		Target  string `json:"target"`
+		Symbol  string `json:"ticker_id"`
 		Address string `json:"pool_id"`
 	}
 )
@@ -96,7 +96,7 @@ func (p FinProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[string]Ti
 	}
 	tickerSymbolPairs := make(map[string]types.CurrencyPair, len(pairs))
 	for _, pair := range pairs {
-		tickerSymbolPairs[pair.Base + "_" + pair.Quote] = pair
+		tickerSymbolPairs[pair.Base+"_"+pair.Quote] = pair
 	}
 	tickerPrices := make(map[string]TickerPrice, len(pairs))
 	for _, ticker := range tickers.Tickers {
@@ -120,11 +120,14 @@ func (p FinProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[string]Ti
 		tickerPrices[pair.String()] = TickerPrice{Price: price, Volume: volume}
 	}
 	for _, pair := range pairs {
-		_, ok := tickerPrices[pair.String()];
+		_, ok := tickerPrices[pair.String()]
 		if !ok {
 			return nil, fmt.Errorf("FIN ticker price missing for pair: %s", pair.String())
 		}
 	}
+	fmt.Println("tickerPrices")
+	fmt.Println(tickerPrices)
+
 	return tickerPrices, nil
 }
 
@@ -139,13 +142,13 @@ func (p FinProvider) GetCandlePrices(pairs ...types.CurrencyPair) (map[string][]
 		if !ok {
 			return nil, fmt.Errorf("FIN contract address lookup failed for pair: %s", pair.String())
 		}
-		_, ok = candlePricesPairs[pair.Base];
+		_, ok = candlePricesPairs[pair.Base]
 		if !ok {
 			candlePricesPairs[pair.String()] = []CandlePrice{}
 		}
 		windowEndTime := time.Now()
 		windowStartTime := windowEndTime.Add(-finCandleWindowSizeHours * time.Hour)
-		path := fmt.Sprintf("%s%s?contract=%s&precision=%d&from=%s&to=%s", 
+		path := fmt.Sprintf("%s%s?contract=%s&precision=%d&from=%s&to=%s",
 			p.baseURL,
 			finCandlesEndpoint,
 			address,
@@ -181,6 +184,8 @@ func (p FinProvider) GetCandlePrices(pairs ...types.CurrencyPair) (map[string][]
 		}
 		candlePricesPairs[pair.String()] = candlePrices
 	}
+	fmt.Println("candlePricesPairs")
+	fmt.Println(candlePricesPairs)
 	return candlePricesPairs, nil
 }
 
@@ -222,7 +227,7 @@ func (p FinProvider) getFinPairAddresses() (map[string]string, error) {
 	}
 	pairAddresses := make(map[string]string, len(finPairs.Pairs))
 	for _, pair := range finPairs.Pairs {
-		pairAddresses[strings.ToUpper(pair.Base + pair.Target)] = pair.Address
+		pairAddresses[strings.ToUpper(pair.Base+pair.Target)] = pair.Address
 	}
 	return pairAddresses, nil
 }
@@ -232,7 +237,7 @@ func (p FinProvider) SubscribeCurrencyPairs(pairs ...types.CurrencyPair) error {
 	return nil
 }
 
-func strToDec(str string) (sdk.Dec) {
+func strToDec(str string) sdk.Dec {
 	if strings.Contains(str, ".") {
 		split := strings.Split(str, ".")
 		if len(split[1]) > 18 {

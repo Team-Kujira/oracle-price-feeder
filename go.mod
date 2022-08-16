@@ -2,10 +2,9 @@ module price-feeder
 
 go 1.18
 
-replace kujira v0.5.0 => ../core
-
 require (
 	github.com/BurntSushi/toml v1.2.0
+	github.com/Team-Kujira/core v0.5.1-0.20220815082403-b0bfcea6324f
 	github.com/cosmos/cosmos-sdk v0.45.6
 	github.com/go-playground/validator/v10 v10.11.0
 	github.com/golangci/golangci-lint v1.47.2
@@ -23,7 +22,6 @@ require (
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	google.golang.org/grpc v1.48.0
 	gopkg.in/yaml.v3 v3.0.1
-	kujira v0.5.0
 )
 
 require (
@@ -297,7 +295,7 @@ require (
 	golang.org/x/text v0.3.7 // indirect
 	golang.org/x/tools v0.1.12-0.20220628192153-7743d1d949f1 // indirect
 	golang.org/x/xerrors v0.0.0-20220517211312-f3a8303e98df // indirect
-	google.golang.org/genproto v0.0.0-20220728213248-dd149ef739b9 // indirect
+	google.golang.org/genproto v0.0.0-20220805133916-01dd62135a58 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
 	gopkg.in/ini.v1 v1.66.6 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect

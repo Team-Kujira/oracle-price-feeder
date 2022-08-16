@@ -21,7 +21,7 @@ import (
 	"price-feeder/oracle/types"
 	pfsync "price-feeder/pkg/sync"
 
-	oracletypes "kujira/x/oracle/types"
+	oracletypes "github.com/Team-Kujira/core/x/oracle/types"
 
 	"github.com/cosmos/cosmos-sdk/telemetry"
 )

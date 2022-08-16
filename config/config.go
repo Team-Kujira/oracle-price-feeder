@@ -116,10 +116,11 @@ type (
 	// Account defines account related configuration that is related to the
 	// network and transaction signing functionality.
 	Account struct {
-		ChainID   string `toml:"chain_id" validate:"required"`
-		Address   string `toml:"address" validate:"required"`
-		Validator string `toml:"validator" validate:"required"`
-		Prefix    string `toml:"prefix" validate:"required"`
+		ChainID    string `toml:"chain_id" validate:"required"`
+		Address    string `toml:"address" validate:"required"`
+		Validator  string `toml:"validator" validate:"required"`
+		FeeGranter string `toml:"fee_granter"`
+		Prefix     string `toml:"prefix" validate:"required"`
 	}
 
 	// Keyring defines the required keyring configuration.
@@ -273,7 +274,7 @@ func ParseConfig(configPath string) (Config, error) {
 	}
 
 	for base, providers := range pairs {
-		if _, ok := pairs[base]["mock"]; !ok && len(providers) < 3 {
+		if _, ok := pairs[base]["mock"]; !ok && len(providers) < 1 {
 			return cfg, fmt.Errorf("must have at least three providers for %s", base)
 		}
 	}
