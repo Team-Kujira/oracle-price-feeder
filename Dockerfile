@@ -1,8 +1,6 @@
 FROM golang:1.18-buster AS build
 
-WORKDIR /usr/lib
-RUN git clone https://github.com/Team-Kujira/core.git
-ADD . oracle-price-feeder
+ADD . /usr/lib/oracle-price-feeder
 WORKDIR /usr/lib/oracle-price-feeder
 RUN make install
 
