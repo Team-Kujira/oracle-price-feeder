@@ -88,7 +88,7 @@ func NewOracleClient(
 		OracleAddrString:    oracleAddrString,
 		ValidatorAddr:       sdk.ValAddress(validatorAddrString),
 		ValidatorAddrString: validatorAddrString,
-		FeeGranterAddr:      sdk.AccAddress(feeGranterAddrString),
+		FeeGranterAddr:      sdk.MustAccAddressFromBech32(feeGranterAddrString),
 		Encoding:            cosmoscmd.MakeEncodingConfig(app.ModuleBasics),
 		GasAdjustment:       gasAdjustment,
 		GRPCEndpoint:        grpcEndpoint,
