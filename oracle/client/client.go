@@ -76,6 +76,8 @@ func NewOracleClient(
 		return OracleClient{}, err
 	}
 
+	feegrantAddrErr, _ := sdk.AccAddressFromBech32(feeGranterAddrString)
+
 	oracleClient := OracleClient{
 		Logger:              logger.With().Str("module", "oracle_client").Logger(),
 		ChainID:             chainID,
@@ -88,7 +90,7 @@ func NewOracleClient(
 		OracleAddrString:    oracleAddrString,
 		ValidatorAddr:       sdk.ValAddress(validatorAddrString),
 		ValidatorAddrString: validatorAddrString,
-		FeeGranterAddr:      sdk.MustAccAddressFromBech32(feeGranterAddrString),
+		FeeGranterAddr:      feegrantAddrErr,
 		Encoding:            cosmoscmd.MakeEncodingConfig(app.ModuleBasics),
 		GasAdjustment:       gasAdjustment,
 		GRPCEndpoint:        grpcEndpoint,
