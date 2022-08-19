@@ -5,12 +5,13 @@ Change `VERSION` to the release you want to build.
 
 ```bash
 VERSION=master
-git clone https://github.com/Defiantlabs/oracle-price-feeder.git
+git clone https://github.com/Team-Kujira/oracle-price-feeder.git
 cd oracle-price-feeder/dockerfile || exit
 docker build --build-arg VERSION=$VERSION -t price-feeder:latest .
 ```
 
 ## Create `config.toml`
+Edit your `address`, `validator`, `grpc_endpoint`, `tmrpc_endpoint` you may need to modifify your firewall to allow this container to reach your chain-node. See [offical docs](https://docs.kujira.app/validators/run-a-node/oracle-price-feeder) for more details.
 
 ```bash
 sudo tee config.toml <<EOF
@@ -98,16 +99,4 @@ docker run \
 -v "$PWD"/config.toml:/root/price-feeder/config.toml \
 -v "$PWD"/client.toml:/root/.kujira/config/client.toml \
 -it price-feeder /root/price-feeder/config.toml
-```
-
-
-## Debug Docker Image
-this command can be used to interact with the container to test your password and keyring.
-```bash
-docker run \
---env PRICE_FEEDER_PASS=password \
--v ~/.kujira/keyring-file:/root/.kujira/keyring-file \
--v "$PWD"/config.toml:/root/price-feeder/config.toml \
--v "$PWD"/client.toml:/root/.kujira/config/client.toml \
--it --entrypoint /bin/sh price-feeder
 ```
