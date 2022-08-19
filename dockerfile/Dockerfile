@@ -21,5 +21,8 @@ RUN COMMIT="$(git rev-parse HEAD)"; BUILD_TAGS=muslc CGO_ENABLED=1 go install -m
 FROM alpine:latest 
 COPY --from=oracle /go/bin/price-feeder /usr/local/bin
 COPY --from=core /go/bin/kujirad /usr/local/bin
+RUN apk add --no-cache bash
 RUN apk add --no-cache gcc
-ENTRYPOINT ["/usr/local/bin/price-feeder"]
+COPY commands.sh /scripts/commands.sh
+RUN ["chmod", "+x", "/scripts/commands.sh"]
+ENTRYPOINT ["/scripts/commands.sh"]
