@@ -72,32 +72,42 @@ EOF
 ```
 
 ## Create `client.toml`
+change node to your favorite `rpc` node
 
 ```bash
 sudo tee client.toml <<EOF
 chain-id = "kaiyo-1"
 keyring-backend = "file"
 output = "text"
-node = "tcp://localhost:26657"
+node = "tcp://rpc-kujira.synergynodes.com:80"
 broadcast-mode = "sync"
 EOF
 ```
 
-## Run Test Shell
+## Recover oracle `keyring-file` to local file
 ```bash
-docker run \
---env PRICE_FEEDER_PASS=password \
--v "$PWD"/config.toml:/root/price-feeder/config.toml \
--v "$PWD"/client.toml:/root/.kujira/config/client.toml \
--it --entrypoint /bin/sh oracle-price-feeder
+kujirad keys add oracle --keyring-backend file --recover
 ```
-
+In the kujira home directory (~/.kujira/) you should see the `keyring-file` folder.  This will be mounted as a volume when running the docker container.
 
 ## Run Docker Image
 ```bash
 docker run \
 --env PRICE_FEEDER_PASS=password \
+-v ~/.kujira/keyring-file:/root/.kujira/keyring-file \
 -v "$PWD"/config.toml:/root/price-feeder/config.toml \
 -v "$PWD"/client.toml:/root/.kujira/config/client.toml \
--it oracle-price-feeder /root/price-feeder/config.toml
+-it price-feeder /root/price-feeder/config.toml
+```
+
+
+## Debug Docker Image
+this command can be used to interact with the container to test your password and keyring.
+```bash
+docker run \
+--env PRICE_FEEDER_PASS=password \
+-v ~/.kujira/keyring-file:/root/.kujira/keyring-file \
+-v "$PWD"/config.toml:/root/price-feeder/config.toml \
+-v "$PWD"/client.toml:/root/.kujira/config/client.toml \
+-it --entrypoint /bin/sh price-feeder
 ```
