@@ -6,7 +6,7 @@ LCD="<http://YOUR-ENDPOINT:1317>"
 # create your slack integration: https://api.slack.com/apps
 SLACK_WEBHOOK="<http://YOUR-SLACK-WEBHOOK-ENDPOINT>"
 
-# create you rown Telegram API https://core.telegram.org/bots/api 
+# create you rown Telegram API https://core.telegram.org/bots/api  
 TELEGRAM_BOT_TOKEN="<TELEGRAM_API_TOKEN>"                          
 CHAT_ID="<TELEGRAM_CHAT_ID>"
 
