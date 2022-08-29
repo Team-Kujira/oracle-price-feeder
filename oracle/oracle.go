@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"net/http"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/rs/zerolog"
@@ -70,6 +71,7 @@ type Oracle struct {
 	lastPriceSyncTS time.Time
 	prices          map[string]sdk.Dec
 	paramCache      ParamCache
+	healthchecks    map[string]http.Client
 }
 
 func New(
@@ -79,6 +81,7 @@ func New(
 	providerTimeout time.Duration,
 	deviations map[string]sdk.Dec,
 	endpoints map[string]config.ProviderEndpoint,
+	healthchecksConfig []config.Healthchecks,
 ) *Oracle {
 	providerPairs := make(map[string][]types.CurrencyPair)
 
@@ -88,6 +91,20 @@ func New(
 				Base:  pair.Base,
 				Quote: pair.Quote,
 			})
+		}
+	}
+
+	healthchecks := make(map[string]http.Client)
+	for _, healthcheck := range healthchecksConfig {
+		timeout, err := time.ParseDuration(healthcheck.Timeout)
+		if err != nil {
+			logger.Warn().
+				Str("timeout", healthcheck.Timeout).
+				Msg("failed to parse healthcheck timeout, skipping configuration")
+		} else {
+			healthchecks[healthcheck.URL] = http.Client{
+				Timeout: timeout,
+			}
 		}
 	}
 
@@ -102,6 +119,7 @@ func New(
 		deviations:      deviations,
 		paramCache:      ParamCache{},
 		endpoints:       endpoints,
+		healthchecks:    healthchecks,
 	}
 }
 
@@ -610,9 +628,20 @@ func (o *Oracle) tick(ctx context.Context) error {
 
 		o.previousPrevote = nil
 		o.previousVotePeriod = 0
+		o.healthchecksPing()
 	}
 
 	return nil
+}
+
+func (o *Oracle) healthchecksPing() {
+    for url, client := range o.healthchecks {
+		o.logger.Info().Msg("updating healthcheck status")
+		_, err := client.Get(url)
+		if err != nil {
+			o.logger.Warn().Msg("healthcheck ping failed")
+		}
+	}
 }
 
 // GenerateSalt generates a random salt, size length/2,  as a HEX encoded string.

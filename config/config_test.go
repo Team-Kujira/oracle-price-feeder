@@ -48,7 +48,7 @@ func TestValidate(t *testing.T) {
 			GasAdjustment: 1.5,
 			GasPrices: "0.00125ukuji",
 			Healthchecks: []config.Healthchecks{
-				{URL: "https://hc-ping.com/HEALTHCHECK-UUID"},
+				{URL: "https://hc-ping.com/HEALTHCHECK-UUID", Timeout: "200ms"},
 			},
 		}
 	}
@@ -204,6 +204,7 @@ global_labels = [["chain-id", "kujira-local-testnet"]]
 
 [[healthchecks]]
 url = "https://hc-ping.com/HEALTHCHECK-UUID"
+timeout = "200ms"
 `)
 	_, err = tmpFile.Write(content)
 	require.NoError(t, err)

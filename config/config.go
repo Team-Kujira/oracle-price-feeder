@@ -183,6 +183,7 @@ type (
 
 	Healthchecks struct {
 		URL string `toml:"url" validate:"required"`
+		Timeout string `toml:"timeout" validate:"required"`
 	}
 )
 
