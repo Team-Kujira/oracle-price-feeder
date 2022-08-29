@@ -47,6 +47,9 @@ func TestValidate(t *testing.T) {
 			},
 			GasAdjustment: 1.5,
 			GasPrices: "0.00125ukuji",
+			Healthchecks: []config.Healthchecks{
+				{URL: "https://hc-ping.com/HEALTHCHECK-UUID"},
+			},
 		}
 	}
 	emptyPairs := validConfig()
@@ -198,6 +201,9 @@ enable_hostname_label = true
 enable_service_label = true
 prometheus_retention = 120
 global_labels = [["chain-id", "kujira-local-testnet"]]
+
+[[healthchecks]]
+url = "https://hc-ping.com/HEALTHCHECK-UUID"
 `)
 	_, err = tmpFile.Write(content)
 	require.NoError(t, err)
