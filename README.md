@@ -101,6 +101,13 @@ The `rpc` section contains the Tendermint and Cosmos application gRPC endpoints.
 These endpoints are used to query for on-chain data that pertain to oracle
 functionality and for broadcasting signed pre-vote and vote oracle messages.
 
+### `healthchecks`
+
+The `healthchecks` section defines optional healthcheck endpoints to ping on successful
+oracle votes. This provides a simple alerting solution which can integrate with a service
+like [healthchecks.io](https://healthchecks.io). It's recommended to configure additional
+monitoring since third-party services can be unreliable.
+
 ## Keyring
 
 Our keyring must be set up to sign transactions before running the price feeder.
