@@ -116,10 +116,11 @@ type (
 	// Account defines account related configuration that is related to the
 	// network and transaction signing functionality.
 	Account struct {
-		ChainID   string `toml:"chain_id" validate:"required"`
-		Address   string `toml:"address" validate:"required"`
-		Validator string `toml:"validator" validate:"required"`
-		Prefix    string `toml:"prefix" validate:"required"`
+		ChainID    string `toml:"chain_id" validate:"required"`
+		Address    string `toml:"address" validate:"required"`
+		Validator  string `toml:"validator" validate:"required"`
+		FeeGranter string `toml:"fee_granter"`
+		Prefix     string `toml:"prefix" validate:"required"`
 	}
 
 	// Keyring defines the required keyring configuration.

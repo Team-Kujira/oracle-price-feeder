@@ -9,7 +9,7 @@ import (
 	"os"
 	"time"
 
-	"kujira/app"
+	"github.com/Team-Kujira/core/app"
 
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/flags"
@@ -40,6 +40,7 @@ type (
 		OracleAddrString    string
 		ValidatorAddr       sdk.ValAddress
 		ValidatorAddrString string
+		FeeGranterAddr      sdk.AccAddress
 		Encoding            cosmoscmd.EncodingConfig
 		GasPrices           string
 		GasAdjustment       float64
@@ -65,6 +66,7 @@ func NewOracleClient(
 	rpcTimeout time.Duration,
 	oracleAddrString string,
 	validatorAddrString string,
+	feeGranterAddrString string,
 	grpcEndpoint string,
 	gasAdjustment float64,
 	gasPrices string,
@@ -73,6 +75,8 @@ func NewOracleClient(
 	if err != nil {
 		return OracleClient{}, err
 	}
+
+	feegrantAddrErr, _ := sdk.AccAddressFromBech32(feeGranterAddrString)
 
 	oracleClient := OracleClient{
 		Logger:              logger.With().Str("module", "oracle_client").Logger(),
@@ -86,6 +90,7 @@ func NewOracleClient(
 		OracleAddrString:    oracleAddrString,
 		ValidatorAddr:       sdk.ValAddress(validatorAddrString),
 		ValidatorAddrString: validatorAddrString,
+		FeeGranterAddr:      feegrantAddrErr,
 		Encoding:            cosmoscmd.MakeEncodingConfig(app.ModuleBasics),
 		GasAdjustment:       gasAdjustment,
 		GRPCEndpoint:        grpcEndpoint,
@@ -260,6 +265,7 @@ func (oc OracleClient) CreateClientContext() (client.Context, error) {
 		GenerateOnly:      false,
 		Offline:           false,
 		SkipConfirm:       true,
+		FeeGranter:        oc.FeeGranterAddr,
 	}
 
 	return clientCtx, nil
