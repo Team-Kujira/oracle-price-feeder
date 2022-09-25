@@ -14,6 +14,14 @@ func (cp CurrencyPair) String() string {
 	return cp.Base + cp.Quote
 }
 
+func (cp CurrencyPair) Label(quoteDefault string) string {
+	if quoteDefault == cp.Quote {
+		return cp.Base
+	} else {
+		return cp.Base + "-" + cp.Quote
+	}
+}
+
 // MapPairsToSlice returns the map of currency pairs as slice.
 func MapPairsToSlice(mapPairs map[string]CurrencyPair) []CurrencyPair {
 	currencyPairs := make([]CurrencyPair, len(mapPairs))

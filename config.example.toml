@@ -2,6 +2,7 @@ gas_adjustment = 1.5
 gas_prices = "0.00125ukuji"
 enable_server = true
 enable_voter = true
+quote_default = "USD"
 
 [server]
 listen_addr = "0.0.0.0:7171"

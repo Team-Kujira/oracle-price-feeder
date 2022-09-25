@@ -65,6 +65,7 @@ type Oracle struct {
 	oracleClient       client.OracleClient
 	deviations         map[string]sdk.Dec
 	endpoints          map[string]config.ProviderEndpoint
+	quoteDefault       string
 
 	mtx             sync.RWMutex
 	lastPriceSyncTS time.Time
@@ -76,6 +77,7 @@ func New(
 	logger zerolog.Logger,
 	oc client.OracleClient,
 	currencyPairs []config.CurrencyPair,
+	quoteDefault string,
 	providerTimeout time.Duration,
 	deviations map[string]sdk.Dec,
 	endpoints map[string]config.ProviderEndpoint,
@@ -96,6 +98,7 @@ func New(
 		closer:          pfsync.NewCloser(),
 		oracleClient:    oc,
 		providerPairs:   providerPairs,
+		quoteDefault:    quoteDefault,
 		priceProviders:  make(map[string]provider.Provider),
 		previousPrevote: nil,
 		providerTimeout: providerTimeout,
@@ -184,8 +187,8 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 		}
 
 		for _, pair := range currencyPairs {
-			if _, ok := requiredRates[pair.Base]; !ok {
-				requiredRates[pair.Base] = struct{}{}
+			if _, ok := requiredRates[pair.Label(o.quoteDefault)]; !ok {
+				requiredRates[pair.Label(o.quoteDefault)] = struct{}{}
 			}
 		}
 
@@ -225,7 +228,7 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 			// e.g.: {ProviderKraken: {"ATOM": <price, volume>, ...}}
 			mtx.Lock()
 			for _, pair := range currencyPairs {
-				success := SetProviderTickerPricesAndCandles(providerName, providerPrices, providerCandles, prices, candles, pair)
+				success := SetProviderTickerPricesAndCandles(providerName, providerPrices, providerCandles, prices, candles, pair, o.quoteDefault)
 				if !success {
 					mtx.Unlock()
 					return fmt.Errorf("failed to find any exchange rates in provider responses")
@@ -255,9 +258,9 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 	if len(computedPrices) != len(requiredRates) {
 		return fmt.Errorf("unable to get prices for all exchange candles")
 	}
-	for base := range requiredRates {
-		if _, ok := computedPrices[base]; !ok {
-			return fmt.Errorf("reported prices were not equal to required rates, missed: %s", base)
+	for label := range requiredRates {
+		if _, ok := computedPrices[label]; !ok {
+			return fmt.Errorf("reported prices were not equal to required rates, missed: %s", label)
 		}
 	}
 
@@ -346,6 +349,7 @@ func SetProviderTickerPricesAndCandles(
 	prices map[string]provider.TickerPrice,
 	candles map[string][]provider.CandlePrice,
 	pair types.CurrencyPair,
+	quoteDefault string,
 ) (success bool) {
 	if _, ok := providerPrices[providerName]; !ok {
 		providerPrices[providerName] = make(map[string]provider.TickerPrice)
@@ -358,10 +362,10 @@ func SetProviderTickerPricesAndCandles(
 	cp, candlesOk := candles[pair.String()]
 
 	if pricesOk {
-		providerPrices[providerName][pair.Base] = tp
+		providerPrices[providerName][pair.Label(quoteDefault)] = tp
 	}
 	if candlesOk {
-		providerCandles[providerName][pair.Base] = cp
+		providerCandles[providerName][pair.Label(quoteDefault)] = cp
 	}
 
 	return pricesOk || candlesOk

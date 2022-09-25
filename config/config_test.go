@@ -137,6 +137,7 @@ func TestParseConfig_Valid(t *testing.T) {
 
 	content := []byte(`
 gas_adjustment = 1.5
+quote_default = "USD"
 
 [server]
 listen_addr = "0.0.0.0:99999"

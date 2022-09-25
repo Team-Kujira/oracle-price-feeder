@@ -105,6 +105,7 @@ func (ots *OracleTestSuite) SetupSuite() {
 				Providers: []string{config.ProviderCoinbase},
 			},
 		},
+		"USD",
 		time.Millisecond*100,
 		make(map[string]sdk.Dec),
 		make(map[string]config.ProviderEndpoint),
@@ -417,6 +418,7 @@ func TestSuccessSetProviderTickerPricesAndCandles(t *testing.T) {
 		prices,
 		candles,
 		pair,
+		"USD",
 	)
 
 	require.True(t, success, "It should successfully set the prices")
@@ -435,6 +437,7 @@ func TestFailedSetProviderTickerPricesAndCandles(t *testing.T) {
 			Base:  "ATOM",
 			Quote: "USDT",
 		},
+		"USD",
 	)
 
 	require.False(t, success, "It should failed to set the prices, prices and candle are empty")

@@ -75,6 +75,7 @@ type (
 	// Config defines all necessary price-feeder configuration parameters.
 	Config struct {
 		Server            Server             `toml:"server"`
+		QuoteDefault      string             `toml:"quote_default" validate:"required"`
 		CurrencyPairs     []CurrencyPair     `toml:"currency_pairs" validate:"required,gt=0,dive,required"`
 		Deviations        []Deviation        `toml:"deviation_thresholds"`
 		Account           Account            `toml:"account" validate:"required,gt=0,dive,required"`
