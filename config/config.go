@@ -21,6 +21,7 @@ const (
 	defaultProviderTimeout = 100 * time.Millisecond
 
 	ProviderFin      = "fin"
+	ProviderLiquid   = "liquid"
 	ProviderKraken   = "kraken"
 	ProviderBinance  = "binance"
 	ProviderMexc     = "mexc"
@@ -42,6 +43,7 @@ var (
 	// providers.
 	SupportedProviders = map[string]struct{}{
 		ProviderFin:      {},
+		ProviderLiquid:   {},
 		ProviderKraken:   {},
 		ProviderBinance:  {},
 		ProviderMexc:     {},
@@ -178,6 +180,12 @@ type (
 
 		// Websocket endpoint for the provider, ex. "stream.binance.com:9443"
 		Websocket string `toml:"websocket"`
+
+		SupplyGrpc string `toml:"supply_grpc"`
+
+		StakeGrpc string `toml:"stake_grpc"`
+
+		StakeAccount string `toml:"stake_account"`
 	}
 )
 
