@@ -26,8 +26,8 @@ func TestLiquidProvider_GetTickerPrices(t *testing.T) {
 		volume := "2396974.02000000"
 
 		tickerMap := map[string]LiquidTicker{}
-		tickerMap["STATOMATOM"] = LiquidTicker{
-			Symbol:    "STATOMATOM",
+		tickerMap["stATOMATOM"] = LiquidTicker{
+			Symbol:    "stATOMATOM",
 			LastPrice: lastPrice,
 			Volume:    volume,
 		}
@@ -37,8 +37,8 @@ func TestLiquidProvider_GetTickerPrices(t *testing.T) {
 		prices, err := p.GetTickerPrices(types.CurrencyPair{Base: "stATOM", Quote: "ATOM"})
 		require.NoError(t, err)
 		require.Len(t, prices, 1)
-		require.Equal(t, sdk.MustNewDecFromStr(lastPrice), prices["STATOMATOM"].Price)
-		require.Equal(t, sdk.MustNewDecFromStr(volume), prices["STATOMATOM"].Volume)
+		require.Equal(t, sdk.MustNewDecFromStr(lastPrice), prices["stATOMATOM"].Price)
+		require.Equal(t, sdk.MustNewDecFromStr(volume), prices["stATOMATOM"].Volume)
 	})
 
 	t.Run("valid_request_multi_ticker", func(t *testing.T) {
@@ -46,8 +46,8 @@ func TestLiquidProvider_GetTickerPrices(t *testing.T) {
 		volume := "2396974.02000000"
 
 		tickerMap := map[string]LiquidTicker{}
-		tickerMap["STATOMATOM"] = LiquidTicker{
-			Symbol:    "STATOMATOM",
+		tickerMap["stATOMATOM"] = LiquidTicker{
+			Symbol:    "stATOMATOM",
 			LastPrice: lastPricestAtom,
 			Volume:    volume,
 		}
@@ -58,8 +58,8 @@ func TestLiquidProvider_GetTickerPrices(t *testing.T) {
 		)
 		require.NoError(t, err)
 		require.Len(t, prices, 2)
-		require.Equal(t, sdk.MustNewDecFromStr(lastPricestAtom), prices["STATOMATOM"].Price)
-		require.Equal(t, sdk.MustNewDecFromStr(volume), prices["STATOMATOM"].Volume)
+		require.Equal(t, sdk.MustNewDecFromStr(lastPricestAtom), prices["stATOMATOM"].Price)
+		require.Equal(t, sdk.MustNewDecFromStr(volume), prices["stATOMATOM"].Volume)
 	})
 
 	t.Run("invalid_request_invalid_ticker", func(t *testing.T) {

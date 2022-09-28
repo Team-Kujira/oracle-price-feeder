@@ -72,16 +72,6 @@ type (
 		C         uint64 `json:"C"`      // Statistics close time
 	}
 
-	LiquidTickerData struct {
-		LastPrice float64 `json:"p"` // Last price ex.: 0.0025
-		Volume    float64 `json:"v"` // Total traded base asset volume ex.: 1000
-	}
-
-	LiquidTickerResult struct {
-		Channel string                      `json:"channel"` // expect "push.overview"
-		Symbol  map[string]LiquidTickerData `json:"data"`    // this key is the Symbol ex.: ATOM_USDT
-	}
-
 	// LiquidStake
 	LiquidStake struct {
 		Responses []LiquidStakeDetail `json:"delegation_responses"` // expect "push.kline"
@@ -89,8 +79,8 @@ type (
 
 	// LiquidStakeDetail
 	LiquidStakeDetail struct {
-		Delegation []LiquidStakeShares  `json:"delegation"` // expect "push.kline"
-		Balance    []LiquidLiquidDetail `json:"balance"`    // expect "push.kline"
+		Delegation LiquidStakeShares  `json:"delegation"` // expect "push.kline"
+		Balance    LiquidLiquidDetail `json:"balance"`    // expect "push.kline"
 	}
 
 	// LiquidLiquid
@@ -100,26 +90,26 @@ type (
 
 	// LiquidLiquidDetail
 	LiquidLiquidDetail struct {
-		ticker string  `json:"denom"`  // expect "uatom"
-		amount float64 `json:"amount"` // expect "123456"
+		Ticker string `json:"denom"`  // expect "uatom"
+		Amount string `json:"amount"` // expect "123456"
 	}
 
 	// LiquidStakeShares
 	LiquidStakeShares struct {
-		Delegator string  `json:"delegator_address"` // expect "cosmos10uxaa5gkxpeungu2c9qswx035v6t3r24w6v2r6dxd858rq2mzknqj8ru28"
-		Validator string  `json:"validator_address"` // expect "cosmosvaloper1qwl879nx9t6kef4supyazayf7vjhennyh568ys"
-		Shares    float64 `json:"shares"`            // expect "123.456"
+		Delegator string `json:"delegator_address"` // expect "cosmos10uxaa5gkxpeungu2c9qswx035v6t3r24w6v2r6dxd858rq2mzknqj8ru28"
+		Validator string `json:"validator_address"` // expect "cosmosvaloper1qwl879nx9t6kef4supyazayf7vjhennyh568ys"
+		Shares    string `json:"shares"`            // expect "123.456"
 	}
 
-	// LiquidStakeShares
+	// LiquidSupply
 	LiquidSupply struct {
 		Data []LiquidSupplyDetail `json:"supply"` // expect "array"
 	}
 
 	// LiquidStakeShares
 	LiquidSupplyDetail struct {
-		ticker string  `json:"denom"`  // expect "stuatom"
-		amount float64 `json:"amount"` // expect "push.kline"
+		Ticker string `json:"denom"`  // expect "stuatom"
+		Amount string `json:"amount"` // expect "123456"
 	}
 )
 
@@ -198,9 +188,11 @@ func (p *LiquidProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[strin
 	}
 
 	for _, tr := range stakeResp.Responses {
-		for _, d := range tr.Delegation {
-			stake += d.Shares
+		s, err := strconv.ParseFloat(tr.Delegation.Shares, 64)
+		if err != nil {
+			return nil, fmt.Errorf("error converting to float64 1: %w", err)
 		}
+		stake += s
 	}
 
 	// Get liquid
@@ -220,7 +212,11 @@ func (p *LiquidProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[strin
 		return nil, fmt.Errorf("failed to unmarshal liquid response body: %w", err)
 	}
 	for _, tr := range stakeLiqResp.Data {
-		stake += tr.amount
+		s, err := strconv.ParseFloat(tr.Amount, 64)
+		if err != nil {
+			return nil, fmt.Errorf("error converting to float64 2: %w", err)
+		}
+		stake += s
 	}
 
 	// Get supply
@@ -252,7 +248,7 @@ func (p *LiquidProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[strin
 	tickerPrices := make(map[string]TickerPrice, len(pairs))
 	for _, tr := range tokensSupplyResp.Data {
 
-		symbol := strings.ToUpper(tr.ticker) // symbol == base in a currency pair
+		symbol := strings.ToUpper(tr.Ticker) // symbol == base in a currency pair
 
 		cp, ok := baseDenomIdx[symbol]
 		if !ok {
@@ -264,7 +260,11 @@ func (p *LiquidProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[strin
 			return nil, fmt.Errorf("duplicate token found in liquid response: %s", symbol)
 		}
 
-		supply := tr.amount
+		s, err := strconv.ParseFloat(tr.Amount, 64)
+		if err != nil {
+			return nil, fmt.Errorf("error converting to float64 3: %w", err)
+		}
+		supply := s
 
 		// Divide stake by supply
 		priceRaw := strconv.FormatFloat(stake/supply, 'f', -1, 64)
@@ -273,7 +273,7 @@ func (p *LiquidProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[strin
 			return nil, fmt.Errorf("failed to read liquid price (%s) for %s", priceRaw, symbol)
 		}
 
-		volumeRaw := strconv.FormatFloat(tr.amount, 'f', -1, 64)
+		volumeRaw := strconv.FormatFloat(supply, 'f', -1, 64)
 		volume, err := sdk.NewDecFromStr(volumeRaw)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read liquid volume (%s) for %s", volumeRaw, symbol)
@@ -362,8 +362,8 @@ func (p *LiquidProvider) GetAvailablePairs() (map[string]struct{}, error) {
 	availablePairs := make(map[string]struct{}, len(pairsSummary.Data))
 	for _, pair := range pairsSummary.Data {
 		cp := types.CurrencyPair{
-			Base:  strings.ToUpper(pair.ticker),
-			Quote: strings.ToUpper(re.FindString(pair.ticker)),
+			Base:  strings.ToUpper(pair.Ticker),
+			Quote: strings.ToUpper(re.FindString(pair.Ticker)),
 		}
 		availablePairs[cp.String()] = struct{}{}
 	}
