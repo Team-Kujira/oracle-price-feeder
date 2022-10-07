@@ -30,8 +30,9 @@ while (true); do
         # sleep 5
         # TEXT="$TEXT\n\nAttempted feeder restart!"
 
-        LOGS=$(journalctl -u price-feeder -n 20 -q | grep -v 'skipping')
-        TEXT="$TEXT\nlast logs:\`\`\`$LOGS\`\`\`"
+	# be more verbose to not overshoot slack char limit
+        # LOGS=$(journalctl -u price-feeder -n 20 -q | grep -v 'skipping')
+        # TEXT="$TEXT\nlast logs:\`\`\`$LOGS\`\`\`"
 
         curl -X POST -H 'Content-type: application/json' --data '{"text":"'"$TEXT"'"}' $SLACK_WEBHOOK
     fi
