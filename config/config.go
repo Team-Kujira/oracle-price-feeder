@@ -87,6 +87,7 @@ type (
 		ProviderEndpoints []ProviderEndpoint `toml:"provider_endpoints" validate:"dive"`
 		EnableServer      bool               `toml:"enable_server"`
 		EnableVoter       bool               `toml:"enable_voter"`
+		Healthchecks      []Healthchecks     `toml:"healthchecks" validate:"dive"`
 	}
 
 	// Server defines the API server configuration.
@@ -178,6 +179,11 @@ type (
 
 		// Websocket endpoint for the provider, ex. "stream.binance.com:9443"
 		Websocket string `toml:"websocket"`
+	}
+
+	Healthchecks struct {
+		URL string `toml:"url" validate:"required"`
+		Timeout string `toml:"timeout" validate:"required"`
 	}
 )
 

@@ -108,6 +108,9 @@ func (ots *OracleTestSuite) SetupSuite() {
 		time.Millisecond*100,
 		make(map[string]sdk.Dec),
 		make(map[string]config.ProviderEndpoint),
+		[]config.Healthchecks{
+			{URL: "https://hc-ping.com/HEALTHCHECK-UUID", Timeout: "200ms"},
+		},
 	)
 }
 

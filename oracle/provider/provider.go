@@ -3,6 +3,7 @@ package provider
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"price-feeder/oracle/types"
@@ -108,4 +109,15 @@ func newCandlePrice(provider, symbol, lastPrice, volume string, timeStamp int64)
 // minus t.
 func PastUnixTime(t time.Duration) int64 {
 	return time.Now().Add(t*-1).Unix() * int64(time.Second/time.Millisecond)
+}
+
+func strToDec(str string) sdk.Dec {
+	if strings.Contains(str, ".") {
+		split := strings.Split(str, ".")
+		if len(split[1]) > 18 {
+			// sdk.MustNewDecFromStr will panic if decimal precision is greater than 18
+			str = split[0] + "." + split[1][0:18]
+		}
+	}
+	return sdk.MustNewDecFromStr(str)
 }

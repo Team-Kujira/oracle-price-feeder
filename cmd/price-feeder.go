@@ -169,6 +169,7 @@ func priceFeederCmdHandler(cmd *cobra.Command, args []string) error {
 		providerTimeout,
 		deviations,
 		endpoints,
+		cfg.Healthchecks,
 	)
 
 	telemetryCfg := telemetry.Config{}
