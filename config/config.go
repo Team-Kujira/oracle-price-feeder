@@ -89,6 +89,7 @@ type (
 		ProviderEndpoints []ProviderEndpoint `toml:"provider_endpoints" validate:"dive"`
 		EnableServer      bool               `toml:"enable_server"`
 		EnableVoter       bool               `toml:"enable_voter"`
+		Healthchecks      []Healthchecks     `toml:"healthchecks" validate:"dive"`
 	}
 
 	// Server defines the API server configuration.
@@ -186,6 +187,11 @@ type (
 		StakeGrpc string `toml:"stake_grpc"`
 
 		StakeAccount string `toml:"stake_account"`
+	}
+
+	Healthchecks struct {
+		URL string `toml:"url" validate:"required"`
+		Timeout string `toml:"timeout" validate:"required"`
 	}
 )
 
