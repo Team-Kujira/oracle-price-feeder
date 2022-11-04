@@ -22,6 +22,7 @@ The list of current supported providers:
 - [Kraken](https://www.kraken.com/en-us/)
 - [Okx](https://www.okx.com/)
 - [Osmosis](https://app.osmosis.zone/)
+- liquid ([Stride](https://twitter.com/stride_zone), [pStake](https://twitter.com/pStakeFinance), etc.)
 
 ## Usage
 
