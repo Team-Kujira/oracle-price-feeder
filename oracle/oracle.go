@@ -515,8 +515,8 @@ func (o *Oracle) tick(ctx context.Context) error {
 	if blockHeight < 1 {
 		return fmt.Errorf("expected positive block height")
 	}
-	if repeats < 20 {
-		return fmt.Errorf("blockheight has been the same for 5 ticks")
+	if repeats < 200 {
+		return fmt.Errorf("blockheight has been the same for 200 ticks - %d", repeats)
 	}
 
 	oracleParams, err := o.GetParamCache(ctx, blockHeight)
@@ -601,8 +601,8 @@ func (o *Oracle) tick(ctx context.Context) error {
 			return err
 		}
 
-		if repeats < 20 {
-			return fmt.Errorf("blockheight hasn't moved for 5 ticks")
+		if repeats < 200 {
+			return fmt.Errorf("blockheight hasn't moved for 20 ticks - %d", repeats)
 		}
 
 		o.previousVotePeriod = math.Floor(float64(currentHeight) / float64(oracleVotePeriod))
