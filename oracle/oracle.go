@@ -6,10 +6,10 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
-	"net/http"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/rs/zerolog"
@@ -508,12 +508,15 @@ func (o *Oracle) checkWhitelist(params oracletypes.Params) {
 func (o *Oracle) tick(ctx context.Context) error {
 	o.logger.Debug().Msg("executing oracle tick")
 
-	blockHeight, err := o.oracleClient.ChainHeight.GetChainHeight()
+	blockHeight, repeats, err := o.oracleClient.ChainHeight.GetChainHeight()
 	if err != nil {
 		return err
 	}
 	if blockHeight < 1 {
 		return fmt.Errorf("expected positive block height")
+	}
+	if repeats < 5 {
+		return fmt.Errorf("blockheight has been the same for 5 ticks")
 	}
 
 	oracleParams, err := o.GetParamCache(ctx, blockHeight)
@@ -593,9 +596,13 @@ func (o *Oracle) tick(ctx context.Context) error {
 			return err
 		}
 
-		currentHeight, err := o.oracleClient.ChainHeight.GetChainHeight()
+		currentHeight, repeats, err := o.oracleClient.ChainHeight.GetChainHeight()
 		if err != nil {
 			return err
+		}
+
+		if repeats < 5 {
+			return fmt.Errorf("blockheight hasn't moved for 5 ticks")
 		}
 
 		o.previousVotePeriod = math.Floor(float64(currentHeight) / float64(oracleVotePeriod))
@@ -635,7 +642,7 @@ func (o *Oracle) tick(ctx context.Context) error {
 }
 
 func (o *Oracle) healthchecksPing() {
-    for url, client := range o.healthchecks {
+	for url, client := range o.healthchecks {
 		o.logger.Info().Msg("updating healthcheck status")
 		_, err := client.Get(url)
 		if err != nil {
