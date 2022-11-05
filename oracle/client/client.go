@@ -158,7 +158,7 @@ func (oc OracleClient) BroadcastTx(nextBlockHeight, timeoutHeight int64, msgs ..
 
 	// re-try voting until timeout
 	for lastCheckHeight < maxBlockHeight {
-		latestBlockHeight, err := oc.ChainHeight.GetChainHeight()
+		latestBlockHeight, _, err := oc.ChainHeight.GetChainHeight()
 		if err != nil {
 			return err
 		}

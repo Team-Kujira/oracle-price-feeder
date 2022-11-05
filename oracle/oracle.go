@@ -515,7 +515,7 @@ func (o *Oracle) tick(ctx context.Context) error {
 	if blockHeight < 1 {
 		return fmt.Errorf("expected positive block height")
 	}
-	if repeats < 5 {
+	if repeats < 20 {
 		return fmt.Errorf("blockheight has been the same for 5 ticks")
 	}
 
@@ -601,7 +601,7 @@ func (o *Oracle) tick(ctx context.Context) error {
 			return err
 		}
 
-		if repeats < 5 {
+		if repeats < 20 {
 			return fmt.Errorf("blockheight hasn't moved for 5 ticks")
 		}
 
