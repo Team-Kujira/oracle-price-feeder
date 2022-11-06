@@ -24,9 +24,10 @@ var (
 type ChainHeight struct {
 	Logger zerolog.Logger
 
-	mtx               sync.RWMutex
-	errGetChainHeight error
-	lastChainHeight   int64
+	mtx                 sync.RWMutex
+	errGetChainHeight   error
+	lastChainHeight     int64
+	repeatedHeightCount int64
 }
 
 // NewChainHeight returns a new ChainHeight struct that
@@ -54,9 +55,10 @@ func NewChainHeight(
 	}
 
 	chainHeight := &ChainHeight{
-		Logger:            logger.With().Str("oracle_client", "chain_height").Logger(),
-		errGetChainHeight: nil,
-		lastChainHeight:   initialHeight,
+		Logger:              logger.With().Str("oracle_client", "chain_height").Logger(),
+		errGetChainHeight:   nil,
+		lastChainHeight:     initialHeight,
+		repeatedHeightCount: 0,
 	}
 
 	go chainHeight.subscribe(ctx, rpcClient, newBlockHeaderSubscription)
@@ -68,7 +70,11 @@ func NewChainHeight(
 func (chainHeight *ChainHeight) updateChainHeight(blockHeight int64, err error) {
 	chainHeight.mtx.Lock()
 	defer chainHeight.mtx.Unlock()
-
+	if chainHeight.lastChainHeight == blockHeight {
+		chainHeight.repeatedHeightCount += 1
+	} else {
+		chainHeight.repeatedHeightCount = 0
+	}
 	chainHeight.lastChainHeight = blockHeight
 	chainHeight.errGetChainHeight = err
 }
@@ -104,9 +110,9 @@ func (chainHeight *ChainHeight) subscribe(
 }
 
 // GetChainHeight returns the last chain height available.
-func (chainHeight *ChainHeight) GetChainHeight() (int64, error) {
+func (chainHeight *ChainHeight) GetChainHeight() (int64, int64, error) {
 	chainHeight.mtx.RLock()
 	defer chainHeight.mtx.RUnlock()
 
-	return chainHeight.lastChainHeight, chainHeight.errGetChainHeight
+	return chainHeight.lastChainHeight, chainHeight.repeatedHeightCount, chainHeight.errGetChainHeight
 }
