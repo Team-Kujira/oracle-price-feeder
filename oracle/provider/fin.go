@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"price-feeder/config"
 	"price-feeder/oracle/types"
 )
 
@@ -63,8 +62,8 @@ type (
 	}
 )
 
-func NewFinProvider(endpoint config.ProviderEndpoint) *FinProvider {
-	if endpoint.Name == config.ProviderFin {
+func NewFinProvider(endpoint Endpoint) *FinProvider {
+	if endpoint.Name == ProviderFin {
 		return &FinProvider{
 			baseURL: endpoint.Rest,
 			client:  newDefaultHTTPClient(),
@@ -76,7 +75,7 @@ func NewFinProvider(endpoint config.ProviderEndpoint) *FinProvider {
 	}
 }
 
-func (p FinProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[string]TickerPrice, error) {
+func (p FinProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
 	path := fmt.Sprintf("%s%s", p.baseURL, finTickersEndpoint)
 	tickerResponse, err := p.client.Get(path)
 	if err != nil {
@@ -96,7 +95,7 @@ func (p FinProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[string]Ti
 	for _, pair := range pairs {
 		tickerSymbolPairs[pair.Base+"_"+pair.Quote] = pair
 	}
-	tickerPrices := make(map[string]TickerPrice, len(pairs))
+	tickerPrices := make(map[string]types.TickerPrice, len(pairs))
 	for _, ticker := range tickers.Tickers {
 		pair, ok := tickerSymbolPairs[strings.ToUpper(ticker.Symbol)]
 		if !ok {
@@ -107,7 +106,7 @@ func (p FinProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[string]Ti
 		if ok {
 			return nil, fmt.Errorf("FIN tickers response contained duplicate: %s", ticker.Symbol)
 		}
-		tickerPrices[pair.String()] = TickerPrice{
+		tickerPrices[pair.String()] = types.TickerPrice{
 			Price: strToDec(ticker.Price), 
 			Volume: strToDec(ticker.Volume),
 		}
@@ -121,18 +120,18 @@ func (p FinProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[string]Ti
 	return tickerPrices, nil
 }
 
-func (p FinProvider) GetCandlePrices(pairs ...types.CurrencyPair) (map[string][]CandlePrice, error) {
+func (p FinProvider) GetCandlePrices(pairs ...types.CurrencyPair) (map[string][]types.CandlePrice, error) {
 	pairAddresses, err := p.getFinPairAddresses()
 	if err != nil {
 		return nil, fmt.Errorf("FIN pair addresses lookup failed: %w", err)
 	}
-	candlePricesPairs := make(map[string][]CandlePrice)
+	candlePricesPairs := make(map[string][]types.CandlePrice)
 	for _, pair := range pairs {
 		address, ok := pairAddresses[pair.String()]
 		if !ok {
 			return nil, fmt.Errorf("FIN contract address lookup failed for pair: %s", pair.String())
 		}
-		candlePricesPairs[pair.String()] = []CandlePrice{}
+		candlePricesPairs[pair.String()] = []types.CandlePrice{}
 		windowEndTime := time.Now()
 		windowStartTime := windowEndTime.Add(-finCandleWindowSizeHours * time.Hour)
 		path := fmt.Sprintf("%s%s?contract=%s&precision=%d&from=%s&to=%s",
@@ -157,13 +156,13 @@ func (p FinProvider) GetCandlePrices(pairs ...types.CurrencyPair) (map[string][]
 		if err != nil {
 			return nil, fmt.Errorf("FIN candles response unmarshal failed: %w", err)
 		}
-		candlePrices := []CandlePrice{}
+		candlePrices := []types.CandlePrice{}
 		for _, candle := range candles.Candles {
 			timeStamp, err := binToTimeStamp(candle.Bin)
 			if err != nil {
 				return nil, fmt.Errorf("FIN candle timestamp failed to parse: %s", candle.Bin)
 			}
-			candlePrices = append(candlePrices, CandlePrice{
+			candlePrices = append(candlePrices, types.CandlePrice{
 				Price:     strToDec(candle.Close),
 				Volume:    strToDec(candle.Volume),
 				TimeStamp: timeStamp,

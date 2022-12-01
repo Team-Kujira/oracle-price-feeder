@@ -59,13 +59,13 @@ type Oracle struct {
 	closer *pfsync.Closer
 
 	providerTimeout    time.Duration
-	providerPairs      map[string][]types.CurrencyPair
+	providerPairs      map[provider.Name][]types.CurrencyPair
 	previousPrevote    *PreviousPrevote
 	previousVotePeriod float64
-	priceProviders     map[string]provider.Provider
+	priceProviders     map[provider.Name]provider.Provider
 	oracleClient       client.OracleClient
 	deviations         map[string]sdk.Dec
-	endpoints          map[string]config.ProviderEndpoint
+	endpoints          map[provider.Name]provider.Endpoint
 
 	mtx             sync.RWMutex
 	lastPriceSyncTS time.Time
@@ -80,10 +80,10 @@ func New(
 	currencyPairs []config.CurrencyPair,
 	providerTimeout time.Duration,
 	deviations map[string]sdk.Dec,
-	endpoints map[string]config.ProviderEndpoint,
+	endpoints map[provider.Name]provider.Endpoint,
 	healthchecksConfig []config.Healthchecks,
 ) *Oracle {
-	providerPairs := make(map[string][]types.CurrencyPair)
+	providerPairs := make(map[provider.Name][]types.CurrencyPair)
 
 	for _, pair := range currencyPairs {
 		for _, provider := range pair.Providers {
@@ -113,7 +113,7 @@ func New(
 		closer:          pfsync.NewCloser(),
 		oracleClient:    oc,
 		providerPairs:   providerPairs,
-		priceProviders:  make(map[string]provider.Provider),
+		priceProviders:  make(map[provider.Name]provider.Provider),
 		previousPrevote: nil,
 		providerTimeout: providerTimeout,
 		deviations:      deviations,
@@ -208,8 +208,8 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 		}
 
 		g.Go(func() error {
-			prices := make(map[string]provider.TickerPrice, 0)
-			candles := make(map[string][]provider.CandlePrice, 0)
+			prices := make(map[string]types.TickerPrice, 0)
+			candles := make(map[string][]types.CandlePrice, 0)
 			ch := make(chan struct{})
 			errCh := make(chan error, 1)
 
@@ -291,7 +291,7 @@ func GetComputedPrices(
 	logger zerolog.Logger,
 	providerCandles provider.AggregatedProviderCandles,
 	providerPrices provider.AggregatedProviderPrices,
-	providerPairs map[string][]types.CurrencyPair,
+	providerPairs map[provider.Name][]types.CurrencyPair,
 	deviations map[string]sdk.Dec,
 ) (prices map[string]sdk.Dec, err error) {
 	// convert any non-USD denominated candles into USD
@@ -358,18 +358,18 @@ func GetComputedPrices(
 // candles and tickers based on the base currency per provider.
 // Returns true if at least one of price or candle exists.
 func SetProviderTickerPricesAndCandles(
-	providerName string,
+	providerName provider.Name,
 	providerPrices provider.AggregatedProviderPrices,
 	providerCandles provider.AggregatedProviderCandles,
-	prices map[string]provider.TickerPrice,
-	candles map[string][]provider.CandlePrice,
+	prices map[string]types.TickerPrice,
+	candles map[string][]types.CandlePrice,
 	pair types.CurrencyPair,
 ) (success bool) {
 	if _, ok := providerPrices[providerName]; !ok {
-		providerPrices[providerName] = make(map[string]provider.TickerPrice)
+		providerPrices[providerName] = make(map[string]types.TickerPrice)
 	}
 	if _, ok := providerCandles[providerName]; !ok {
-		providerCandles[providerName] = make(map[string][]provider.CandlePrice)
+		providerCandles[providerName] = make(map[string][]types.CandlePrice)
 	}
 
 	tp, pricesOk := prices[pair.String()]
@@ -428,7 +428,7 @@ func (o *Oracle) GetParams(ctx context.Context) (oracletypes.Params, error) {
 	return queryResponse.Params, nil
 }
 
-func (o *Oracle) getOrSetProvider(ctx context.Context, providerName string) (provider.Provider, error) {
+func (o *Oracle) getOrSetProvider(ctx context.Context, providerName provider.Name) (provider.Provider, error) {
 	var (
 		priceProvider provider.Provider
 		ok            bool
@@ -456,40 +456,49 @@ func (o *Oracle) getOrSetProvider(ctx context.Context, providerName string) (pro
 
 func NewProvider(
 	ctx context.Context,
-	providerName string,
+	providerName provider.Name,
 	logger zerolog.Logger,
-	endpoint config.ProviderEndpoint,
+	endpoint provider.Endpoint,
 	providerPairs ...types.CurrencyPair,
 ) (provider.Provider, error) {
 	switch providerName {
-	case config.ProviderFin:
-		return provider.NewFinProvider(endpoint), nil
+	case provider.ProviderBinance:
+		return provider.NewBinanceProvider(ctx, logger, endpoint, false, providerPairs...)
 
-	case config.ProviderBinance:
-		return provider.NewBinanceProvider(ctx, logger, endpoint, providerPairs...)
+	case provider.ProviderBinanceUS:
+		return provider.NewBinanceProvider(ctx, logger, endpoint, true, providerPairs...)
 
-	case config.ProviderKraken:
+	case provider.ProviderKraken:
 		return provider.NewKrakenProvider(ctx, logger, endpoint, providerPairs...)
 
-	case config.ProviderMexc:
-		return provider.NewMexcProvider(ctx, logger, endpoint, providerPairs...)
-
-	case config.ProviderOsmosis:
+	case provider.ProviderOsmosis:
 		return provider.NewOsmosisProvider(endpoint), nil
 
-	case config.ProviderHuobi:
+	case provider.ProviderOsmosisV2:
+		return provider.NewOsmosisV2Provider(ctx, logger, endpoint, providerPairs...)
+
+	case provider.ProviderHuobi:
 		return provider.NewHuobiProvider(ctx, logger, endpoint, providerPairs...)
 
-	case config.ProviderCoinbase:
+	case provider.ProviderCoinbase:
 		return provider.NewCoinbaseProvider(ctx, logger, endpoint, providerPairs...)
 
-	case config.ProviderOkx:
+	case provider.ProviderOkx:
 		return provider.NewOkxProvider(ctx, logger, endpoint, providerPairs...)
 
-	case config.ProviderGate:
+	case provider.ProviderGate:
 		return provider.NewGateProvider(ctx, logger, endpoint, providerPairs...)
 
-	case config.ProviderMock:
+	case provider.ProviderBitget:
+		return provider.NewBitgetProvider(ctx, logger, endpoint, providerPairs...)
+
+	case provider.ProviderMexc:
+		return provider.NewMexcProvider(ctx, logger, endpoint, providerPairs...)
+
+	case provider.ProviderCrypto:
+		return provider.NewCryptoProvider(ctx, logger, endpoint, providerPairs...)
+
+	case provider.ProviderMock:
 		return provider.NewMockProvider(), nil
 	}
 

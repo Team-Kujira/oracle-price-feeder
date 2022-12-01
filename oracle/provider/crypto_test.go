@@ -2,7 +2,6 @@ package provider
 
 import (
 	"context"
-	"encoding/json"
 	"testing"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -11,8 +10,8 @@ import (
 	"price-feeder/oracle/types"
 )
 
-func TestMexcProvider_GetTickerPrices(t *testing.T) {
-	p, err := NewMexcProvider(
+func TestCryptoProvider_GetTickerPrices(t *testing.T) {
+	p, err := NewCryptoProvider(
 		context.TODO(),
 		zerolog.Nop(),
 		Endpoint{},
@@ -71,29 +70,53 @@ func TestMexcProvider_GetTickerPrices(t *testing.T) {
 	t.Run("invalid_request_invalid_ticker", func(t *testing.T) {
 		prices, err := p.GetTickerPrices(types.CurrencyPair{Base: "FOO", Quote: "BAR"})
 		require.Error(t, err)
-		require.Equal(t, "mexc failed to get ticker price for FOO_BAR", err.Error())
+		require.Equal(t, "crypto failed to get ticker price for FOO_BAR", err.Error())
 		require.Nil(t, prices)
 	})
 }
 
-func TestMexcCurrencyPairToMexcPair(t *testing.T) {
-	cp := types.CurrencyPair{Base: "ATOM", Quote: "USDT"}
-	MexcSymbol := currencyPairToMexcPair(cp)
-	require.Equal(t, MexcSymbol, "ATOM_USDT")
+func TestCryptoProvider_GetCandlePrices(t *testing.T) {
+	p, err := NewCryptoProvider(
+		context.TODO(),
+		zerolog.Nop(),
+		Endpoint{},
+		types.CurrencyPair{Base: "ATOM", Quote: "USDT"},
+	)
+	require.NoError(t, err)
+
+	t.Run("valid_request_single_candle", func(t *testing.T) {
+		price := "34.689998626708984000"
+		volume := "2396974.000000000000000000"
+		timeStamp := int64(1000000)
+
+		candle := CryptoCandle{
+			Volume:    volume,
+			Close:     price,
+			Timestamp: timeStamp,
+		}
+
+		p.setCandlePair("ATOM_USDT", candle)
+
+		prices, err := p.GetCandlePrices(types.CurrencyPair{Base: "ATOM", Quote: "USDT"})
+		require.NoError(t, err)
+		require.Len(t, prices, 1)
+		priceDec, _ := sdk.NewDecFromStr(price)
+		volumeDec, _ := sdk.NewDecFromStr(volume)
+
+		require.Equal(t, priceDec, prices["ATOMUSDT"][0].Price)
+		require.Equal(t, volumeDec, prices["ATOMUSDT"][0].Volume)
+		require.Equal(t, timeStamp*1000, prices["ATOMUSDT"][0].TimeStamp)
+	})
+
+	t.Run("invalid_request_invalid_candle", func(t *testing.T) {
+		prices, err := p.GetCandlePrices(types.CurrencyPair{Base: "FOO", Quote: "BAR"})
+		require.EqualError(t, err, "crypto failed to get candle price for FOO_BAR")
+		require.Nil(t, prices)
+	})
 }
 
-func TestMexcProvider_getSubscriptionMsgs(t *testing.T) {
-	provider := &MexcProvider{
-		subscribedPairs: map[string]types.CurrencyPair{},
-	}
-	cps := []types.CurrencyPair{
-		{Base: "ATOM", Quote: "USDT"},
-	}
-	subMsgs := provider.getSubscriptionMsgs(cps...)
-
-	msg, _ := json.Marshal(subMsgs[0])
-	require.Equal(t, "{\"op\":\"sub.kline\",\"symbol\":\"ATOM_USDT\",\"interval\":\"Min1\"}", string(msg))
-
-	msg, _ = json.Marshal(subMsgs[1])
-	require.Equal(t, "{\"op\":\"sub.overview\"}", string(msg))
+func TestCryptoCurrencyPairToCryptoPair(t *testing.T) {
+	cp := types.CurrencyPair{Base: "ATOM", Quote: "USDT"}
+	cryptoSymbol := currencyPairToCryptoPair(cp)
+	require.Equal(t, cryptoSymbol, "ATOM_USDT")
 }
