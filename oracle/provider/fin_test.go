@@ -6,7 +6,6 @@ import (
 	"testing"
 	"strings"
 
-	"price-feeder/config"
 	"price-feeder/oracle/types"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -14,7 +13,7 @@ import (
 )
 
 func TestFinProvider_GetTickerPrices(t *testing.T) {
-	p := NewFinProvider(config.ProviderEndpoint{})
+	p := NewFinProvider(Endpoint{})
 
 	t.Run("valid_request_single_ticker", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
@@ -149,7 +148,7 @@ func TestFinProvider_GetTickerPrices(t *testing.T) {
 }
 
 func TestFinProvideR_GetCandlePrices(t *testing.T) {
-	p := NewFinProvider(config.ProviderEndpoint{})
+	p := NewFinProvider(Endpoint{})
 
 	t.Run("valid_request_single_candle", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
@@ -190,7 +189,7 @@ func TestFinProvideR_GetCandlePrices(t *testing.T) {
 }
 
 func TestFinProvider_GetAvailablePairs(t *testing.T) {
-	p := NewFinProvider(config.ProviderEndpoint{})
+	p := NewFinProvider(Endpoint{})
 	p.GetAvailablePairs()
 
 	t.Run("valid_available_pair", func(t *testing.T) {

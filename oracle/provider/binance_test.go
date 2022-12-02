@@ -2,21 +2,21 @@ package provider
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
-
-	"price-feeder/config"
-	"price-feeder/oracle/types"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
+	"price-feeder/oracle/types"
 )
 
 func TestBinanceProvider_GetTickerPrices(t *testing.T) {
 	p, err := NewBinanceProvider(
 		context.TODO(),
 		zerolog.Nop(),
-		config.ProviderEndpoint{},
+		Endpoint{},
+		false,
 		types.CurrencyPair{Base: "ATOM", Quote: "USDT"},
 	)
 	require.NoError(t, err)
@@ -74,24 +74,8 @@ func TestBinanceProvider_GetTickerPrices(t *testing.T) {
 
 	t.Run("invalid_request_invalid_ticker", func(t *testing.T) {
 		prices, err := p.GetTickerPrices(types.CurrencyPair{Base: "FOO", Quote: "BAR"})
-		require.Error(t, err)
-		require.Equal(t, "binance provider failed to get ticker price for FOOBAR", err.Error())
+		require.EqualError(t, err, "binance failed to get ticker price for FOOBAR")
 		require.Nil(t, prices)
-	})
-}
-
-func TestBinanceProvider_SubscribeCurrencyPairs(t *testing.T) {
-	p, err := NewBinanceProvider(
-		context.TODO(),
-		zerolog.Nop(),
-		config.ProviderEndpoint{},
-		types.CurrencyPair{Base: "ATOM", Quote: "USDT"},
-	)
-	require.NoError(t, err)
-
-	t.Run("invalid_subscribe_channels_empty", func(t *testing.T) {
-		err = p.SubscribeCurrencyPairs([]types.CurrencyPair{}...)
-		require.ErrorContains(t, err, "currency pairs is empty")
 	})
 }
 
@@ -99,4 +83,21 @@ func TestBinanceCurrencyPairToBinancePair(t *testing.T) {
 	cp := types.CurrencyPair{Base: "ATOM", Quote: "USDT"}
 	binanceSymbol := currencyPairToBinanceTickerPair(cp)
 	require.Equal(t, binanceSymbol, "atomusdt@ticker")
+}
+
+func TestBinanceProvider_getSubscriptionMsgs(t *testing.T) {
+	provider := &BinanceProvider{
+		subscribedPairs: map[string]types.CurrencyPair{},
+	}
+	cps := []types.CurrencyPair{
+		{Base: "ATOM", Quote: "USDT"},
+	}
+
+	subMsgs := provider.getSubscriptionMsgs(cps...)
+
+	msg, _ := json.Marshal(subMsgs[0])
+	require.Equal(t, "{\"method\":\"SUBSCRIBE\",\"params\":[\"atomusdt@ticker\"],\"id\":1}", string(msg))
+
+	msg, _ = json.Marshal(subMsgs[1])
+	require.Equal(t, "{\"method\":\"SUBSCRIBE\",\"params\":[\"atomusdt@kline_1m\"],\"id\":1}", string(msg))
 }

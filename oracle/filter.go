@@ -6,6 +6,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/telemetry"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/rs/zerolog"
+	"price-feeder/oracle/types"
 )
 
 // defaultDeviationThreshold defines how many 𝜎 a provider can be away
@@ -22,7 +23,7 @@ func FilterTickerDeviations(
 ) (provider.AggregatedProviderPrices, error) {
 	var (
 		filteredPrices = make(provider.AggregatedProviderPrices)
-		priceMap       = make(map[string]map[string]sdk.Dec)
+		priceMap       = make(map[provider.Name]map[string]sdk.Dec)
 	)
 
 	for providerName, priceTickers := range prices {
@@ -54,7 +55,7 @@ func FilterTickerDeviations(
 			if d, ok := deviations[base]; !ok || isBetween(tp.Price, means[base], d.Mul(t)) {
 				p, ok := filteredPrices[providerName]
 				if !ok {
-					p = map[string]provider.TickerPrice{}
+					p = map[string]types.TickerPrice{}
 					filteredPrices[providerName] = p
 				}
 				p[base] = tp
@@ -62,7 +63,7 @@ func FilterTickerDeviations(
 				telemetry.IncrCounter(1, "failure", "provider", "type", "ticker")
 				logger.Warn().
 					Str("base", base).
-					Str("provider", providerName).
+					Str("provider", providerName.String()).
 					Str("price", tp.Price.String()).
 					Msg("provider deviating from other prices")
 			}
@@ -81,7 +82,7 @@ func FilterCandleDeviations(
 ) (provider.AggregatedProviderCandles, error) {
 	var (
 		filteredCandles = make(provider.AggregatedProviderCandles)
-		tvwaps          = make(map[string]map[string]sdk.Dec)
+		tvwaps          = make(map[provider.Name]map[string]sdk.Dec)
 	)
 
 	for providerName, priceCandles := range candles {
@@ -90,7 +91,7 @@ func FilterCandleDeviations(
 		for base, cp := range priceCandles {
 			p, ok := candlePrices[providerName]
 			if !ok {
-				p = map[string][]provider.CandlePrice{}
+				p = map[string][]types.CandlePrice{}
 				candlePrices[providerName] = p
 			}
 			p[base] = cp
@@ -128,7 +129,7 @@ func FilterCandleDeviations(
 			if d, ok := deviations[base]; !ok || isBetween(price, means[base], d.Mul(t)) {
 				p, ok := filteredCandles[providerName]
 				if !ok {
-					p = map[string][]provider.CandlePrice{}
+					p = map[string][]types.CandlePrice{}
 					filteredCandles[providerName] = p
 				}
 				p[base] = candles[providerName][base]
@@ -136,7 +137,7 @@ func FilterCandleDeviations(
 				telemetry.IncrCounter(1, "failure", "provider", "type", "candle")
 				logger.Warn().
 					Str("base", base).
-					Str("provider", providerName).
+					Str("provider", providerName.String()).
 					Str("price", price.String()).
 					Msg("provider deviating from other candles")
 			}

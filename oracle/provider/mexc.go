@@ -6,17 +6,12 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"sync"
-	"time"
 
-	"price-feeder/config"
-	"price-feeder/oracle/types"
-
-	"github.com/cosmos/cosmos-sdk/telemetry"
 	"github.com/gorilla/websocket"
 	"github.com/rs/zerolog"
+	"price-feeder/oracle/types"
 )
 
 const (
@@ -36,62 +31,44 @@ type (
 	// REF: https://mxcdevelop.github.io/apidocs/spot_v2_en/#k-line
 	// REF: https://mxcdevelop.github.io/apidocs/spot_v2_en/#overview
 	MexcProvider struct {
-		wsURL           url.URL
-		wsClient        *websocket.Conn
+		wsc             *WebsocketController
 		logger          zerolog.Logger
 		mtx             sync.RWMutex
-		endpoints       config.ProviderEndpoint
-		tickers         map[string]MexcTicker         // Symbol => MexcTicker
-		candles         map[string][]MexcCandle       // Symbol => MexcCandle
-		subscribedPairs map[string]types.CurrencyPair // Symbol => types.CurrencyPair
+		endpoints       Endpoint
+		tickers         map[string]types.TickerPrice   // Symbol => TickerPrice
+		candles         map[string][]types.CandlePrice // Symbol => CandlePrice
+		subscribedPairs map[string]types.CurrencyPair  // Symbol => types.CurrencyPair
 	}
 
-	// MexcTicker ticker price response. https://pkg.go.dev/encoding/json#Unmarshal
-	// Unmarshal matches incoming object keys to the keys used by Marshal (either the
-	// struct field name or its tag), preferring an exact match but also accepting a
-	// case-insensitive match. C field which is Statistics close time is not used, but
-	// it avoids to implement specific UnmarshalJSON.
-
+	// MexcTickerResponse is the ticker price response object.
+	MexcTickerResponse struct {
+		Symbol map[string]MexcTicker `json:"data"` // e.x. ATOM_USDT
+	}
 	MexcTicker struct {
-		Symbol    string `json:"symbol"` // Symbol ex.: ATOM_USDT
-		LastPrice string `json:"p"`      // Last price ex.: 0.0025
-		Volume    string `json:"v"`      // Total traded base asset volume ex.: 1000
-		C         uint64 `json:"C"`      // Statistics close time
-	}
-
-	MexcTickerData struct {
 		LastPrice float64 `json:"p"` // Last price ex.: 0.0025
 		Volume    float64 `json:"v"` // Total traded base asset volume ex.: 1000
 	}
 
-	MexcTickerResult struct {
-		Channel string                    `json:"channel"` // expect "push.overview"
-		Symbol  map[string]MexcTickerData `json:"data"`    // this key is the Symbol ex.: ATOM_USDT
+	// MexcCandle is the candle websocket response object.
+	MexcCandleResponse struct {
+		Symbol   string     `json:"symbol"` // Symbol ex.: ATOM_USDT
+		Metadata MexcCandle `json:"data"`   // Metadata for candle
 	}
-
-	// MexcCandleMetadata candle metadata used to compute tvwap price.
-	MexcCandleMetadata struct {
+	MexcCandle struct {
 		Close     float64 `json:"c"` // Price at close
 		TimeStamp int64   `json:"t"` // Close time in unix epoch ex.: 1645756200000
 		Volume    float64 `json:"v"` // Volume during period
 	}
 
-	// MexcCandle candle Mexc websocket channel "kline_1m" response.
-	MexcCandle struct {
-		//Channel  string             `json:"channel"` // expect "push.kline"
-		Symbol   string             `json:"symbol"` // Symbol ex.: ATOM_USDT
-		Metadata MexcCandleMetadata `json:"data"`   // Metadata for candle
-	}
-
-	// MexcSubscribeMsg Msg to subscribe all the tickers channels.
-	MexcCandleSubscriptionMsg struct {
+	// MexcCandleSubscription Msg to subscribe all the candle channels.
+	MexcCandleSubscription struct {
 		OP       string `json:"op"`       // kline
 		Symbol   string `json:"symbol"`   // streams to subscribe ex.: atom_usdt
 		Interval string `json:"interval"` // Min1、Min5、Min15、Min30
 	}
 
-	// MexcSubscribeMsg Msg to subscribe all the tickers channels.
-	MexcTickerSubscriptionMsg struct {
+	// MexcTickerSubscription Msg to subscribe all the ticker channels.
+	MexcTickerSubscription struct {
 		OP string `json:"op"` // kline
 	}
 
@@ -105,12 +82,12 @@ type (
 func NewMexcProvider(
 	ctx context.Context,
 	logger zerolog.Logger,
-	endpoints config.ProviderEndpoint,
+	endpoints Endpoint,
 	pairs ...types.CurrencyPair,
 ) (*MexcProvider, error) {
-	if (endpoints.Name) != config.ProviderMexc {
-		endpoints = config.ProviderEndpoint{
-			Name:      config.ProviderMexc,
+	if (endpoints.Name) != ProviderMexc {
+		endpoints = Endpoint{
+			Name:      ProviderMexc,
 			Rest:      mexcRestHost,
 			Websocket: mexcWSHost,
 		}
@@ -122,173 +99,148 @@ func NewMexcProvider(
 		Path:   mexcWSPath,
 	}
 
-	wsConn, _, err := websocket.DefaultDialer.Dial(wsURL.String(), nil)
-	if err != nil {
-		return nil, fmt.Errorf("error connecting to mexc websocket: %w", err)
-	}
+	mexcLogger := logger.With().Str("provider", "mexc").Logger()
 
 	provider := &MexcProvider{
-		wsURL:           wsURL,
-		wsClient:        wsConn,
-		logger:          logger.With().Str("provider", "mexc").Logger(),
+		logger:          mexcLogger,
 		endpoints:       endpoints,
-		tickers:         map[string]MexcTicker{},
-		candles:         map[string][]MexcCandle{},
+		tickers:         map[string]types.TickerPrice{},
+		candles:         map[string][]types.CandlePrice{},
 		subscribedPairs: map[string]types.CurrencyPair{},
 	}
 
-	if err := provider.SubscribeCurrencyPairs(pairs...); err != nil {
-		return nil, err
-	}
+	provider.setSubscribedPairs(pairs...)
 
-	go provider.handleWebSocketMsgs(ctx)
+	provider.wsc = NewWebsocketController(
+		ctx,
+		ProviderMexc,
+		wsURL,
+		provider.getSubscriptionMsgs(pairs...),
+		provider.messageReceived,
+		defaultPingDuration,
+		websocket.PingMessage,
+		mexcLogger,
+	)
+	go provider.wsc.Start()
 
 	return provider, nil
 }
 
+func (p *MexcProvider) getSubscriptionMsgs(cps ...types.CurrencyPair) []interface{} {
+	subscriptionMsgs := make([]interface{}, 0, len(cps)+1)
+	for _, cp := range cps {
+		mexcPair := currencyPairToMexcPair(cp)
+		subscriptionMsgs = append(subscriptionMsgs, newMexcCandleSubscriptionMsg(mexcPair))
+	}
+	subscriptionMsgs = append(subscriptionMsgs, newMexcTickerSubscriptionMsg())
+	return subscriptionMsgs
+}
+
+// SubscribeCurrencyPairs sends the new subscription messages to the websocket
+// and adds them to the providers subscribedPairs array
+func (p *MexcProvider) SubscribeCurrencyPairs(cps ...types.CurrencyPair) error {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+
+	newPairs := []types.CurrencyPair{}
+	for _, cp := range cps {
+		if _, ok := p.subscribedPairs[cp.String()]; !ok {
+			newPairs = append(newPairs, cp)
+		}
+	}
+
+	newSubscriptionMsgs := p.getSubscriptionMsgs(newPairs...)
+	if err := p.wsc.AddSubscriptionMsgs(newSubscriptionMsgs); err != nil {
+		return err
+	}
+	p.setSubscribedPairs(newPairs...)
+	return nil
+}
+
 // GetTickerPrices returns the tickerPrices based on the provided pairs.
-func (p *MexcProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[string]TickerPrice, error) {
-	tickerPrices := make(map[string]TickerPrice, len(pairs))
+func (p *MexcProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
+	tickerPrices := make(map[string]types.TickerPrice, len(pairs))
 
 	for _, cp := range pairs {
-		key := cp.String()
+		key := currencyPairToMexcPair(cp)
 		price, err := p.getTickerPrice(key)
 		if err != nil {
 			return nil, err
 		}
-		tickerPrices[key] = price
+		tickerPrices[cp.String()] = price
 	}
 
 	return tickerPrices, nil
 }
 
 // GetCandlePrices returns the candlePrices based on the provided pairs.
-func (p *MexcProvider) GetCandlePrices(pairs ...types.CurrencyPair) (map[string][]CandlePrice, error) {
-	candlePrices := make(map[string][]CandlePrice, len(pairs))
+func (p *MexcProvider) GetCandlePrices(pairs ...types.CurrencyPair) (map[string][]types.CandlePrice, error) {
+	candlePrices := make(map[string][]types.CandlePrice, len(pairs))
 
 	for _, cp := range pairs {
-		key := cp.String()
+		key := currencyPairToMexcPair(cp)
 		prices, err := p.getCandlePrices(key)
 		if err != nil {
 			return nil, err
 		}
-		candlePrices[key] = prices
+		candlePrices[cp.String()] = prices
 	}
 
 	return candlePrices, nil
 }
 
-// SubscribeCurrencyPairs subscribe all currency pairs into ticker and candle channels.
-func (p *MexcProvider) SubscribeCurrencyPairs(cps ...types.CurrencyPair) error {
-	if len(cps) == 0 {
-		return fmt.Errorf("currency pairs is empty")
-	}
-
-	if err := p.subscribeChannels(cps...); err != nil {
-		return err
-	}
-
-	p.setSubscribedPairs(cps...)
-	return nil
-}
-
-// subscribeChannels subscribe to the ticker and candle channels for all currency pairs.
-func (p *MexcProvider) subscribeChannels(cps ...types.CurrencyPair) error {
-	if err := p.subscribeTickers(cps...); err != nil {
-		return err
-	}
-
-	return p.subscribeCandles(cps...)
-}
-
-// subscribeTickers subscribe to the ticker channel for all currency pairs.
-func (p *MexcProvider) subscribeTickers(cps ...types.CurrencyPair) error {
-	pairs := make([]string, len(cps))
-
-	for i, cp := range cps {
-		pairs[i] = currencyPairToMexcPair(cp)
-	}
-
-	return p.subscribePairs(pairs...)
-}
-
-// subscribeCandles subscribe to the candle channel for all currency pairs.
-func (p *MexcProvider) subscribeCandles(cps ...types.CurrencyPair) error {
-	pairs := make([]string, len(cps))
-
-	for i, cp := range cps {
-		pairs[i] = currencyPairToMexcPair(cp)
-	}
-
-	return p.subscribePairs(pairs...)
-}
-
-// subscribedPairsToSlice returns the map of subscribed pairs as a slice.
-func (p *MexcProvider) subscribedPairsToSlice() []types.CurrencyPair {
-	p.mtx.RLock()
-	defer p.mtx.RUnlock()
-
-	return types.MapPairsToSlice(p.subscribedPairs)
-}
-
-func (p *MexcProvider) getTickerPrice(key string) (TickerPrice, error) {
+func (p *MexcProvider) getTickerPrice(key string) (types.TickerPrice, error) {
 	p.mtx.RLock()
 	defer p.mtx.RUnlock()
 
 	ticker, ok := p.tickers[key]
 	if !ok {
-		return TickerPrice{}, fmt.Errorf("mexc provider failed to get ticker price for %s", key)
+		return types.TickerPrice{}, fmt.Errorf(
+			types.ErrTickerNotFound.Error(),
+			ProviderMexc,
+			key,
+		)
 	}
 
-	return ticker.toTickerPrice()
+	return ticker, nil
 }
 
-func (p *MexcProvider) getCandlePrices(key string) ([]CandlePrice, error) {
+func (p *MexcProvider) getCandlePrices(key string) ([]types.CandlePrice, error) {
 	p.mtx.RLock()
 	defer p.mtx.RUnlock()
 
 	candles, ok := p.candles[key]
 	if !ok {
-		return []CandlePrice{}, fmt.Errorf("failed to get candle prices for %s", key)
+		return []types.CandlePrice{}, fmt.Errorf(
+			types.ErrCandleNotFound.Error(),
+			ProviderMexc,
+			key,
+		)
 	}
 
-	candleList := []CandlePrice{}
-	for _, candle := range candles {
-		cp, err := candle.toCandlePrice()
-		if err != nil {
-			return []CandlePrice{}, err
-		}
-		candleList = append(candleList, cp)
-	}
+	candleList := []types.CandlePrice{}
+	candleList = append(candleList, candles...)
+
 	return candleList, nil
 }
 
 func (p *MexcProvider) messageReceived(messageType int, bz []byte) {
-	if messageType != websocket.TextMessage {
-		return
-	}
-
 	var (
-		tickerResp MexcTickerResult
+		tickerResp MexcTickerResponse
 		tickerErr  error
-		candleResp MexcCandle
+		candleResp MexcCandleResponse
 		candleErr  error
 	)
 
 	tickerErr = json.Unmarshal(bz, &tickerResp)
-	// subscribed_pairs := make([]string, 0, len(p.subscribedPairs))
 	for _, cp := range p.subscribedPairs {
-		if tickerResp.Symbol[currencyPairToMexcPair(cp)].LastPrice != 0 {
-			p.setTickerPair(cp.String(), tickerResp.Symbol[currencyPairToMexcPair(cp)])
-			telemetry.IncrCounter(
-				1,
-				"websocket",
-				"message",
-				"type",
-				"ticker",
-				"provider",
-				config.ProviderMexc,
+		mexcPair := currencyPairToMexcPair(cp)
+		if tickerResp.Symbol[mexcPair].LastPrice != 0 {
+			p.setTickerPair(
+				mexcPair,
+				tickerResp.Symbol[mexcPair],
 			)
+			telemetryWebsocketMessage(ProviderMexc, MessageTypeTicker)
 			return
 		}
 	}
@@ -296,161 +248,58 @@ func (p *MexcProvider) messageReceived(messageType int, bz []byte) {
 	candleErr = json.Unmarshal(bz, &candleResp)
 	if candleResp.Metadata.Close != 0 {
 		p.setCandlePair(candleResp)
-		telemetry.IncrCounter(
-			1,
-			"websocket",
-			"message",
-			"type",
-			"candle",
-			"provider",
-			config.ProviderMexc,
-		)
+		telemetryWebsocketMessage(ProviderMexc, MessageTypeCandle)
 		return
 	}
 
-	p.logger.Error().
-		Int("length", len(bz)).
-		AnErr("ticker", tickerErr).
-		AnErr("candle", candleErr).
-		Msg("mexc: Error on receive message")
+	if tickerErr != nil || candleErr != nil {
+		p.logger.Error().
+			Int("length", len(bz)).
+			AnErr("ticker", tickerErr).
+			AnErr("candle", candleErr).
+			Msg("mexc: Error on receive message")
+	}
 }
 
-func (p *MexcProvider) setTickerPair(symbol string, ticker MexcTickerData) {
+func (p *MexcProvider) setTickerPair(symbol string, ticker MexcTicker) {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
-	var mt MexcTicker
-	mt.Symbol = symbol
-	mt.LastPrice = strconv.FormatFloat(ticker.LastPrice, 'f', 5, 64)
-	mt.Volume = strconv.FormatFloat(ticker.Volume, 'f', 5, 64)
-	// Uncomment below two lines to log retrieved ticker prices
-	// msg := mt.Symbol + " - $" + mt.LastPrice + " - V: " + mt.Volume
-	// p.logger.Warn().Msgf("mexc got price: %d", msg)
-	p.tickers[symbol] = mt
 
+	p.tickers[symbol] = types.TickerPrice{
+		Price:  floatToDec(ticker.LastPrice),
+		Volume: floatToDec(ticker.Volume),
+	}
 }
 
-func (p *MexcProvider) setCandlePair(candle MexcCandle) {
+func (p *MexcProvider) setCandlePair(candleResp MexcCandleResponse) {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
+
+	candle := types.CandlePrice{
+		Price:  floatToDec(candleResp.Metadata.Close),
+		Volume: floatToDec(candleResp.Metadata.Volume),
+		// convert seconds -> milli
+		TimeStamp: SecondsToMilli(candleResp.Metadata.TimeStamp),
+	}
+
 	staleTime := PastUnixTime(providerCandlePeriod)
-	candleList := []MexcCandle{}
+	candleList := []types.CandlePrice{}
 	candleList = append(candleList, candle)
 
-	for _, c := range p.candles[candle.Symbol] {
-		if staleTime < c.Metadata.TimeStamp {
+	for _, c := range p.candles[candleResp.Symbol] {
+		if staleTime < c.TimeStamp {
 			candleList = append(candleList, c)
 		}
 	}
-	// Uncomment below two lines to log retrieved candle prices
-	// msg := strconv.FormatInt(candle.Metadata.TimeStamp, 10) + " - " + candle.Symbol + " - C: $" + strconv.FormatFloat(candle.Metadata.Close, 'f', 5, 64) + " - V: " + strconv.FormatFloat(candle.Metadata.Volume, 'f', 5, 64)
-	// p.logger.Warn().Msgf("mexc got candle: %d", msg)
-	p.candles[candle.Symbol] = candleList
-}
 
-func (ticker MexcTicker) toTickerPrice() (TickerPrice, error) {
-	return newTickerPrice("Mexc", ticker.Symbol, ticker.LastPrice, ticker.Volume)
-}
-
-func (candle MexcCandle) toCandlePrice() (CandlePrice, error) {
-	return newCandlePrice("Mexc", candle.Symbol, strconv.FormatFloat(candle.Metadata.Close, 'f', 5, 64), strconv.FormatFloat(candle.Metadata.Volume, 'f', 5, 64),
-		candle.Metadata.TimeStamp)
-}
-
-func (p *MexcProvider) handleWebSocketMsgs(ctx context.Context) {
-	reconnectTicker := time.NewTicker(defaultMaxConnectionTime)
-	defer reconnectTicker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(defaultReadNewWSMessage):
-			messageType, bz, err := p.wsClient.ReadMessage()
-			if err != nil {
-				// if some error occurs continue to try to read the next message.
-				p.logger.Err(err).Msg("mexc: could not read message")
-				continue
-			}
-
-			if len(bz) == 0 {
-				continue
-			}
-
-			p.messageReceived(messageType, bz)
-
-		case <-reconnectTicker.C:
-			if err := p.reconnect(); err != nil {
-				p.logger.Err(err).Msg("mexc: error reconnecting")
-				p.keepReconnecting()
-			}
-		}
-	}
-}
-
-// reconnect closes the last WS connection then create a new one and subscribe to
-// all subscribed pairs in the ticker and candle pairs. If no ping is received
-// within 1 minute, the connection will be disconnected. It is recommended to
-// send a ping for 10-20 seconds
-func (p *MexcProvider) reconnect() error {
-	p.wsClient.Close()
-
-	p.logger.Debug().Msg("mexc: reconnecting websocket")
-	wsConn, _, err := websocket.DefaultDialer.Dial(p.wsURL.String(), nil)
-	if err != nil {
-		return fmt.Errorf("mexc: error reconnect to mexc websocket: %w", err)
-	}
-	p.wsClient = wsConn
-
-	currencyPairs := p.subscribedPairsToSlice()
-
-	telemetry.IncrCounter(
-		1,
-		"websocket",
-		"reconnect",
-		"provider",
-		config.ProviderMexc,
-	)
-	return p.subscribeChannels(currencyPairs...)
-}
-
-// keepReconnecting keeps trying to reconnect if an error occurs in reconnect.
-func (p *MexcProvider) keepReconnecting() {
-	reconnectTicker := time.NewTicker(defaultReconnectTime)
-	defer reconnectTicker.Stop()
-	connectionTries := 1
-
-	for time := range reconnectTicker.C {
-		if err := p.reconnect(); err != nil {
-			p.logger.Err(err).Msgf("mexc: attempted to reconnect %d times at %s", connectionTries, time.String())
-			connectionTries++
-			continue
-		}
-
-		if connectionTries > maxReconnectionTries {
-			p.logger.Warn().Msgf("mexc: failed to reconnect %d times", connectionTries)
-		}
-		return
-	}
+	p.candles[candleResp.Symbol] = candleList
 }
 
 // setSubscribedPairs sets N currency pairs to the map of subscribed pairs.
 func (p *MexcProvider) setSubscribedPairs(cps ...types.CurrencyPair) {
-	p.mtx.Lock()
-	defer p.mtx.Unlock()
-
 	for _, cp := range cps {
 		p.subscribedPairs[cp.String()] = cp
 	}
-}
-
-// subscribePairs write the subscription msg to the provider.
-func (p *MexcProvider) subscribePairs(pairs ...string) error {
-	for _, cp := range pairs {
-		subsMsg := newMexcCandleSubscriptionMsg(cp)
-		p.wsClient.WriteJSON(subsMsg)
-	}
-	subsMsg := newMexcTickerSubscriptionMsg()
-	return p.wsClient.WriteJSON(subsMsg)
 }
 
 // GetAvailablePairs returns all pairs to which the provider can subscribe.
@@ -482,8 +331,8 @@ func currencyPairToMexcPair(cp types.CurrencyPair) string {
 }
 
 // newMexcCandleSubscriptionMsg returns a new candle subscription Msg.
-func newMexcCandleSubscriptionMsg(param string) MexcCandleSubscriptionMsg {
-	return MexcCandleSubscriptionMsg{
+func newMexcCandleSubscriptionMsg(param string) MexcCandleSubscription {
+	return MexcCandleSubscription{
 		OP:       "sub.kline",
 		Symbol:   param,
 		Interval: "Min1",
@@ -491,8 +340,8 @@ func newMexcCandleSubscriptionMsg(param string) MexcCandleSubscriptionMsg {
 }
 
 // newMexcTickerSubscriptionMsg returns a new ticker subscription Msg.
-func newMexcTickerSubscriptionMsg() MexcTickerSubscriptionMsg {
-	return MexcTickerSubscriptionMsg{
+func newMexcTickerSubscriptionMsg() MexcTickerSubscription {
+	return MexcTickerSubscription{
 		OP: "sub.overview",
 	}
 }
