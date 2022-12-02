@@ -12,8 +12,8 @@ type ChainHeight struct {
 	Logger zerolog.Logger
 	ctx context.Context
 	rpc tmrpcclient.Client
-	height int64
 	pollInterval time.Duration
+	height int64
 	err error
 }
 
@@ -64,6 +64,7 @@ func (c *ChainHeight) update() {
 	} else {
 		c.Logger.Warn().Err(err).Msg("failed to get chain height")
 	}
+	c.err = err
 }
 
 func (c *ChainHeight) GetChainHeight() (int64, error) {
