@@ -13,7 +13,6 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/flags"
-	"github.com/cosmos/cosmos-sdk/client/rpc"
 	"github.com/cosmos/cosmos-sdk/client/tx"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	"github.com/cosmos/cosmos-sdk/telemetry"
@@ -70,6 +69,7 @@ func NewOracleClient(
 	grpcEndpoint string,
 	gasAdjustment float64,
 	gasPrices string,
+	heightPollInterval time.Duration,
 ) (OracleClient, error) {
 	oracleAddr, err := sdk.AccAddressFromBech32(oracleAddrString)
 	if err != nil {
@@ -102,16 +102,11 @@ func NewOracleClient(
 		return OracleClient{}, err
 	}
 
-	blockHeight, err := rpc.GetChainHeight(clientCtx)
-	if err != nil {
-		return OracleClient{}, err
-	}
-
 	chainHeight, err := NewChainHeight(
 		ctx,
 		clientCtx.Client,
 		oracleClient.Logger,
-		blockHeight,
+		heightPollInterval,
 	)
 	if err != nil {
 		return OracleClient{}, err
