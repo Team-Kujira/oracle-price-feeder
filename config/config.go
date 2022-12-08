@@ -20,6 +20,7 @@ const (
 	defaultSrvWriteTimeout = 15 * time.Second
 	defaultSrvReadTimeout  = 15 * time.Second
 	defaultProviderTimeout = 100 * time.Millisecond
+	defaultHeightPollInterval = 1 * time.Second
 )
 
 var (
@@ -81,6 +82,7 @@ type (
 		EnableServer      bool               `toml:"enable_server"`
 		EnableVoter       bool               `toml:"enable_voter"`
 		Healthchecks      []Healthchecks     `toml:"healthchecks" validate:"dive"`
+		HeightPollInterval string `toml:"height_poll_interval"`
 	}
 
 	// Server defines the API server configuration.
@@ -224,6 +226,9 @@ func ParseConfig(configPath string) (Config, error) {
 	}
 	if len(cfg.ProviderTimeout) == 0 {
 		cfg.ProviderTimeout = defaultProviderTimeout.String()
+	}
+	if cfg.HeightPollInterval == "" {
+		cfg.HeightPollInterval = defaultHeightPollInterval.String()
 	}
 
 	pairs := make(map[string]map[provider.Name]struct{})

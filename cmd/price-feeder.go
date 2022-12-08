@@ -124,6 +124,11 @@ func priceFeederCmdHandler(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	heightPollInterval, err := time.ParseDuration(cfg.HeightPollInterval)
+	if err != nil {
+		return fmt.Errorf("failed to parse height poll interval: %w", err)
+	}
+
 	oracleClient, err := client.NewOracleClient(
 		ctx,
 		logger,
@@ -139,6 +144,7 @@ func priceFeederCmdHandler(cmd *cobra.Command, args []string) error {
 		cfg.RPC.GRPCEndpoint,
 		cfg.GasAdjustment,
 		cfg.GasPrices,
+		heightPollInterval,
 	)
 	if err != nil {
 		return err
