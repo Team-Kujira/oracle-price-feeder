@@ -79,6 +79,7 @@ type (
 		GasPrices         string             `toml:"gas_prices" validate:"required"`
 		ProviderTimeout   string             `toml:"provider_timeout"`
 		ProviderEndpoints []provider.Endpoint `toml:"provider_endpoints" validate:"dive"`
+		ProviderMinOverride bool `toml:"provider_min_override"`
 		EnableServer      bool               `toml:"enable_server"`
 		EnableVoter       bool               `toml:"enable_voter"`
 		Healthchecks      []Healthchecks     `toml:"healthchecks" validate:"dive"`
@@ -264,9 +265,11 @@ func ParseConfig(configPath string) (Config, error) {
 		}
 	}
 
-	for base, providers := range pairs {
-		if _, ok := pairs[base]["mock"]; !ok && len(providers) < 3 {
-			return cfg, fmt.Errorf("must have at least three providers for %s", base)
+	if !cfg.ProviderMinOverride {
+		for base, providers := range pairs {
+			if _, ok := pairs[base]["mock"]; !ok && len(providers) < 3 {
+				return cfg, fmt.Errorf("must have at least three providers for %s", base)
+			}
 		}
 	}
 
