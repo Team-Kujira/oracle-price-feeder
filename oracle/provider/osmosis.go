@@ -3,15 +3,11 @@ package provider
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
-	"strconv"
 	"strings"
 
-	"price-feeder/config"
 	"price-feeder/oracle/types"
-
-	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
 const (
@@ -62,8 +58,8 @@ type (
 	}
 )
 
-func NewOsmosisProvider(endpoint config.ProviderEndpoint) *OsmosisProvider {
-	if endpoint.Name == config.ProviderOsmosis {
+func NewOsmosisProvider(endpoint Endpoint) *OsmosisProvider {
+	if endpoint.Name == ProviderOsmosis {
 		return &OsmosisProvider{
 			baseURL: endpoint.Rest,
 			client:  newDefaultHTTPClient(),
@@ -75,17 +71,26 @@ func NewOsmosisProvider(endpoint config.ProviderEndpoint) *OsmosisProvider {
 	}
 }
 
-func (p OsmosisProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[string]TickerPrice, error) {
+// SubscribeCurrencyPairs performs a no-op since osmosis does not use websockets
+func (p OsmosisProvider) SubscribeCurrencyPairs(pairs ...types.CurrencyPair) error {
+	return nil
+}
+
+func (p OsmosisProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
 	path := fmt.Sprintf("%s%s/all", p.baseURL, osmosisTokenEndpoint)
 
 	resp, err := p.client.Get(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to make Osmosis request: %w", err)
 	}
+	err = checkHTTPStatus(resp)
+	if err != nil {
+		return nil, err
+	}
 
 	defer resp.Body.Close()
 
-	bz, err := ioutil.ReadAll(resp.Body)
+	bz, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read Osmosis response body: %w", err)
 	}
@@ -100,7 +105,7 @@ func (p OsmosisProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[strin
 		baseDenomIdx[strings.ToUpper(cp.Base)] = cp
 	}
 
-	tickerPrices := make(map[string]TickerPrice, len(pairs))
+	tickerPrices := make(map[string]types.TickerPrice, len(pairs))
 	for _, tr := range tokensResp {
 		symbol := strings.ToUpper(tr.Symbol) // symbol == base in a currency pair
 
@@ -114,35 +119,26 @@ func (p OsmosisProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[strin
 			return nil, fmt.Errorf("duplicate token found in Osmosis response: %s", symbol)
 		}
 
-		priceRaw := strconv.FormatFloat(tr.Price, 'f', -1, 64)
-		price, err := sdk.NewDecFromStr(priceRaw)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read Osmosis price (%s) for %s", priceRaw, symbol)
+		tickerPrices[cp.String()] = types.TickerPrice{
+			Price: floatToDec(tr.Price),
+			Volume: floatToDec(tr.Volume),
 		}
-
-		volumeRaw := strconv.FormatFloat(tr.Volume, 'f', -1, 64)
-		volume, err := sdk.NewDecFromStr(volumeRaw)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read Osmosis volume (%s) for %s", volumeRaw, symbol)
-		}
-
-		tickerPrices[cp.String()] = TickerPrice{Price: price, Volume: volume}
 	}
 
 	for _, cp := range pairs {
 		if _, ok := tickerPrices[cp.String()]; !ok {
-			return nil, fmt.Errorf("missing exchange rate for %s", cp.String())
+			return nil, fmt.Errorf(types.ErrMissingExchangeRate.Error(), cp.String())
 		}
 	}
 
 	return tickerPrices, nil
 }
 
-func (p OsmosisProvider) GetCandlePrices(pairs ...types.CurrencyPair) (map[string][]CandlePrice, error) {
-	candles := make(map[string][]CandlePrice)
+func (p OsmosisProvider) GetCandlePrices(pairs ...types.CurrencyPair) (map[string][]types.CandlePrice, error) {
+	candles := make(map[string][]types.CandlePrice)
 	for _, pair := range pairs {
 		if _, ok := candles[pair.Base]; !ok {
-			candles[pair.String()] = []CandlePrice{}
+			candles[pair.String()] = []types.CandlePrice{}
 		}
 
 		path := fmt.Sprintf("%s%s/%s/chart?tf=5", p.baseURL, osmosisCandleEndpoint, pair.Base)
@@ -151,10 +147,14 @@ func (p OsmosisProvider) GetCandlePrices(pairs ...types.CurrencyPair) (map[strin
 		if err != nil {
 			return nil, fmt.Errorf("failed to make Osmosis request: %w", err)
 		}
+		err = checkHTTPStatus(resp)
+		if err != nil {
+			return nil, err
+		}
 
 		defer resp.Body.Close()
 
-		bz, err := ioutil.ReadAll(resp.Body)
+		bz, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read Osmosis response body: %w", err)
 		}
@@ -164,14 +164,18 @@ func (p OsmosisProvider) GetCandlePrices(pairs ...types.CurrencyPair) (map[strin
 			return nil, fmt.Errorf("failed to unmarshal Osmosis response body: %w", err)
 		}
 
-		candlePrices := []CandlePrice{}
+		staleTime := PastUnixTime(providerCandlePeriod)
+
+		candlePrices := []types.CandlePrice{}
 		for _, responseCandle := range candlesResp {
-			closeStr := fmt.Sprintf("%f", responseCandle.Close)
-			volumeStr := fmt.Sprintf("%f", responseCandle.Volume)
-			candlePrices = append(candlePrices, CandlePrice{
-				Price:     sdk.MustNewDecFromStr(closeStr),
-				Volume:    sdk.MustNewDecFromStr(volumeStr),
-				TimeStamp: responseCandle.Time,
+			if staleTime >= responseCandle.Time {
+				continue
+			}
+			candlePrices = append(candlePrices, types.CandlePrice{
+				Price:  floatToDec(responseCandle.Close),
+				Volume: floatToDec(responseCandle.Volume),
+				// convert osmosis timestamp seconds -> milliseconds
+				TimeStamp: SecondsToMilli(responseCandle.Time),
 			})
 		}
 		candles[pair.String()] = candlePrices
@@ -185,6 +189,10 @@ func (p OsmosisProvider) GetAvailablePairs() (map[string]struct{}, error) {
 	path := fmt.Sprintf("%s%s", p.baseURL, osmosisPairsEndpoint)
 
 	resp, err := p.client.Get(path)
+	if err != nil {
+		return nil, err
+	}
+	err = checkHTTPStatus(resp)
 	if err != nil {
 		return nil, err
 	}
@@ -205,9 +213,4 @@ func (p OsmosisProvider) GetAvailablePairs() (map[string]struct{}, error) {
 	}
 
 	return availablePairs, nil
-}
-
-// SubscribeCurrencyPairs performs a no-op since osmosis does not use websockets
-func (p OsmosisProvider) SubscribeCurrencyPairs(pairs ...types.CurrencyPair) error {
-	return nil
 }

@@ -7,9 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"price-feeder/oracle/types"
-
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"price-feeder/oracle/types"
 )
 
 const (
@@ -41,8 +40,13 @@ func NewMockProvider() *MockProvider {
 	}
 }
 
-func (p MockProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[string]TickerPrice, error) {
-	tickerPrices := make(map[string]TickerPrice, len(pairs))
+// SubscribeCurrencyPairs performs a no-op since mock does not use websockets
+func (p MockProvider) SubscribeCurrencyPairs(pairs ...types.CurrencyPair) error {
+	return nil
+}
+
+func (p MockProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
+	tickerPrices := make(map[string]types.TickerPrice, len(pairs))
 
 	resp, err := p.client.Get(p.baseURL)
 	if err != nil {
@@ -85,26 +89,26 @@ func (p MockProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[string]T
 			return nil, fmt.Errorf("found duplicate ticker: %s", ticker)
 		}
 
-		tickerPrices[ticker] = TickerPrice{Price: price, Volume: volume}
+		tickerPrices[ticker] = types.TickerPrice{Price: price, Volume: volume}
 	}
 
 	for t := range tickerMap {
 		if _, ok := tickerPrices[t]; !ok {
-			return nil, fmt.Errorf("missing exchange rate for %s", t)
+			return nil, fmt.Errorf(types.ErrMissingExchangeRate.Error(), t)
 		}
 	}
 
 	return tickerPrices, nil
 }
 
-func (p MockProvider) GetCandlePrices(pairs ...types.CurrencyPair) (map[string][]CandlePrice, error) {
+func (p MockProvider) GetCandlePrices(pairs ...types.CurrencyPair) (map[string][]types.CandlePrice, error) {
 	price, err := p.GetTickerPrices(pairs...)
 	if err != nil {
 		return nil, err
 	}
-	candles := make(map[string][]CandlePrice)
+	candles := make(map[string][]types.CandlePrice)
 	for pair, price := range price {
-		candles[pair] = []CandlePrice{
+		candles[pair] = []types.CandlePrice{
 			{
 				Price:     price.Price,
 				Volume:    price.Volume,
@@ -113,11 +117,6 @@ func (p MockProvider) GetCandlePrices(pairs ...types.CurrencyPair) (map[string][
 		}
 	}
 	return candles, nil
-}
-
-// SubscribeCurrencyPairs performs a no-op since mock does not use websockets
-func (p MockProvider) SubscribeCurrencyPairs(pairs ...types.CurrencyPair) error {
-	return nil
 }
 
 // GetAvailablePairs return all available pairs symbol to susbscribe.

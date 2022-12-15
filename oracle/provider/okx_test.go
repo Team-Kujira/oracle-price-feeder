@@ -2,21 +2,20 @@ package provider
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
-
-	"price-feeder/config"
-	"price-feeder/oracle/types"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
+	"price-feeder/oracle/types"
 )
 
 func TestOkxProvider_GetTickerPrices(t *testing.T) {
 	p, err := NewOkxProvider(
 		context.TODO(),
 		zerolog.Nop(),
-		config.ProviderEndpoint{},
+		Endpoint{},
 		types.CurrencyPair{Base: "BTC", Quote: "USDT"},
 	)
 	require.NoError(t, err)
@@ -80,24 +79,8 @@ func TestOkxProvider_GetTickerPrices(t *testing.T) {
 
 	t.Run("invalid_request_invalid_ticker", func(t *testing.T) {
 		prices, err := p.GetTickerPrices(types.CurrencyPair{Base: "FOO", Quote: "BAR"})
-		require.Error(t, err)
-		require.Equal(t, "okx provider failed to get ticker price for FOO-BAR", err.Error())
+		require.EqualError(t, err, "okx failed to get ticker price for FOO-BAR")
 		require.Nil(t, prices)
-	})
-}
-
-func TestOkxProvider_SubscribeCurrencyPairs(t *testing.T) {
-	p, err := NewOkxProvider(
-		context.TODO(),
-		zerolog.Nop(),
-		config.ProviderEndpoint{},
-		types.CurrencyPair{Base: "ATOM", Quote: "USDT"},
-	)
-	require.NoError(t, err)
-
-	t.Run("invalid_subscribe_channels_empty", func(t *testing.T) {
-		err = p.SubscribeCurrencyPairs([]types.CurrencyPair{}...)
-		require.ErrorContains(t, err, "currency pairs is empty")
 	})
 }
 
@@ -105,4 +88,20 @@ func TestOkxCurrencyPairToOkxPair(t *testing.T) {
 	cp := types.CurrencyPair{Base: "ATOM", Quote: "USDT"}
 	okxSymbol := currencyPairToOkxPair(cp)
 	require.Equal(t, okxSymbol, "ATOM-USDT")
+}
+
+func TestOkxProvider_getSubscriptionMsgs(t *testing.T) {
+	provider := &OkxProvider{
+		subscribedPairs: map[string]types.CurrencyPair{},
+	}
+	cps := []types.CurrencyPair{
+		{Base: "ATOM", Quote: "USDT"},
+	}
+	subMsgs := provider.getSubscriptionMsgs(cps...)
+
+	msg, _ := json.Marshal(subMsgs[0])
+	require.Equal(t, "{\"op\":\"subscribe\",\"args\":[{\"channel\":\"candle1m\",\"instId\":\"ATOM-USDT\"}]}", string(msg))
+
+	msg, _ = json.Marshal(subMsgs[1])
+	require.Equal(t, "{\"op\":\"subscribe\",\"args\":[{\"channel\":\"tickers\",\"instId\":\"ATOM-USDT\"}]}", string(msg))
 }

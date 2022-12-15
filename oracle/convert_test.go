@@ -4,7 +4,6 @@ import (
 	"testing"
 	"time"
 
-	"price-feeder/config"
 	"price-feeder/oracle/provider"
 	"price-feeder/oracle/types"
 
@@ -30,7 +29,7 @@ var (
 )
 
 func TestGetUSDBasedProviders(t *testing.T) {
-	providerPairs := make(map[string][]types.CurrencyPair, 3)
+	providerPairs := make(map[provider.Name][]types.CurrencyPair, 3)
 	providerPairs["coinbase"] = []types.CurrencyPair{
 		{
 			Base:  "FOO",
@@ -58,7 +57,7 @@ func TestGetUSDBasedProviders(t *testing.T) {
 
 	pairs, err := getUSDBasedProviders("FOO", providerPairs)
 	require.NoError(t, err)
-	expectedPairs := map[string]struct{}{
+	expectedPairs := map[provider.Name]struct{}{
 		"coinbase": {},
 		"huobi":    {},
 	}
@@ -66,39 +65,39 @@ func TestGetUSDBasedProviders(t *testing.T) {
 
 	pairs, err = getUSDBasedProviders("USDT", providerPairs)
 	require.NoError(t, err)
-	expectedPairs = map[string]struct{}{
+	expectedPairs = map[provider.Name]struct{}{
 		"binance": {},
 	}
 	require.Equal(t, pairs, expectedPairs)
 
-	pairs, err = getUSDBasedProviders("BAR", providerPairs)
+	_, err = getUSDBasedProviders("BAR", providerPairs)
 	require.Error(t, err)
 }
 
 func TestConvertCandlesToUSD(t *testing.T) {
 	providerCandles := make(provider.AggregatedProviderCandles, 2)
 
-	binanceCandles := map[string][]provider.CandlePrice{
+	binanceCandles := map[string][]types.CandlePrice{
 		"ATOM": {{
 			Price:     atomPrice,
 			Volume:    atomVolume,
 			TimeStamp: provider.PastUnixTime(1 * time.Minute),
 		}},
 	}
-	providerCandles[config.ProviderBinance] = binanceCandles
+	providerCandles[provider.ProviderBinance] = binanceCandles
 
-	krakenCandles := map[string][]provider.CandlePrice{
+	krakenCandles := map[string][]types.CandlePrice{
 		"USDT": {{
 			Price:     usdtPrice,
 			Volume:    usdtVolume,
 			TimeStamp: provider.PastUnixTime(1 * time.Minute),
 		}},
 	}
-	providerCandles[config.ProviderKraken] = krakenCandles
+	providerCandles[provider.ProviderKraken] = krakenCandles
 
-	providerPairs := map[string][]types.CurrencyPair{
-		config.ProviderBinance: {atomPair},
-		config.ProviderKraken:  {usdtPair},
+	providerPairs := map[provider.Name][]types.CurrencyPair{
+		provider.ProviderBinance: {atomPair},
+		provider.ProviderKraken:  {usdtPair},
 	}
 
 	convertedCandles, err := convertCandlesToUSD(
@@ -119,47 +118,47 @@ func TestConvertCandlesToUSD(t *testing.T) {
 func TestConvertCandlesToUSDFiltering(t *testing.T) {
 	providerCandles := make(provider.AggregatedProviderCandles, 2)
 
-	binanceCandles := map[string][]provider.CandlePrice{
+	binanceCandles := map[string][]types.CandlePrice{
 		"ATOM": {{
 			Price:     atomPrice,
 			Volume:    atomVolume,
 			TimeStamp: provider.PastUnixTime(1 * time.Minute),
 		}},
 	}
-	providerCandles[config.ProviderBinance] = binanceCandles
+	providerCandles[provider.ProviderBinance] = binanceCandles
 
-	krakenCandles := map[string][]provider.CandlePrice{
+	krakenCandles := map[string][]types.CandlePrice{
 		"USDT": {{
 			Price:     usdtPrice,
 			Volume:    usdtVolume,
 			TimeStamp: provider.PastUnixTime(1 * time.Minute),
 		}},
 	}
-	providerCandles[config.ProviderKraken] = krakenCandles
+	providerCandles[provider.ProviderKraken] = krakenCandles
 
-	gateCandles := map[string][]provider.CandlePrice{
+	gateCandles := map[string][]types.CandlePrice{
 		"USDT": {{
 			Price:     usdtPrice,
 			Volume:    usdtVolume,
 			TimeStamp: provider.PastUnixTime(1 * time.Minute),
 		}},
 	}
-	providerCandles[config.ProviderGate] = gateCandles
+	providerCandles[provider.ProviderGate] = gateCandles
 
-	okxCandles := map[string][]provider.CandlePrice{
+	okxCandles := map[string][]types.CandlePrice{
 		"USDT": {{
 			Price:     sdk.MustNewDecFromStr("100.0"),
 			Volume:    usdtVolume,
 			TimeStamp: provider.PastUnixTime(1 * time.Minute),
 		}},
 	}
-	providerCandles[config.ProviderOkx] = okxCandles
+	providerCandles[provider.ProviderOkx] = okxCandles
 
-	providerPairs := map[string][]types.CurrencyPair{
-		config.ProviderBinance: {atomPair},
-		config.ProviderKraken:  {usdtPair},
-		config.ProviderGate:    {usdtPair},
-		config.ProviderOkx:     {usdtPair},
+	providerPairs := map[provider.Name][]types.CurrencyPair{
+		provider.ProviderBinance: {atomPair},
+		provider.ProviderKraken:  {usdtPair},
+		provider.ProviderGate:    {usdtPair},
+		provider.ProviderOkx:     {usdtPair},
 	}
 
 	convertedCandles, err := convertCandlesToUSD(
@@ -180,25 +179,25 @@ func TestConvertCandlesToUSDFiltering(t *testing.T) {
 func TestConvertTickersToUSD(t *testing.T) {
 	providerPrices := make(provider.AggregatedProviderPrices, 2)
 
-	binanceTickers := map[string]provider.TickerPrice{
+	binanceTickers := map[string]types.TickerPrice{
 		"ATOM": {
 			Price:  atomPrice,
 			Volume: atomVolume,
 		},
 	}
-	providerPrices[config.ProviderBinance] = binanceTickers
+	providerPrices[provider.ProviderBinance] = binanceTickers
 
-	krakenTicker := map[string]provider.TickerPrice{
+	krakenTicker := map[string]types.TickerPrice{
 		"USDT": {
 			Price:  usdtPrice,
 			Volume: usdtVolume,
 		},
 	}
-	providerPrices[config.ProviderKraken] = krakenTicker
+	providerPrices[provider.ProviderKraken] = krakenTicker
 
-	providerPairs := map[string][]types.CurrencyPair{
-		config.ProviderBinance: {atomPair},
-		config.ProviderKraken:  {usdtPair},
+	providerPairs := map[provider.Name][]types.CurrencyPair{
+		provider.ProviderBinance: {atomPair},
+		provider.ProviderKraken:  {usdtPair},
 	}
 
 	convertedTickers, err := convertTickersToUSD(
@@ -219,40 +218,40 @@ func TestConvertTickersToUSD(t *testing.T) {
 func TestConvertTickersToUSDFiltering(t *testing.T) {
 	providerPrices := make(provider.AggregatedProviderPrices, 2)
 
-	binanceTickers := map[string]provider.TickerPrice{
+	binanceTickers := map[string]types.TickerPrice{
 		"ATOM": {
 			Price:  atomPrice,
 			Volume: atomVolume,
 		},
 	}
-	providerPrices[config.ProviderBinance] = binanceTickers
+	providerPrices[provider.ProviderBinance] = binanceTickers
 
-	krakenTicker := map[string]provider.TickerPrice{
+	krakenTicker := map[string]types.TickerPrice{
 		"USDT": {
 			Price:  usdtPrice,
 			Volume: usdtVolume,
 		},
 	}
-	providerPrices[config.ProviderKraken] = krakenTicker
+	providerPrices[provider.ProviderKraken] = krakenTicker
 
-	gateTicker := map[string]provider.TickerPrice{
+	gateTicker := map[string]types.TickerPrice{
 		"USDT": krakenTicker["USDT"],
 	}
-	providerPrices[config.ProviderGate] = gateTicker
+	providerPrices[provider.ProviderGate] = gateTicker
 
-	huobiTicker := map[string]provider.TickerPrice{
+	huobiTicker := map[string]types.TickerPrice{
 		"USDT": {
 			Price:  sdk.MustNewDecFromStr("10000"),
 			Volume: usdtVolume,
 		},
 	}
-	providerPrices[config.ProviderHuobi] = huobiTicker
+	providerPrices[provider.ProviderHuobi] = huobiTicker
 
-	providerPairs := map[string][]types.CurrencyPair{
-		config.ProviderBinance: {atomPair},
-		config.ProviderKraken:  {usdtPair},
-		config.ProviderGate:    {usdtPair},
-		config.ProviderHuobi:   {usdtPair},
+	providerPairs := map[provider.Name][]types.CurrencyPair{
+		provider.ProviderBinance: {atomPair},
+		provider.ProviderKraken:  {usdtPair},
+		provider.ProviderGate:    {usdtPair},
+		provider.ProviderHuobi:   {usdtPair},
 	}
 
 	covertedDeviation, err := convertTickersToUSD(

@@ -10,6 +10,7 @@ import (
 	"github.com/BurntSushi/toml"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/go-playground/validator/v10"
+	"price-feeder/oracle/provider"
 )
 
 const (
@@ -19,17 +20,7 @@ const (
 	defaultSrvWriteTimeout = 15 * time.Second
 	defaultSrvReadTimeout  = 15 * time.Second
 	defaultProviderTimeout = 100 * time.Millisecond
-
-	ProviderFin      = "fin"
-	ProviderKraken   = "kraken"
-	ProviderBinance  = "binance"
-	ProviderMexc     = "mexc"
-	ProviderOsmosis  = "osmosis"
-	ProviderHuobi    = "huobi"
-	ProviderOkx      = "okx"
-	ProviderGate     = "gate"
-	ProviderCoinbase = "coinbase"
-	ProviderMock     = "mock"
+	defaultHeightPollInterval = 1 * time.Second
 )
 
 var (
@@ -40,17 +31,20 @@ var (
 
 	// SupportedProviders defines a lookup table of all the supported currency API
 	// providers.
-	SupportedProviders = map[string]struct{}{
-		ProviderFin:      {},
-		ProviderKraken:   {},
-		ProviderBinance:  {},
-		ProviderMexc:     {},
-		ProviderOsmosis:  {},
-		ProviderOkx:      {},
-		ProviderHuobi:    {},
-		ProviderGate:     {},
-		ProviderCoinbase: {},
-		ProviderMock:     {},
+	SupportedProviders = map[provider.Name]struct{}{
+		provider.ProviderKraken:    {},
+		provider.ProviderBinance:   {},
+		provider.ProviderBinanceUS: {},
+		provider.ProviderOsmosis:   {},
+		provider.ProviderOsmosisV2: {},
+		provider.ProviderOkx:       {},
+		provider.ProviderHuobi:     {},
+		provider.ProviderGate:      {},
+		provider.ProviderCoinbase:  {},
+		provider.ProviderBitget:    {},
+		provider.ProviderMexc:      {},
+		provider.ProviderCrypto:    {},
+		provider.ProviderMock:      {},
 	}
 
 	// maxDeviationThreshold is the maxmimum allowed amount of standard
@@ -84,10 +78,12 @@ type (
 		GasAdjustment     float64            `toml:"gas_adjustment" validate:"required"`
 		GasPrices         string             `toml:"gas_prices" validate:"required"`
 		ProviderTimeout   string             `toml:"provider_timeout"`
-		ProviderEndpoints []ProviderEndpoint `toml:"provider_endpoints" validate:"dive"`
+		ProviderEndpoints []provider.Endpoint `toml:"provider_endpoints" validate:"dive"`
+		ProviderMinOverride bool `toml:"provider_min_override"`
 		EnableServer      bool               `toml:"enable_server"`
 		EnableVoter       bool               `toml:"enable_voter"`
 		Healthchecks      []Healthchecks     `toml:"healthchecks" validate:"dive"`
+		HeightPollInterval string `toml:"height_poll_interval"`
 	}
 
 	// Server defines the API server configuration.
@@ -104,7 +100,7 @@ type (
 	CurrencyPair struct {
 		Base      string   `toml:"base" validate:"required"`
 		Quote     string   `toml:"quote" validate:"required"`
-		Providers []string `toml:"providers" validate:"required,gt=0,dive,required"`
+		Providers []provider.Name `toml:"providers" validate:"required,gt=0,dive,required"`
 	}
 
 	// Deviation defines a maximum amount of standard deviations that a given asset can
@@ -168,19 +164,6 @@ type (
 		PrometheusRetentionTime int64 `toml:"prometheus_retention" mapstructure:"prometheus-retention-time"`
 	}
 
-	// ProviderEndpoint defines an override setting in our config for the
-	// hardcoded rest and websocket api endpoints.
-	ProviderEndpoint struct {
-		// Name of the provider, ex. "binance"
-		Name string `toml:"name"`
-
-		// Rest endpoint for the provider, ex. "https://api1.binance.com"
-		Rest string `toml:"rest"`
-
-		// Websocket endpoint for the provider, ex. "stream.binance.com:9443"
-		Websocket string `toml:"websocket"`
-	}
-
 	Healthchecks struct {
 		URL string `toml:"url" validate:"required"`
 		Timeout string `toml:"timeout" validate:"required"`
@@ -198,7 +181,7 @@ func telemetryValidation(sl validator.StructLevel) {
 
 // endpointValidation is custom validation for the ProviderEndpoint struct.
 func endpointValidation(sl validator.StructLevel) {
-	endpoint := sl.Current().Interface().(ProviderEndpoint)
+	endpoint := sl.Current().Interface().(provider.Endpoint)
 
 	if len(endpoint.Name) < 1 || len(endpoint.Rest) < 1 || len(endpoint.Websocket) < 1 {
 		sl.ReportError(endpoint, "endpoint", "Endpoint", "unsupportedEndpointType", "")
@@ -211,7 +194,7 @@ func endpointValidation(sl validator.StructLevel) {
 // Validate returns an error if the Config object is invalid.
 func (c Config) Validate() error {
 	validate.RegisterStructValidation(telemetryValidation, Telemetry{})
-	validate.RegisterStructValidation(endpointValidation, ProviderEndpoint{})
+	validate.RegisterStructValidation(endpointValidation, provider.Endpoint{})
 	return validate.Struct(c)
 }
 
@@ -245,12 +228,15 @@ func ParseConfig(configPath string) (Config, error) {
 	if len(cfg.ProviderTimeout) == 0 {
 		cfg.ProviderTimeout = defaultProviderTimeout.String()
 	}
+	if cfg.HeightPollInterval == "" {
+		cfg.HeightPollInterval = defaultHeightPollInterval.String()
+	}
 
-	pairs := make(map[string]map[string]struct{})
+	pairs := make(map[string]map[provider.Name]struct{})
 	coinQuotes := make(map[string]struct{})
 	for _, cp := range cfg.CurrencyPairs {
 		if _, ok := pairs[cp.Base]; !ok {
-			pairs[cp.Base] = make(map[string]struct{})
+			pairs[cp.Base] = make(map[provider.Name]struct{})
 		}
 		if strings.ToUpper(cp.Quote) != DenomUSD {
 			coinQuotes[cp.Quote] = struct{}{}
@@ -279,9 +265,11 @@ func ParseConfig(configPath string) (Config, error) {
 		}
 	}
 
-	for base, providers := range pairs {
-		if _, ok := pairs[base]["mock"]; !ok && len(providers) < 3 {
-			return cfg, fmt.Errorf("must have at least three providers for %s", base)
+	if !cfg.ProviderMinOverride {
+		for base, providers := range pairs {
+			if _, ok := pairs[base]["mock"]; !ok && len(providers) < 3 {
+				return cfg, fmt.Errorf("must have at least three providers for %s", base)
+			}
 		}
 	}
 

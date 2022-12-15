@@ -18,17 +18,17 @@ import (
 )
 
 type mockProvider struct {
-	prices map[string]provider.TickerPrice
+	prices map[string]types.TickerPrice
 }
 
-func (m mockProvider) GetTickerPrices(_ ...types.CurrencyPair) (map[string]provider.TickerPrice, error) {
+func (m mockProvider) GetTickerPrices(_ ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
 	return m.prices, nil
 }
 
-func (m mockProvider) GetCandlePrices(_ ...types.CurrencyPair) (map[string][]provider.CandlePrice, error) {
-	candles := make(map[string][]provider.CandlePrice)
+func (m mockProvider) GetCandlePrices(_ ...types.CurrencyPair) (map[string][]types.CandlePrice, error) {
+	candles := make(map[string][]types.CandlePrice)
 	for pair, price := range m.prices {
-		candles[pair] = []provider.CandlePrice{
+		candles[pair] = []types.CandlePrice{
 			{
 				Price:     price.Price,
 				TimeStamp: provider.PastUnixTime(1 * time.Minute),
@@ -48,14 +48,14 @@ func (m mockProvider) GetAvailablePairs() (map[string]struct{}, error) {
 }
 
 type failingProvider struct {
-	prices map[string]provider.TickerPrice
+	prices map[string]types.TickerPrice
 }
 
-func (m failingProvider) GetTickerPrices(_ ...types.CurrencyPair) (map[string]provider.TickerPrice, error) {
+func (m failingProvider) GetTickerPrices(_ ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
 	return nil, fmt.Errorf("unable to get ticker prices")
 }
 
-func (m failingProvider) GetCandlePrices(_ ...types.CurrencyPair) (map[string][]provider.CandlePrice, error) {
+func (m failingProvider) GetCandlePrices(_ ...types.CurrencyPair) (map[string][]types.CandlePrice, error) {
 	return nil, fmt.Errorf("unable to get candle prices")
 }
 
@@ -82,32 +82,32 @@ func (ots *OracleTestSuite) SetupSuite() {
 			{
 				Base:      "UMEE",
 				Quote:     "USDT",
-				Providers: []string{config.ProviderBinance},
+				Providers: []provider.Name{provider.ProviderBinance},
 			},
 			{
 				Base:      "UMEE",
 				Quote:     "USDC",
-				Providers: []string{config.ProviderKraken},
+				Providers: []provider.Name{provider.ProviderKraken},
 			},
 			{
 				Base:      "XBT",
 				Quote:     "USDT",
-				Providers: []string{config.ProviderOsmosis},
+				Providers: []provider.Name{provider.ProviderOsmosis},
 			},
 			{
 				Base:      "USDC",
 				Quote:     "USD",
-				Providers: []string{config.ProviderHuobi},
+				Providers: []provider.Name{provider.ProviderHuobi},
 			},
 			{
 				Base:      "USDT",
 				Quote:     "USD",
-				Providers: []string{config.ProviderCoinbase},
+				Providers: []provider.Name{provider.ProviderCoinbase},
 			},
 		},
 		time.Millisecond*100,
 		make(map[string]sdk.Dec),
-		make(map[string]config.ProviderEndpoint),
+		make(map[provider.Name]provider.Endpoint),
 		[]config.Healthchecks{
 			{URL: "https://hc-ping.com/HEALTHCHECK-UUID", Timeout: "200ms"},
 		},
@@ -140,17 +140,17 @@ func (ots *OracleTestSuite) TestPrices() {
 
 	// Use a mock provider with exchange rates that are not specified in
 	// configuration.
-	ots.oracle.priceProviders = map[string]provider.Provider{
-		config.ProviderBinance: mockProvider{
-			prices: map[string]provider.TickerPrice{
+	ots.oracle.priceProviders = map[provider.Name]provider.Provider{
+		provider.ProviderBinance: mockProvider{
+			prices: map[string]types.TickerPrice{
 				"UMEEUSDX": {
 					Price:  sdk.MustNewDecFromStr("3.72"),
 					Volume: sdk.MustNewDecFromStr("2396974.02000000"),
 				},
 			},
 		},
-		config.ProviderKraken: mockProvider{
-			prices: map[string]provider.TickerPrice{
+		provider.ProviderKraken: mockProvider{
+			prices: map[string]types.TickerPrice{
 				"UMEEUSDX": {
 					Price:  sdk.MustNewDecFromStr("3.70"),
 					Volume: sdk.MustNewDecFromStr("1994674.34000000"),
@@ -163,17 +163,17 @@ func (ots *OracleTestSuite) TestPrices() {
 	ots.Require().Empty(ots.oracle.GetPrices())
 
 	// use a mock provider without a conversion rate for these stablecoins
-	ots.oracle.priceProviders = map[string]provider.Provider{
-		config.ProviderBinance: mockProvider{
-			prices: map[string]provider.TickerPrice{
+	ots.oracle.priceProviders = map[provider.Name]provider.Provider{
+		provider.ProviderBinance: mockProvider{
+			prices: map[string]types.TickerPrice{
 				"UMEEUSDT": {
 					Price:  sdk.MustNewDecFromStr("3.72"),
 					Volume: sdk.MustNewDecFromStr("2396974.02000000"),
 				},
 			},
 		},
-		config.ProviderKraken: mockProvider{
-			prices: map[string]provider.TickerPrice{
+		provider.ProviderKraken: mockProvider{
+			prices: map[string]types.TickerPrice{
 				"UMEEUSDC": {
 					Price:  sdk.MustNewDecFromStr("3.70"),
 					Volume: sdk.MustNewDecFromStr("1994674.34000000"),
@@ -188,41 +188,41 @@ func (ots *OracleTestSuite) TestPrices() {
 	ots.Require().Len(prices, 0)
 
 	// use a mock provider to provide prices for the configured exchange pairs
-	ots.oracle.priceProviders = map[string]provider.Provider{
-		config.ProviderBinance: mockProvider{
-			prices: map[string]provider.TickerPrice{
+	ots.oracle.priceProviders = map[provider.Name]provider.Provider{
+		provider.ProviderBinance: mockProvider{
+			prices: map[string]types.TickerPrice{
 				"UMEEUSDT": {
 					Price:  sdk.MustNewDecFromStr("3.72"),
 					Volume: sdk.MustNewDecFromStr("2396974.02000000"),
 				},
 			},
 		},
-		config.ProviderKraken: mockProvider{
-			prices: map[string]provider.TickerPrice{
+		provider.ProviderKraken: mockProvider{
+			prices: map[string]types.TickerPrice{
 				"UMEEUSDC": {
 					Price:  sdk.MustNewDecFromStr("3.70"),
 					Volume: sdk.MustNewDecFromStr("1994674.34000000"),
 				},
 			},
 		},
-		config.ProviderHuobi: mockProvider{
-			prices: map[string]provider.TickerPrice{
+		provider.ProviderHuobi: mockProvider{
+			prices: map[string]types.TickerPrice{
 				"USDCUSD": {
 					Price:  sdk.MustNewDecFromStr("1"),
 					Volume: sdk.MustNewDecFromStr("2396974.34000000"),
 				},
 			},
 		},
-		config.ProviderCoinbase: mockProvider{
-			prices: map[string]provider.TickerPrice{
+		provider.ProviderCoinbase: mockProvider{
+			prices: map[string]types.TickerPrice{
 				"USDTUSD": {
 					Price:  sdk.MustNewDecFromStr("1"),
 					Volume: sdk.MustNewDecFromStr("1994674.34000000"),
 				},
 			},
 		},
-		config.ProviderOsmosis: mockProvider{
-			prices: map[string]provider.TickerPrice{
+		provider.ProviderOsmosis: mockProvider{
+			prices: map[string]types.TickerPrice{
 				"XBTUSDT": {
 					Price:  sdk.MustNewDecFromStr("3.717"),
 					Volume: sdk.MustNewDecFromStr("1994674.34000000"),
@@ -241,41 +241,41 @@ func (ots *OracleTestSuite) TestPrices() {
 	ots.Require().Equal(sdk.MustNewDecFromStr("1"), prices.AmountOf("USDT"))
 
 	// use one working provider and one provider with an incorrect exchange rate
-	ots.oracle.priceProviders = map[string]provider.Provider{
-		config.ProviderBinance: mockProvider{
-			prices: map[string]provider.TickerPrice{
+	ots.oracle.priceProviders = map[provider.Name]provider.Provider{
+		provider.ProviderBinance: mockProvider{
+			prices: map[string]types.TickerPrice{
 				"UMEEUSDX": {
 					Price:  sdk.MustNewDecFromStr("3.72"),
 					Volume: sdk.MustNewDecFromStr("2396974.02000000"),
 				},
 			},
 		},
-		config.ProviderKraken: mockProvider{
-			prices: map[string]provider.TickerPrice{
+		provider.ProviderKraken: mockProvider{
+			prices: map[string]types.TickerPrice{
 				"UMEEUSDC": {
 					Price:  sdk.MustNewDecFromStr("3.70"),
 					Volume: sdk.MustNewDecFromStr("1994674.34000000"),
 				},
 			},
 		},
-		config.ProviderHuobi: mockProvider{
-			prices: map[string]provider.TickerPrice{
+		provider.ProviderHuobi: mockProvider{
+			prices: map[string]types.TickerPrice{
 				"USDCUSD": {
 					Price:  sdk.MustNewDecFromStr("1"),
 					Volume: sdk.MustNewDecFromStr("2396974.34000000"),
 				},
 			},
 		},
-		config.ProviderCoinbase: mockProvider{
-			prices: map[string]provider.TickerPrice{
+		provider.ProviderCoinbase: mockProvider{
+			prices: map[string]types.TickerPrice{
 				"USDTUSD": {
 					Price:  sdk.MustNewDecFromStr("1"),
 					Volume: sdk.MustNewDecFromStr("1994674.34000000"),
 				},
 			},
 		},
-		config.ProviderOsmosis: mockProvider{
-			prices: map[string]provider.TickerPrice{
+		provider.ProviderOsmosis: mockProvider{
+			prices: map[string]types.TickerPrice{
 				"XBTUSDT": {
 					Price:  sdk.MustNewDecFromStr("3.717"),
 					Volume: sdk.MustNewDecFromStr("1994674.34000000"),
@@ -293,41 +293,41 @@ func (ots *OracleTestSuite) TestPrices() {
 	ots.Require().Equal(sdk.MustNewDecFromStr("1"), prices.AmountOf("USDT"))
 
 	// use one working provider and one provider that fails
-	ots.oracle.priceProviders = map[string]provider.Provider{
-		config.ProviderBinance: failingProvider{
-			prices: map[string]provider.TickerPrice{
+	ots.oracle.priceProviders = map[provider.Name]provider.Provider{
+		provider.ProviderBinance: failingProvider{
+			prices: map[string]types.TickerPrice{
 				"UMEEUSDC": {
 					Price:  sdk.MustNewDecFromStr("3.72"),
 					Volume: sdk.MustNewDecFromStr("2396974.02000000"),
 				},
 			},
 		},
-		config.ProviderKraken: mockProvider{
-			prices: map[string]provider.TickerPrice{
+		provider.ProviderKraken: mockProvider{
+			prices: map[string]types.TickerPrice{
 				"UMEEUSDC": {
 					Price:  sdk.MustNewDecFromStr("3.71"),
 					Volume: sdk.MustNewDecFromStr("1994674.34000000"),
 				},
 			},
 		},
-		config.ProviderHuobi: mockProvider{
-			prices: map[string]provider.TickerPrice{
+		provider.ProviderHuobi: mockProvider{
+			prices: map[string]types.TickerPrice{
 				"USDCUSD": {
 					Price:  sdk.MustNewDecFromStr("1"),
 					Volume: sdk.MustNewDecFromStr("2396974.34000000"),
 				},
 			},
 		},
-		config.ProviderCoinbase: mockProvider{
-			prices: map[string]provider.TickerPrice{
+		provider.ProviderCoinbase: mockProvider{
+			prices: map[string]types.TickerPrice{
 				"USDTUSD": {
 					Price:  sdk.MustNewDecFromStr("1"),
 					Volume: sdk.MustNewDecFromStr("1994674.34000000"),
 				},
 			},
 		},
-		config.ProviderOsmosis: mockProvider{
-			prices: map[string]provider.TickerPrice{
+		provider.ProviderOsmosis: mockProvider{
+			prices: map[string]types.TickerPrice{
 				"XBTUSDT": {
 					Price:  sdk.MustNewDecFromStr("3.717"),
 					Volume: sdk.MustNewDecFromStr("1994674.34000000"),
@@ -398,14 +398,14 @@ func TestSuccessSetProviderTickerPricesAndCandles(t *testing.T) {
 	atomPrice := sdk.MustNewDecFromStr("29.93")
 	atomVolume := sdk.MustNewDecFromStr("894123.00")
 
-	prices := make(map[string]provider.TickerPrice, 1)
-	prices[pair.String()] = provider.TickerPrice{
+	prices := make(map[string]types.TickerPrice, 1)
+	prices[pair.String()] = types.TickerPrice{
 		Price:  atomPrice,
 		Volume: atomVolume,
 	}
 
-	candles := make(map[string][]provider.CandlePrice, 1)
-	candles[pair.String()] = []provider.CandlePrice{
+	candles := make(map[string][]types.CandlePrice, 1)
+	candles[pair.String()] = []types.CandlePrice{
 		{
 			Price:     atomPrice,
 			Volume:    atomVolume,
@@ -414,7 +414,7 @@ func TestSuccessSetProviderTickerPricesAndCandles(t *testing.T) {
 	}
 
 	success := SetProviderTickerPricesAndCandles(
-		config.ProviderGate,
+		provider.ProviderGate,
 		providerPrices,
 		providerCandles,
 		prices,
@@ -423,17 +423,17 @@ func TestSuccessSetProviderTickerPricesAndCandles(t *testing.T) {
 	)
 
 	require.True(t, success, "It should successfully set the prices")
-	require.Equal(t, atomPrice, providerPrices[config.ProviderGate][pair.Base].Price)
-	require.Equal(t, atomPrice, providerCandles[config.ProviderGate][pair.Base][0].Price)
+	require.Equal(t, atomPrice, providerPrices[provider.ProviderGate][pair.Base].Price)
+	require.Equal(t, atomPrice, providerCandles[provider.ProviderGate][pair.Base][0].Price)
 }
 
 func TestFailedSetProviderTickerPricesAndCandles(t *testing.T) {
 	success := SetProviderTickerPricesAndCandles(
-		config.ProviderCoinbase,
+		provider.ProviderCoinbase,
 		make(provider.AggregatedProviderPrices, 1),
 		make(provider.AggregatedProviderCandles, 1),
-		make(map[string]provider.TickerPrice, 1),
-		make(map[string][]provider.CandlePrice, 1),
+		make(map[string]types.TickerPrice, 1),
+		make(map[string][]types.CandlePrice, 1),
 		types.CurrencyPair{
 			Base:  "ATOM",
 			Quote: "USDT",
@@ -453,17 +453,17 @@ func TestSuccessGetComputedPricesCandles(t *testing.T) {
 	atomPrice := sdk.MustNewDecFromStr("29.93")
 	atomVolume := sdk.MustNewDecFromStr("894123.00")
 
-	candles := make(map[string][]provider.CandlePrice, 1)
-	candles[pair.Base] = []provider.CandlePrice{
+	candles := make(map[string][]types.CandlePrice, 1)
+	candles[pair.Base] = []types.CandlePrice{
 		{
 			Price:     atomPrice,
 			Volume:    atomVolume,
 			TimeStamp: provider.PastUnixTime(1 * time.Minute),
 		},
 	}
-	providerCandles[config.ProviderBinance] = candles
+	providerCandles[provider.ProviderBinance] = candles
 
-	providerPair := map[string][]types.CurrencyPair{
+	providerPair := map[provider.Name][]types.CurrencyPair{
 		"binance": {pair},
 	}
 
@@ -489,14 +489,14 @@ func TestSuccessGetComputedPricesTickers(t *testing.T) {
 	atomPrice := sdk.MustNewDecFromStr("29.93")
 	atomVolume := sdk.MustNewDecFromStr("894123.00")
 
-	tickerPrices := make(map[string]provider.TickerPrice, 1)
-	tickerPrices[pair.Base] = provider.TickerPrice{
+	tickerPrices := make(map[string]types.TickerPrice, 1)
+	tickerPrices[pair.Base] = types.TickerPrice{
 		Price:  atomPrice,
 		Volume: atomVolume,
 	}
-	providerPrices[config.ProviderBinance] = tickerPrices
+	providerPrices[provider.ProviderBinance] = tickerPrices
 
-	providerPair := map[string][]types.CurrencyPair{
+	providerPair := map[provider.Name][]types.CurrencyPair{
 		"binance": {pair},
 	}
 
@@ -532,68 +532,68 @@ func TestGetComputedPricesCandlesConversion(t *testing.T) {
 	providerCandles := make(provider.AggregatedProviderCandles, 4)
 
 	// normal rates
-	binanceCandles := make(map[string][]provider.CandlePrice, 2)
-	binanceCandles[btcPair.Base] = []provider.CandlePrice{
+	binanceCandles := make(map[string][]types.CandlePrice, 2)
+	binanceCandles[btcPair.Base] = []types.CandlePrice{
 		{
 			Price:     btcEthPrice,
 			Volume:    volume,
 			TimeStamp: provider.PastUnixTime(1 * time.Minute),
 		},
 	}
-	binanceCandles[ethPair.Base] = []provider.CandlePrice{
+	binanceCandles[ethPair.Base] = []types.CandlePrice{
 		{
 			Price:     ethUsdPrice,
 			Volume:    volume,
 			TimeStamp: provider.PastUnixTime(1 * time.Minute),
 		},
 	}
-	providerCandles[config.ProviderBinance] = binanceCandles
+	providerCandles[provider.ProviderBinance] = binanceCandles
 
 	// normal rates
-	gateCandles := make(map[string][]provider.CandlePrice, 1)
-	gateCandles[ethPair.Base] = []provider.CandlePrice{
+	gateCandles := make(map[string][]types.CandlePrice, 1)
+	gateCandles[ethPair.Base] = []types.CandlePrice{
 		{
 			Price:     ethUsdPrice,
 			Volume:    volume,
 			TimeStamp: provider.PastUnixTime(1 * time.Minute),
 		},
 	}
-	gateCandles[btcPair.Base] = []provider.CandlePrice{
+	gateCandles[btcPair.Base] = []types.CandlePrice{
 		{
 			Price:     btcEthPrice,
 			Volume:    volume,
 			TimeStamp: provider.PastUnixTime(1 * time.Minute),
 		},
 	}
-	providerCandles[config.ProviderGate] = gateCandles
+	providerCandles[provider.ProviderGate] = gateCandles
 
 	// abnormal eth rate
-	okxCandles := make(map[string][]provider.CandlePrice, 1)
-	okxCandles[ethPair.Base] = []provider.CandlePrice{
+	okxCandles := make(map[string][]types.CandlePrice, 1)
+	okxCandles[ethPair.Base] = []types.CandlePrice{
 		{
 			Price:     sdk.MustNewDecFromStr("1.0"),
 			Volume:    volume,
 			TimeStamp: provider.PastUnixTime(1 * time.Minute),
 		},
 	}
-	providerCandles[config.ProviderOkx] = okxCandles
+	providerCandles[provider.ProviderOkx] = okxCandles
 
 	// btc / usd rate
-	krakenCandles := make(map[string][]provider.CandlePrice, 1)
-	krakenCandles[btcUSDPair.Base] = []provider.CandlePrice{
+	krakenCandles := make(map[string][]types.CandlePrice, 1)
+	krakenCandles[btcUSDPair.Base] = []types.CandlePrice{
 		{
 			Price:     btcUSDPrice,
 			Volume:    volume,
 			TimeStamp: provider.PastUnixTime(1 * time.Minute),
 		},
 	}
-	providerCandles[config.ProviderKraken] = krakenCandles
+	providerCandles[provider.ProviderKraken] = krakenCandles
 
-	providerPair := map[string][]types.CurrencyPair{
-		config.ProviderBinance: {btcPair, ethPair},
-		config.ProviderGate:    {ethPair},
-		config.ProviderOkx:     {ethPair},
-		config.ProviderKraken:  {btcUSDPair},
+	providerPair := map[provider.Name][]types.CurrencyPair{
+		provider.ProviderBinance: {btcPair, ethPair},
+		provider.ProviderGate:    {ethPair},
+		provider.ProviderOkx:     {ethPair},
+		provider.ProviderKraken:  {btcUSDPair},
 	}
 
 	prices, err := GetComputedPrices(
@@ -634,50 +634,50 @@ func TestGetComputedPricesTickersConversion(t *testing.T) {
 	providerPrices := make(provider.AggregatedProviderPrices, 1)
 
 	// normal rates
-	binanceTickerPrices := make(map[string]provider.TickerPrice, 2)
-	binanceTickerPrices[btcPair.Base] = provider.TickerPrice{
+	binanceTickerPrices := make(map[string]types.TickerPrice, 2)
+	binanceTickerPrices[btcPair.Base] = types.TickerPrice{
 		Price:  btcEthPrice,
 		Volume: volume,
 	}
-	binanceTickerPrices[ethPair.Base] = provider.TickerPrice{
+	binanceTickerPrices[ethPair.Base] = types.TickerPrice{
 		Price:  ethUsdPrice,
 		Volume: volume,
 	}
-	providerPrices[config.ProviderBinance] = binanceTickerPrices
+	providerPrices[provider.ProviderBinance] = binanceTickerPrices
 
 	// normal rates
-	gateTickerPrices := make(map[string]provider.TickerPrice, 4)
-	gateTickerPrices[btcPair.Base] = provider.TickerPrice{
+	gateTickerPrices := make(map[string]types.TickerPrice, 4)
+	gateTickerPrices[btcPair.Base] = types.TickerPrice{
 		Price:  btcEthPrice,
 		Volume: volume,
 	}
-	gateTickerPrices[ethPair.Base] = provider.TickerPrice{
+	gateTickerPrices[ethPair.Base] = types.TickerPrice{
 		Price:  ethUsdPrice,
 		Volume: volume,
 	}
-	providerPrices[config.ProviderGate] = gateTickerPrices
+	providerPrices[provider.ProviderGate] = gateTickerPrices
 
 	// abnormal eth rate
-	okxTickerPrices := make(map[string]provider.TickerPrice, 1)
-	okxTickerPrices[ethPair.Base] = provider.TickerPrice{
+	okxTickerPrices := make(map[string]types.TickerPrice, 1)
+	okxTickerPrices[ethPair.Base] = types.TickerPrice{
 		Price:  sdk.MustNewDecFromStr("1.0"),
 		Volume: volume,
 	}
-	providerPrices[config.ProviderOkx] = okxTickerPrices
+	providerPrices[provider.ProviderOkx] = okxTickerPrices
 
 	// btc / usd rate
-	krakenTickerPrices := make(map[string]provider.TickerPrice, 1)
-	krakenTickerPrices[btcUSDPair.Base] = provider.TickerPrice{
+	krakenTickerPrices := make(map[string]types.TickerPrice, 1)
+	krakenTickerPrices[btcUSDPair.Base] = types.TickerPrice{
 		Price:  btcUSDPrice,
 		Volume: volume,
 	}
-	providerPrices[config.ProviderKraken] = krakenTickerPrices
+	providerPrices[provider.ProviderKraken] = krakenTickerPrices
 
-	providerPair := map[string][]types.CurrencyPair{
-		config.ProviderBinance: {ethPair, btcPair},
-		config.ProviderGate:    {ethPair},
-		config.ProviderOkx:     {ethPair},
-		config.ProviderKraken:  {btcUSDPair},
+	providerPair := map[provider.Name][]types.CurrencyPair{
+		provider.ProviderBinance: {ethPair, btcPair},
+		provider.ProviderGate:    {ethPair},
+		provider.ProviderOkx:     {ethPair},
+		provider.ProviderKraken:  {btcUSDPair},
 	}
 
 	prices, err := GetComputedPrices(

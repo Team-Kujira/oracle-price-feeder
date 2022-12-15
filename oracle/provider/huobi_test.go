@@ -2,22 +2,19 @@ package provider
 
 import (
 	"context"
-	"strconv"
+	"encoding/json"
 	"testing"
 
-	"price-feeder/config"
-	"price-feeder/oracle/types"
-
-	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
+	"price-feeder/oracle/types"
 )
 
 func TestHuobiProvider_GetTickerPrices(t *testing.T) {
 	p, err := NewHuobiProvider(
 		context.TODO(),
 		zerolog.Nop(),
-		config.ProviderEndpoint{},
+		Endpoint{},
 		types.CurrencyPair{Base: "ATOM", Quote: "USDT"},
 	)
 	require.NoError(t, err)
@@ -40,8 +37,8 @@ func TestHuobiProvider_GetTickerPrices(t *testing.T) {
 		prices, err := p.GetTickerPrices(types.CurrencyPair{Base: "ATOM", Quote: "USDT"})
 		require.NoError(t, err)
 		require.Len(t, prices, 1)
-		require.Equal(t, sdk.MustNewDecFromStr(strconv.FormatFloat(lastPrice, 'f', -1, 64)), prices["ATOMUSDT"].Price)
-		require.Equal(t, sdk.MustNewDecFromStr(strconv.FormatFloat(volume, 'f', -1, 64)), prices["ATOMUSDT"].Volume)
+		require.Equal(t, floatToDec(lastPrice), prices["ATOMUSDT"].Price)
+		require.Equal(t, floatToDec(volume), prices["ATOMUSDT"].Volume)
 	})
 
 	t.Run("valid_request_multi_ticker", func(t *testing.T) {
@@ -73,32 +70,16 @@ func TestHuobiProvider_GetTickerPrices(t *testing.T) {
 		)
 		require.NoError(t, err)
 		require.Len(t, prices, 2)
-		require.Equal(t, sdk.MustNewDecFromStr(strconv.FormatFloat(lastPriceAtom, 'f', -1, 64)), prices["ATOMUSDT"].Price)
-		require.Equal(t, sdk.MustNewDecFromStr(strconv.FormatFloat(volume, 'f', -1, 64)), prices["ATOMUSDT"].Volume)
-		require.Equal(t, sdk.MustNewDecFromStr(strconv.FormatFloat(lastPriceLuna, 'f', -1, 64)), prices["LUNAUSDT"].Price)
-		require.Equal(t, sdk.MustNewDecFromStr(strconv.FormatFloat(volume, 'f', -1, 64)), prices["LUNAUSDT"].Volume)
+		require.Equal(t, floatToDec(lastPriceAtom), prices["ATOMUSDT"].Price)
+		require.Equal(t, floatToDec(volume), prices["ATOMUSDT"].Volume)
+		require.Equal(t, floatToDec(lastPriceLuna), prices["LUNAUSDT"].Price)
+		require.Equal(t, floatToDec(volume), prices["LUNAUSDT"].Volume)
 	})
 
 	t.Run("invalid_request_invalid_ticker", func(t *testing.T) {
 		prices, err := p.GetTickerPrices(types.CurrencyPair{Base: "FOO", Quote: "BAR"})
-		require.Error(t, err)
-		require.Equal(t, "failed to get ticker price for FOOBAR", err.Error())
+		require.EqualError(t, err, "huobi failed to get ticker price for FOOBAR")
 		require.Nil(t, prices)
-	})
-}
-
-func TestHuobiProvider_SubscribeCurrencyPairs(t *testing.T) {
-	p, err := NewHuobiProvider(
-		context.TODO(),
-		zerolog.Nop(),
-		config.ProviderEndpoint{},
-		types.CurrencyPair{Base: "ATOM", Quote: "USDT"},
-	)
-	require.NoError(t, err)
-
-	t.Run("invalid_subscribe_channels_empty", func(t *testing.T) {
-		err = p.SubscribeCurrencyPairs([]types.CurrencyPair{}...)
-		require.ErrorContains(t, err, "currency pairs is empty")
 	})
 }
 
@@ -106,4 +87,20 @@ func TestHuobiCurrencyPairToHuobiPair(t *testing.T) {
 	cp := types.CurrencyPair{Base: "ATOM", Quote: "USDT"}
 	binanceSymbol := currencyPairToHuobiTickerPair(cp)
 	require.Equal(t, binanceSymbol, "market.atomusdt.ticker")
+}
+
+func TestHuobiProvider_getSubscriptionMsgs(t *testing.T) {
+	provider := &HuobiProvider{
+		subscribedPairs: map[string]types.CurrencyPair{},
+	}
+	cps := []types.CurrencyPair{
+		{Base: "ATOM", Quote: "USDT"},
+	}
+	subMsgs := provider.getSubscriptionMsgs(cps...)
+
+	msg, _ := json.Marshal(subMsgs[0])
+	require.Equal(t, "{\"sub\":\"market.atomusdt.ticker\"}", string(msg))
+
+	msg, _ = json.Marshal(subMsgs[1])
+	require.Equal(t, "{\"sub\":\"market.atomusdt.kline.1min\"}", string(msg))
 }
