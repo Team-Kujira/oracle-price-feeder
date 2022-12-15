@@ -144,15 +144,16 @@ func NewBinanceProvider(
 }
 
 func (p *BinanceProvider) getSubscriptionMsgs(cps ...types.CurrencyPair) []interface{} {
-	subscriptionMsgs := make([]interface{}, 0, len(p.subscribedPairs)*2)
-	for _, cp := range cps {
-		binanceTickerPair := currencyPairToBinanceTickerPair(cp)
-		subscriptionMsgs = append(subscriptionMsgs, newBinanceSubscriptionMsg(binanceTickerPair))
-
-		binanceCandlePair := currencyPairToBinanceCandlePair(cp)
-		subscriptionMsgs = append(subscriptionMsgs, newBinanceSubscriptionMsg(binanceCandlePair))
+	msg := BinanceSubscriptionMsg{
+		Method: "SUBSCRIBE",
+		Params: make([]string, len(cps) * 2),
+		ID:     1,
 	}
-	return subscriptionMsgs
+	for i, cp := range cps {
+		msg.Params[i * 2] = strings.ToLower(cp.String()) + "@ticker"
+		msg.Params[i * 2 + 1] = strings.ToLower(cp.String()) + "@kline_1m"
+	}
+	return []interface{}{msg}
 }
 
 // SubscribeCurrencyPairs sends the new subscription messages to the websocket
@@ -334,25 +335,4 @@ func (p *BinanceProvider) GetAvailablePairs() (map[string]struct{}, error) {
 	}
 
 	return availablePairs, nil
-}
-
-// currencyPairToBinanceTickerPair receives a currency pair and return binance
-// ticker symbol atomusdt@ticker.
-func currencyPairToBinanceTickerPair(cp types.CurrencyPair) string {
-	return strings.ToLower(cp.String() + "@ticker")
-}
-
-// currencyPairToBinanceCandlePair receives a currency pair and return binance
-// candle symbol atomusdt@kline_1m.
-func currencyPairToBinanceCandlePair(cp types.CurrencyPair) string {
-	return strings.ToLower(cp.String() + "@kline_1m")
-}
-
-// newBinanceSubscriptionMsg returns a new subscription Msg.
-func newBinanceSubscriptionMsg(params ...string) BinanceSubscriptionMsg {
-	return BinanceSubscriptionMsg{
-		Method: "SUBSCRIBE",
-		Params: params,
-		ID:     1,
-	}
 }

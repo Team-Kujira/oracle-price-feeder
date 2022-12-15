@@ -79,12 +79,6 @@ func TestBinanceProvider_GetTickerPrices(t *testing.T) {
 	})
 }
 
-func TestBinanceCurrencyPairToBinancePair(t *testing.T) {
-	cp := types.CurrencyPair{Base: "ATOM", Quote: "USDT"}
-	binanceSymbol := currencyPairToBinanceTickerPair(cp)
-	require.Equal(t, binanceSymbol, "atomusdt@ticker")
-}
-
 func TestBinanceProvider_getSubscriptionMsgs(t *testing.T) {
 	provider := &BinanceProvider{
 		subscribedPairs: map[string]types.CurrencyPair{},
@@ -96,8 +90,5 @@ func TestBinanceProvider_getSubscriptionMsgs(t *testing.T) {
 	subMsgs := provider.getSubscriptionMsgs(cps...)
 
 	msg, _ := json.Marshal(subMsgs[0])
-	require.Equal(t, "{\"method\":\"SUBSCRIBE\",\"params\":[\"atomusdt@ticker\"],\"id\":1}", string(msg))
-
-	msg, _ = json.Marshal(subMsgs[1])
-	require.Equal(t, "{\"method\":\"SUBSCRIBE\",\"params\":[\"atomusdt@kline_1m\"],\"id\":1}", string(msg))
+	require.Equal(t, "{\"method\":\"SUBSCRIBE\",\"params\":[\"atomusdt@ticker\",\"atomusdt@kline_1m\"],\"id\":1}", string(msg))
 }
