@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"testing"
 
+	"price-feeder/oracle/types"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
-	"price-feeder/oracle/types"
 )
 
 func TestBinanceProvider_GetTickerPrices(t *testing.T) {

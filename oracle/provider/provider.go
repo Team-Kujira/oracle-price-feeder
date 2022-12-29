@@ -3,11 +3,12 @@ package provider
 import (
 	"fmt"
 	"net/http"
-	"time"
-	"strings"
 	"strconv"
+	"strings"
+	"time"
 
 	"price-feeder/oracle/types"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
@@ -15,7 +16,7 @@ const (
 	defaultTimeout       = 10 * time.Second
 	providerCandlePeriod = 10 * time.Minute
 
-	ProviderFin		  Name = "fin"
+	ProviderFin       Name = "fin"
 	ProviderKraken    Name = "kraken"
 	ProviderBinance   Name = "binance"
 	ProviderBinanceUS Name = "binanceus"
@@ -38,9 +39,6 @@ type (
 	Provider interface {
 		// GetTickerPrices returns the tickerPrices based on the provided pairs.
 		GetTickerPrices(...types.CurrencyPair) (map[string]types.TickerPrice, error)
-
-		// GetCandlePrices returns the candlePrices based on the provided pairs.
-		GetCandlePrices(...types.CurrencyPair) (map[string][]types.CandlePrice, error)
 
 		// GetAvailablePairs return all available pairs symbol to subscribe.
 		GetAvailablePairs() (map[string]struct{}, error)

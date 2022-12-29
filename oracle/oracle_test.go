@@ -469,7 +469,6 @@ func TestSuccessGetComputedPricesCandles(t *testing.T) {
 
 	prices, err := GetComputedPrices(
 		zerolog.Nop(),
-		providerCandles,
 		make(provider.AggregatedProviderPrices, 1),
 		providerPair,
 		make(map[string]sdk.Dec),
@@ -502,7 +501,6 @@ func TestSuccessGetComputedPricesTickers(t *testing.T) {
 
 	prices, err := GetComputedPrices(
 		zerolog.Nop(),
-		make(provider.AggregatedProviderCandles, 1),
 		providerPrices,
 		providerPair,
 		make(map[string]sdk.Dec),
@@ -598,7 +596,6 @@ func TestGetComputedPricesCandlesConversion(t *testing.T) {
 
 	prices, err := GetComputedPrices(
 		zerolog.Nop(),
-		providerCandles,
 		make(provider.AggregatedProviderPrices, 1),
 		providerPair,
 		make(map[string]sdk.Dec),
@@ -682,7 +679,6 @@ func TestGetComputedPricesTickersConversion(t *testing.T) {
 
 	prices, err := GetComputedPrices(
 		zerolog.Nop(),
-		make(provider.AggregatedProviderCandles, 1),
 		providerPrices,
 		providerPair,
 		make(map[string]sdk.Dec),

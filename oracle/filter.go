@@ -2,17 +2,49 @@ package oracle
 
 import (
 	"price-feeder/oracle/provider"
+	"time"
+
+	"price-feeder/oracle/types"
 
 	"github.com/cosmos/cosmos-sdk/telemetry"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/rs/zerolog"
-	"price-feeder/oracle/types"
 )
 
 // defaultDeviationThreshold defines how many 𝜎 a provider can be away
 // from the mean without being considered faulty. This can be overridden
 // in the config.
 var defaultDeviationThreshold = sdk.MustNewDecFromStr("1.0")
+
+func FilterStaleTickers(
+	logger zerolog.Logger,
+	prices provider.AggregatedProviderPrices,
+	staleDuration float64, // in seconds
+	// excludes []string,
+) (provider.AggregatedProviderPrices, error) {
+	var filteredPrices = make(provider.AggregatedProviderPrices)
+
+	staleTime := time.Now().UnixMilli() - int64(staleDuration*1000)
+
+	for providerName, priceTickers := range prices {
+		_, ok := filteredPrices[providerName]
+
+		if !ok {
+			filteredPrices[providerName] = make(map[string]types.TickerPrice)
+		}
+
+		for base, tp := range priceTickers {
+			filteredPrices[providerName][base] = tp
+			if base == "USDT" || tp.Time >= staleTime {
+				// filteredPrices[providerName][base] = tp
+			} else {
+				logger.Warn().Msgf("price for %s is older than %f seconds", base, staleDuration)
+			}
+		}
+	}
+
+	return filteredPrices, nil
+}
 
 // FilterTickerDeviations finds the standard deviations of the prices of
 // all assets, and filters out any providers that are not within 2𝜎 of the mean.
@@ -71,80 +103,6 @@ func FilterTickerDeviations(
 	}
 
 	return filteredPrices, nil
-}
-
-// FilterCandleDeviations finds the standard deviations of the tvwaps of
-// all assets, and filters out any providers that are not within 2𝜎 of the mean.
-func FilterCandleDeviations(
-	logger zerolog.Logger,
-	candles provider.AggregatedProviderCandles,
-	deviationThresholds map[string]sdk.Dec,
-) (provider.AggregatedProviderCandles, error) {
-	var (
-		filteredCandles = make(provider.AggregatedProviderCandles)
-		tvwaps          = make(map[provider.Name]map[string]sdk.Dec)
-	)
-
-	for providerName, priceCandles := range candles {
-		candlePrices := make(provider.AggregatedProviderCandles)
-
-		for base, cp := range priceCandles {
-			p, ok := candlePrices[providerName]
-			if !ok {
-				p = map[string][]types.CandlePrice{}
-				candlePrices[providerName] = p
-			}
-			p[base] = cp
-		}
-
-		tvwap, err := ComputeTVWAP(candlePrices)
-		if err != nil {
-			return nil, err
-		}
-
-		for base, asset := range tvwap {
-			if _, ok := tvwaps[providerName]; !ok {
-				tvwaps[providerName] = make(map[string]sdk.Dec)
-			}
-
-			tvwaps[providerName][base] = asset
-		}
-	}
-
-	deviations, means, err := StandardDeviation(tvwaps)
-	if err != nil {
-		return nil, err
-	}
-
-	// We accept any prices that are within (2 * T)𝜎, or for which we couldn't get 𝜎.
-	// T is defined as the deviation threshold, either set by the config
-	// or defaulted to 1.
-	for providerName, priceMap := range tvwaps {
-		for base, price := range priceMap {
-			t := defaultDeviationThreshold
-			if _, ok := deviationThresholds[base]; ok {
-				t = deviationThresholds[base]
-			}
-
-			if d, ok := deviations[base]; !ok || isBetween(price, means[base], d.Mul(t)) {
-				p, ok := filteredCandles[providerName]
-				if !ok {
-					p = map[string][]types.CandlePrice{}
-					filteredCandles[providerName] = p
-				}
-				p[base] = candles[providerName][base]
-			} else {
-				telemetry.IncrCounter(1, "failure", "provider", "type", "candle")
-				logger.Warn().
-					Str("base", base).
-					Str("provider", providerName.String()).
-					Str("price", price.String()).
-					Msg("provider deviating from other candles")
-			}
-		}
-	}
-
-	return filteredCandles, nil
 }
 
 func isBetween(p, mean, margin sdk.Dec) bool {
