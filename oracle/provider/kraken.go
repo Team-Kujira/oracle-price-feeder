@@ -302,7 +302,6 @@ func (p *KrakenProvider) setTickerPair(symbol string, ticker types.TickerPrice) 
 	defer p.mtx.Unlock()
 
 	ticker.Time = time.Now().UnixMilli()
-	fmt.Println(ticker)
 	p.tickers[symbol] = ticker
 }
 
