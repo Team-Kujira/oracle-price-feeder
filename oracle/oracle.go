@@ -527,10 +527,6 @@ func (o *Oracle) tick(ctx context.Context) error {
 		return err
 	}
 
-	if err := o.SetPrices(ctx); err != nil {
-		return err
-	}
-
 	// Get oracle vote period, next block height, current vote period, and index
 	// in the vote period.
 	oracleVotePeriod := int64(oracleParams.VotePeriod)
@@ -553,6 +549,10 @@ func (o *Oracle) tick(ctx context.Context) error {
 			Msg("skipping until next voting period")
 
 		return nil
+	}
+
+	if err := o.SetPrices(ctx); err != nil {
+		return err
 	}
 
 	// If we're past the voting period we needed to hit, reset and submit another
