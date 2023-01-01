@@ -198,7 +198,7 @@ func (p *BinanceProvider) messageReceived(messageType int, bz []byte) {
 	)
 
 	tickerErr = json.Unmarshal(bz, &tickerResp)
-	if len(tickerResp.LastPrice) != 0 {
+	if tickerErr == nil {
 		p.setTickerPair(tickerResp)
 		telemetryWebsocketMessage(ProviderBinance, MessageTypeTicker)
 		return
