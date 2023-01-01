@@ -534,15 +534,18 @@ func (o *Oracle) tick(ctx context.Context) error {
 	currentVotePeriod := math.Floor(float64(nextBlockHeight) / float64(oracleVotePeriod))
 	indexInVotePeriod := nextBlockHeight % oracleVotePeriod
 
+	o.logger.Info().
+		Int64("vote_period", oracleVotePeriod).
+		Float64("previous_vote_period", o.previousVotePeriod).
+		Float64("current_vote_period", currentVotePeriod).
+		Int64("indexInVotePeriod", indexInVotePeriod).
+		Msg("tick")
+
 	// Skip until new voting period. Specifically, skip when:
 	// index [0, oracleVotePeriod - 1] > oracleVotePeriod - 2 OR index is 0
 	if (o.previousVotePeriod != 0 && currentVotePeriod == o.previousVotePeriod) ||
-		oracleVotePeriod-indexInVotePeriod < 2 {
+		oracleVotePeriod-indexInVotePeriod < 2 || (indexInVotePeriod > 0 && indexInVotePeriod < int64(float64(oracleVotePeriod)*0.75)) {
 		o.logger.Info().
-			Int64("vote_period", oracleVotePeriod).
-			Float64("previous_vote_period", o.previousVotePeriod).
-			Float64("current_vote_period", currentVotePeriod).
-			Int64("indexInVotePeriod", indexInVotePeriod).
 			Msg("skipping until next voting period")
 
 		return nil
@@ -552,9 +555,6 @@ func (o *Oracle) tick(ctx context.Context) error {
 	// prevote.
 	if o.previousVotePeriod != 0 && currentVotePeriod-o.previousVotePeriod != 1 {
 		o.logger.Info().
-			Int64("vote_period", oracleVotePeriod).
-			Float64("previous_vote_period", o.previousVotePeriod).
-			Float64("current_vote_period", currentVotePeriod).
 			Msg("missing vote during voting period")
 		telemetry.IncrCounter(1, "vote", "failure", "missed")
 
