@@ -273,13 +273,17 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 	}
 
 	if len(computedPrices) != len(requiredRates) {
-		return fmt.Errorf("unable to get prices for all exchange candles")
-	}
-
-	for base := range requiredRates {
-		if _, ok := computedPrices[base]; !ok {
-			return fmt.Errorf("reported prices were not equal to required rates, missed: %s", base)
+		missingPrices := []string{}
+		for base := range requiredRates {
+			if _, ok := computedPrices[base]; !ok {
+				missingPrices = append(missingPrices, base)
+			}
 		}
+
+		return fmt.Errorf(
+			"unable to get prices for: %s",
+			strings.Join(missingPrices, ", "),
+		)
 	}
 
 	o.prices = computedPrices
@@ -476,17 +480,17 @@ func NewProvider(
 	case provider.ProviderCoinbase:
 		return provider.NewCoinbaseProvider(ctx, logger, endpoint, providerPairs...)
 
-		// case provider.ProviderOkx:
-		// 	return provider.NewOkxProvider(ctx, logger, endpoint, providerPairs...)
+	// case provider.ProviderOkx:
+	// 	return provider.NewOkxProvider(ctx, logger, endpoint, providerPairs...)
 
-		// case provider.ProviderGate:
-		// 	return provider.NewGateProvider(ctx, logger, endpoint, providerPairs...)
+	// case provider.ProviderGate:
+	// 	return provider.NewGateProvider(ctx, logger, endpoint, providerPairs...)
 
-		// case provider.ProviderBitget:
-		// 	return provider.NewBitgetProvider(ctx, logger, endpoint, providerPairs...)
+	// case provider.ProviderBitget:
+	// 	return provider.NewBitgetProvider(ctx, logger, endpoint, providerPairs...)
 
-		// case provider.ProviderMexc:
-		// 	return provider.NewMexcProvider(ctx, logger, endpoint, providerPairs...)
+	case provider.ProviderMexc:
+		return provider.NewMexcProvider(ctx, logger, endpoint, providerPairs...)
 
 		// case provider.ProviderCrypto:
 		// 	return provider.NewCryptoProvider(ctx, logger, endpoint, providerPairs...)
