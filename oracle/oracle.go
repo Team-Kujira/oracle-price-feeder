@@ -461,8 +461,8 @@ func NewProvider(
 	case provider.ProviderBinanceUS:
 		return provider.NewBinanceProvider(ctx, logger, endpoint, true, providerPairs...)
 
-	// case provider.ProviderKraken:
-	// 	return provider.NewKrakenProvider(ctx, logger, endpoint, providerPairs...)
+	case provider.ProviderKraken:
+		return provider.NewKrakenProvider(ctx, logger, endpoint, providerPairs...)
 
 	// case provider.ProviderOsmosis:
 	// 	return provider.NewOsmosisProvider(endpoint), nil
