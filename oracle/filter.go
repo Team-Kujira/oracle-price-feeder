@@ -24,7 +24,8 @@ func FilterStaleTickers(
 ) (provider.AggregatedProviderPrices, error) {
 	var filteredPrices = make(provider.AggregatedProviderPrices)
 
-	staleTime := time.Now().UnixMilli() - int64(staleDuration*1000)
+	now := time.Now().UnixMilli()
+	staleTime := now - int64(staleDuration*1000)
 
 	for providerName, priceTickers := range prices {
 		_, ok := filteredPrices[providerName]
@@ -38,10 +39,11 @@ func FilterStaleTickers(
 			if tp.Time >= staleTime {
 				// filteredPrices[providerName][base] = tp
 			} else {
+				diff := float64(now-tp.Time) / 1000
 				logger.Warn().
 					Str("provider", providerName.String()).
 					Str("asset", base).
-					Float64("limit", staleDuration).
+					Float64("age", diff).
 					Msg("stale price")
 			}
 		}
