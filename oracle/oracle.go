@@ -461,20 +461,20 @@ func NewProvider(
 	case provider.ProviderBinanceUS:
 		return provider.NewBinanceProvider(ctx, logger, endpoint, true, providerPairs...)
 
-		// case provider.ProviderKraken:
-		// 	return provider.NewKrakenProvider(ctx, logger, endpoint, providerPairs...)
+	// case provider.ProviderKraken:
+	// 	return provider.NewKrakenProvider(ctx, logger, endpoint, providerPairs...)
 
-		// case provider.ProviderOsmosis:
-		// 	return provider.NewOsmosisProvider(endpoint), nil
+	// case provider.ProviderOsmosis:
+	// 	return provider.NewOsmosisProvider(endpoint), nil
 
-		// case provider.ProviderOsmosisV2:
-		// 	return provider.NewOsmosisV2Provider(ctx, logger, endpoint, providerPairs...)
+	// case provider.ProviderOsmosisV2:
+	// 	return provider.NewOsmosisV2Provider(ctx, logger, endpoint, providerPairs...)
 
-		// case provider.ProviderHuobi:
-		// 	return provider.NewHuobiProvider(ctx, logger, endpoint, providerPairs...)
+	// case provider.ProviderHuobi:
+	// 	return provider.NewHuobiProvider(ctx, logger, endpoint, providerPairs...)
 
-		// case provider.ProviderCoinbase:
-		// 	return provider.NewCoinbaseProvider(ctx, logger, endpoint, providerPairs...)
+	case provider.ProviderCoinbase:
+		return provider.NewCoinbaseProvider(ctx, logger, endpoint, providerPairs...)
 
 		// case provider.ProviderOkx:
 		// 	return provider.NewOkxProvider(ctx, logger, endpoint, providerPairs...)
