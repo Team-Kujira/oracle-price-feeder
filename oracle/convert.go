@@ -50,7 +50,7 @@ func convertTickersToUSD(
 	}
 
 	conversionRates := make(map[string]sdk.Dec)
-	requiredConversions := make(map[provider.Name]types.CurrencyPair)
+	requiredConversions := make(map[provider.Name][]types.CurrencyPair)
 
 	for pairProviderName, pairs := range providerPairs {
 		for _, pair := range pairs {
@@ -98,20 +98,25 @@ func convertTickersToUSD(
 				}
 
 				conversionRates[pair.Quote] = vwap[pair.Quote]
-				requiredConversions[pairProviderName] = pair
+				requiredConversions[pairProviderName] = append(
+					requiredConversions[pairProviderName], pair,
+				)
 			}
 		}
 	}
 
 	// Convert assets to USD.
-	for providerName, assetMap := range tickers {
-		for asset := range assetMap {
-			if requiredConversions[providerName].Base == asset {
-				assetMap[asset] = types.TickerPrice{
-					Price: assetMap[asset].Price.Mul(
-						conversionRates[requiredConversions[providerName].Quote],
-					),
-					Volume: assetMap[asset].Volume,
+	for providerName, tickerPrices := range tickers {
+		for base := range tickerPrices {
+			for _, currencyPair := range requiredConversions[providerName] {
+				if currencyPair.Base == base {
+					tickerPrices[base] = types.TickerPrice{
+						Price: tickerPrices[base].Price.Mul(
+							conversionRates[currencyPair.Quote],
+						),
+						Volume: tickerPrices[base].Volume,
+						Time:   tickerPrices[base].Time,
+					}
 				}
 			}
 		}
