@@ -252,6 +252,8 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 		o.logger.Debug().Err(err).Msg("failed to get ticker prices from provider")
 	}
 
+	fmt.Println(providerPrices)
+
 	providerPrices, err := FilterStaleTickers(
 		o.logger,
 		providerPrices,
@@ -492,8 +494,8 @@ func NewProvider(
 	case provider.ProviderMexc:
 		return provider.NewMexcProvider(ctx, logger, endpoint, providerPairs...)
 
-		// case provider.ProviderCrypto:
-		// 	return provider.NewCryptoProvider(ctx, logger, endpoint, providerPairs...)
+	case provider.ProviderCrypto:
+		return provider.NewCryptoProvider(ctx, logger, endpoint, providerPairs...)
 
 		// case provider.ProviderMock:
 		// 	return provider.NewMockProvider(), nil
