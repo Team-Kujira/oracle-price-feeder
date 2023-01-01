@@ -14,6 +14,11 @@ func (cp CurrencyPair) String() string {
 	return cp.Base + cp.Quote
 }
 
+// Join returns the base- and quote denoms seperated by provided string
+func (cp CurrencyPair) Join(seperator string) string {
+	return cp.Base + seperator + cp.Quote
+}
+
 // MapPairsToSlice returns the map of currency pairs as slice.
 func MapPairsToSlice(mapPairs map[string]CurrencyPair) []CurrencyPair {
 	currencyPairs := make([]CurrencyPair, len(mapPairs))
