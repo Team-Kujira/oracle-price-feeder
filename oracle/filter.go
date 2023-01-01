@@ -35,10 +35,14 @@ func FilterStaleTickers(
 
 		for base, tp := range priceTickers {
 			filteredPrices[providerName][base] = tp
-			if base == "USDT" || tp.Time >= staleTime {
+			if tp.Time >= staleTime {
 				// filteredPrices[providerName][base] = tp
 			} else {
-				logger.Warn().Msgf("price for %s is older than %f seconds", base, staleDuration)
+				logger.Warn().
+					Str("provider", providerName.String()).
+					Str("asset", base).
+					Float64("limit", staleDuration).
+					Msg("stale price")
 			}
 		}
 	}
