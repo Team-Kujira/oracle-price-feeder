@@ -480,8 +480,8 @@ func NewProvider(
 	case provider.ProviderCoinbase:
 		return provider.NewCoinbaseProvider(ctx, logger, endpoint, providerPairs...)
 
-	// case provider.ProviderOkx:
-	// 	return provider.NewOkxProvider(ctx, logger, endpoint, providerPairs...)
+	case provider.ProviderOkx:
+		return provider.NewOkxProvider(ctx, logger, endpoint, providerPairs...)
 
 	// case provider.ProviderGate:
 	// 	return provider.NewGateProvider(ctx, logger, endpoint, providerPairs...)
