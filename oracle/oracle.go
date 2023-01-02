@@ -485,8 +485,8 @@ func NewProvider(
 	case provider.ProviderOkx:
 		return provider.NewOkxProvider(ctx, logger, endpoint, providerPairs...)
 
-	// case provider.ProviderGate:
-	// 	return provider.NewGateProvider(ctx, logger, endpoint, providerPairs...)
+	case provider.ProviderGate:
+		return provider.NewGateProvider(ctx, logger, endpoint, providerPairs...)
 
 	// case provider.ProviderBitget:
 	// 	return provider.NewBitgetProvider(ctx, logger, endpoint, providerPairs...)
