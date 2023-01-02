@@ -33,6 +33,7 @@ var (
 	// SupportedProviders defines a lookup table of all the supported currency API
 	// providers.
 	SupportedProviders = map[provider.Name]struct{}{
+		provider.ProviderBybit:     {},
 		provider.ProviderKraken:    {},
 		provider.ProviderBinance:   {},
 		provider.ProviderBinanceUS: {},
