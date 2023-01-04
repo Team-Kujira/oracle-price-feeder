@@ -13,14 +13,65 @@ write_timeout = "20s"
 base = "USDT"
 threshold = "2"
 
+# Stables
+# ----------------------------------------------------------------------------
+
+[[currency_pairs]]
+base = "USDT"
+quote = "USD"
+providers = ["coinbase", "kraken", "crypto", "gate"]
+
+# USD
+# ----------------------------------------------------------------------------
+
 [[currency_pairs]]
 base = "ATOM"
-providers = [
-  "binance",
-  "kraken",
-  "osmosis",
-]
 quote = "USD"
+providers = ["coinbase", "kraken"]
+
+[[currency_pairs]]
+base = "BTC"
+quote = "USD"
+providers = ["coinbase", "kraken", "crypto"]
+
+[[currency_pairs]]
+base = "DOT"
+quote = "USD"
+providers = ["coinbase", "kraken"]
+
+[[currency_pairs]]
+base = "ETH"
+quote = "USD"
+providers = ["coinbase", "kraken", "crypto"]
+
+# USDT
+# ----------------------------------------------------------------------------
+
+[[currency_pairs]]
+base = "ATOM"
+quote = "USDT"
+providers = ["binance", "mexc", "huobi", "okx", "crypto", "gate", "bitget", "bybit"]
+
+[[currency_pairs]]
+base = "BNB"
+quote = "USDT"
+providers = ["binance", "mexc", "huobi", "okx", "gate", "bitget", "bybit"]
+
+[[currency_pairs]]
+base = "BTC"
+quote = "USDT"
+providers = ["binance", "mexc", "huobi", "okx", "gate", "bitget", "bybit"]
+
+[[currency_pairs]]
+base = "DOT"
+quote = "USDT"
+providers = ["binance", "mexc", "huobi", "okx", "crypto", "gate", "bitget", "bybit"]
+
+[[currency_pairs]]
+base = "ETH"
+quote = "USDT"
+providers = ["binance", "mexc", "huobi", "okx", "gate", "bitget", "bybit"]
+
 
 [account]
 address = "kujira..."
