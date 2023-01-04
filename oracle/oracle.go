@@ -549,7 +549,8 @@ func (o *Oracle) tick(ctx context.Context) error {
 	// Skip until new voting period. Specifically, skip when:
 	// index [0, oracleVotePeriod - 1] > oracleVotePeriod - 2 OR index is 0
 	if (o.previousVotePeriod != 0 && currentVotePeriod == o.previousVotePeriod) ||
-		oracleVotePeriod-indexInVotePeriod < 2 || (indexInVotePeriod > 0 && indexInVotePeriod < int64(float64(oracleVotePeriod)*0.75)) {
+		(indexInVotePeriod > 0 && oracleVotePeriod-indexInVotePeriod > 2) {
+		// oracleVotePeriod-indexInVotePeriod < 2 || (indexInVotePeriod > 0 && indexInVotePeriod < int64(float64(oracleVotePeriod)*0.75)) {
 		o.logger.Info().
 			Msg("skipping until next voting period")
 
