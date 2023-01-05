@@ -56,7 +56,7 @@ type (
 	// HuobiTick defines the response type for the last 24h market summary and the last
 	// traded price for a given ticker/symbol.
 	HuobiTick struct {
-		Vol       float64 `json:"vol"`       // Accumulated trading value of last 24 hours
+		Vol       float64 `json:"amount"`    // Accumulated trading volume of last 24 hours
 		LastPrice float64 `json:"lastPrice"` // Last traded price
 	}
 
