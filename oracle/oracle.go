@@ -252,8 +252,6 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 		o.logger.Debug().Err(err).Msg("failed to get ticker prices from provider")
 	}
 
-	fmt.Println(providerPrices)
-
 	providerPrices, err := FilterStaleTickers(
 		o.logger,
 		providerPrices,
@@ -470,8 +468,8 @@ func NewProvider(
 	case provider.ProviderKraken:
 		return provider.NewKrakenProvider(ctx, logger, endpoint, providerPairs...)
 
-	// case provider.ProviderOsmosis:
-	// 	return provider.NewOsmosisProvider(endpoint), nil
+	case provider.ProviderOsmosis:
+		return provider.NewOsmosisProvider(endpoint), nil
 
 	// case provider.ProviderOsmosisV2:
 	// 	return provider.NewOsmosisV2Provider(ctx, logger, endpoint, providerPairs...)
@@ -500,8 +498,12 @@ func NewProvider(
 	case provider.ProviderCrypto:
 		return provider.NewCryptoProvider(ctx, logger, endpoint, providerPairs...)
 
-		// case provider.ProviderMock:
-		// 	return provider.NewMockProvider(), nil
+	case provider.ProviderMock:
+		return provider.NewMockProvider(), nil
+
+	case provider.ProviderFin:
+		return provider.NewFinProvider(endpoint), nil
+
 	}
 
 	return nil, fmt.Errorf("provider %s not found", providerName)
