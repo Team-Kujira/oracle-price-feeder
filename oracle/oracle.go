@@ -503,6 +503,12 @@ func NewProvider(
 	case provider.ProviderBitfinex:
 		return provider.NewBitfinexProvider(ctx, logger, endpoint, providerPairs...)
 
+	case provider.ProviderHitbtc:
+		return provider.NewHitbtcProvider(ctx, logger, endpoint, providerPairs...)
+
+	case provider.ProviderKucoin:
+		return provider.NewKucoinProvider(ctx, logger, endpoint, providerPairs...)
+
 	case provider.ProviderMock:
 		return provider.NewMockProvider(), nil
 

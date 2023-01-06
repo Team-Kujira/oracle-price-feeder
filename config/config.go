@@ -35,7 +35,9 @@ var (
 	SupportedProviders = map[provider.Name]struct{}{
 		provider.ProviderBybit:     {},
 		provider.ProviderBitfinex:  {},
+		provider.ProviderHitbtc:    {},
 		provider.ProviderKraken:    {},
+		provider.ProviderKucoin:    {},
 		provider.ProviderBinance:   {},
 		provider.ProviderBinanceUS: {},
 		provider.ProviderOsmosis:   {},

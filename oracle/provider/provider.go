@@ -28,6 +28,8 @@ const (
 	ProviderCoinbase  Name = "coinbase"
 	ProviderBitget    Name = "bitget"
 	ProviderBitfinex  Name = "bitfinex"
+	ProviderHitbtc    Name = "hitbtc"
+	ProviderKucoin    Name = "kucoin"
 	ProviderBybit     Name = "bybit"
 	ProviderMexc      Name = "mexc"
 	ProviderCrypto    Name = "crypto"

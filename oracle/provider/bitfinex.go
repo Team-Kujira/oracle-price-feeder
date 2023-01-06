@@ -230,7 +230,5 @@ func (p *BitfinexProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[str
 
 func (p *BitfinexProvider) GetAvailablePairs() (map[string]struct{}, error) {
 	// not used yet, so skipping this unless needed
-	availablePairs := make(map[string]struct{}, 0)
-
-	return availablePairs, nil
+	return make(map[string]struct{}, 0), nil
 }
