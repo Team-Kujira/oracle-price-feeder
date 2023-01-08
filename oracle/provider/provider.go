@@ -37,7 +37,30 @@ const (
 	ProviderMock      Name = "mock"
 )
 
-var ping = []byte("ping")
+var (
+	ping = []byte("ping")
+
+	// vars to be used in the provider specific tests
+	testAtomUsdtCurrencyPair = types.CurrencyPair{
+		Base:  "ATOM",
+		Quote: "USDT",
+	}
+
+	testAtomPriceFloat64  = float64(12.3456)
+	testAtomPriceString   = "12.3456"
+	testAtomVolumeFloat64 = float64(7654321.98765)
+	testAtomVolumeString  = "7654321.98765"
+
+	testBtcUsdtCurrencyPair = types.CurrencyPair{
+		Base:  "BTC",
+		Quote: "USDT",
+	}
+
+	testBtcPriceFloat64  = float64(12345.6789)
+	testBtcPriceString   = "12345.6789"
+	testBtcVolumeFloat64 = float64(7654.32198765)
+	testBtcVolumeString  = "7654.32198765"
+)
 
 type (
 	// Provider defines an interface an exchange price provider must implement.
