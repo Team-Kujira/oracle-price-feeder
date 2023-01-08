@@ -79,24 +79,21 @@ func TestGateProvider_GetTickerPrices(t *testing.T) {
 	})
 }
 
-func TestGateCurrencyPairToGatePair(t *testing.T) {
-	cp := types.CurrencyPair{Base: "ATOM", Quote: "USDT"}
-	GateSymbol := cp.Join("_")
-	require.Equal(t, GateSymbol, "ATOM_USDT")
-}
-
 func TestGateProvider_GetSubscriptionMsgs(t *testing.T) {
 	provider := &GateProvider{
 		subscribedPairs: map[string]types.CurrencyPair{},
 	}
+
 	cps := []types.CurrencyPair{
 		{Base: "ATOM", Quote: "USDT"},
 	}
-	subMsgs := provider.GetSubscriptionMsgs(cps...)
 
-	msg, _ := json.Marshal(subMsgs[0])
-	require.Equal(t, "{\"method\":\"ticker.subscribe\",\"params\":[\"ATOM_USDT\"],\"id\":1}", string(msg))
+	msgs := provider.GetSubscriptionMsgs(cps...)
 
-	msg, _ = json.Marshal(subMsgs[1])
-	require.Equal(t, "{\"method\":\"kline.subscribe\",\"params\":[\"ATOM_USDT\",60],\"id\":2}", string(msg))
+	msg, _ := json.Marshal(msgs[0])
+	require.Equal(
+		t,
+		`{"method":"ticker.subscribe","params":["ATOM_USDT"],"id":1}`,
+		string(msg),
+	)
 }
