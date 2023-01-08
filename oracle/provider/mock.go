@@ -7,8 +7,9 @@ import (
 	"strings"
 	"time"
 
-	sdk "github.com/cosmos/cosmos-sdk/types"
 	"price-feeder/oracle/types"
+
+	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
 const (
@@ -43,6 +44,10 @@ func NewMockProvider() *MockProvider {
 // SubscribeCurrencyPairs performs a no-op since mock does not use websockets
 func (p MockProvider) SubscribeCurrencyPairs(pairs ...types.CurrencyPair) error {
 	return nil
+}
+
+func (p MockProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPrice, error) {
+	return types.TickerPrice{}, nil
 }
 
 func (p MockProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[string]types.TickerPrice, error) {

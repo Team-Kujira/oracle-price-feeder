@@ -21,8 +21,14 @@ type mockProvider struct {
 	prices map[string]types.TickerPrice
 }
 
+func (m mockProvider) SetSubscribedPair(types.CurrencyPair) {}
+
 func (m mockProvider) GetTickerPrices(_ ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
 	return m.prices, nil
+}
+
+func (m mockProvider) GetTickerPrice(_ types.CurrencyPair) (types.TickerPrice, error) {
+	return types.TickerPrice{}, nil
 }
 
 func (m mockProvider) GetCandlePrices(_ ...types.CurrencyPair) (map[string][]types.CandlePrice, error) {
@@ -51,8 +57,14 @@ type failingProvider struct {
 	prices map[string]types.TickerPrice
 }
 
+func (m failingProvider) SetSubscribedPair(types.CurrencyPair) {}
+
 func (m failingProvider) GetTickerPrices(_ ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
 	return nil, fmt.Errorf("unable to get ticker prices")
+}
+
+func (m failingProvider) GetTickerPrice(_ types.CurrencyPair) (types.TickerPrice, error) {
+	return types.TickerPrice{}, fmt.Errorf("unable to get ticker price")
 }
 
 func (m failingProvider) GetCandlePrices(_ ...types.CurrencyPair) (map[string][]types.CandlePrice, error) {

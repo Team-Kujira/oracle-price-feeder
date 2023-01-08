@@ -160,18 +160,8 @@ func (p *BybitProvider) SubscribeCurrencyPairs(cps ...types.CurrencyPair) error 
 }
 
 // GetTickerPrices returns the tickerPrices based on the saved map.
-func (p *BybitProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
-	tickerPrices := make(map[string]types.TickerPrice, len(pairs))
-
-	for _, cp := range pairs {
-		price, err := p.getTickerPrice(cp)
-		if err != nil {
-			return nil, err
-		}
-		tickerPrices[cp.String()] = price
-	}
-
-	return tickerPrices, nil
+func (p *BybitProvider) GetTickerPrices(cps ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
+	return getTickerPrices(p, cps)
 }
 
 // messageReceived handles the received data from the Bybit websocket.
@@ -215,7 +205,7 @@ func (p *BybitProvider) setTickerPair(ticker BybitTicker) {
 	p.tickers[ticker.Topic] = ticker
 }
 
-func (p *BybitProvider) getTickerPrice(cp types.CurrencyPair) (types.TickerPrice, error) {
+func (p *BybitProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPrice, error) {
 	p.mtx.RLock()
 	defer p.mtx.RUnlock()
 

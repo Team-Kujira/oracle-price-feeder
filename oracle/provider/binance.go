@@ -162,24 +162,15 @@ func (p *BinanceProvider) SubscribeCurrencyPairs(cps ...types.CurrencyPair) erro
 }
 
 // GetTickerPrices returns the tickerPrices based on the provided pairs.
-func (p *BinanceProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
-	tickerPrices := make(map[string]types.TickerPrice, len(pairs))
-
-	for _, cp := range pairs {
-		key := cp.String()
-		price, err := p.getTickerPrice(key)
-		if err != nil {
-			return nil, err
-		}
-		tickerPrices[key] = price
-	}
-
-	return tickerPrices, nil
+func (p *BinanceProvider) GetTickerPrices(cps ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
+	return getTickerPrices(p, cps)
 }
 
-func (p *BinanceProvider) getTickerPrice(key string) (types.TickerPrice, error) {
+func (p *BinanceProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPrice, error) {
 	p.mtx.RLock()
 	defer p.mtx.RUnlock()
+
+	key := cp.String()
 
 	ticker, ok := p.tickers[key]
 	if !ok {

@@ -28,6 +28,7 @@ const (
 	ProviderCoinbase  Name = "coinbase"
 	ProviderBitget    Name = "bitget"
 	ProviderBitfinex  Name = "bitfinex"
+	ProviderBitforex  Name = "bitforex"
 	ProviderHitbtc    Name = "hitbtc"
 	ProviderKucoin    Name = "kucoin"
 	ProviderBybit     Name = "bybit"
@@ -44,12 +45,16 @@ type (
 		// GetTickerPrices returns the tickerPrices based on the provided pairs.
 		GetTickerPrices(...types.CurrencyPair) (map[string]types.TickerPrice, error)
 
+		GetTickerPrice(types.CurrencyPair) (types.TickerPrice, error)
+
 		// GetAvailablePairs return all available pairs symbol to subscribe.
 		GetAvailablePairs() (map[string]struct{}, error)
 
 		// SubscribeCurrencyPairs sends subscription messages for the new currency
 		// pairs and adds them to the providers subscribed pairs
 		SubscribeCurrencyPairs(...types.CurrencyPair) error
+
+		SetSubscribedPair(types.CurrencyPair)
 	}
 
 	// Name name of an oracle provider. Usually it is an exchange
@@ -78,6 +83,28 @@ type (
 		Websocket string `toml:"websocket"`
 	}
 )
+
+func getTickerPrices(p Provider, cps []types.CurrencyPair) (map[string]types.TickerPrice, error) {
+	tickerPrices := make(map[string]types.TickerPrice, len(cps))
+
+	for _, cp := range cps {
+
+		price, err := p.GetTickerPrice(cp)
+		if err != nil {
+			return nil, err
+		}
+		tickerPrices[cp.String()] = price
+	}
+
+	return tickerPrices, nil
+}
+
+// setSubscribedPairs sets N currency pairs to the map of subscribed pairs.
+func setSubscribedPairs(p Provider, cps ...types.CurrencyPair) {
+	for _, cp := range cps {
+		p.SetSubscribedPair(cp)
+	}
+}
 
 // String cast provider name to string.
 func (n Name) String() string {

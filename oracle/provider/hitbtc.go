@@ -171,24 +171,15 @@ func (p *HitbtcProvider) setTickerPair(ticker HitbtcTickerMsg) {
 	}
 }
 
-func (p *HitbtcProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
-	tickerPrices := make(map[string]types.TickerPrice, len(pairs))
-
-	for _, cp := range pairs {
-		key := cp.String()
-		price, err := p.getTickerPrice(key)
-		if err != nil {
-			return nil, err
-		}
-		tickerPrices[key] = price
-	}
-
-	return tickerPrices, nil
+func (p *HitbtcProvider) GetTickerPrices(cps ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
+	return getTickerPrices(p, cps)
 }
 
-func (p *HitbtcProvider) getTickerPrice(key string) (types.TickerPrice, error) {
+func (p *HitbtcProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPrice, error) {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
+
+	key := cp.String()
 
 	ticker, ok := p.tickers[key]
 	if !ok {

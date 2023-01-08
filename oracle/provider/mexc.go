@@ -141,24 +141,15 @@ func (p *MexcProvider) SubscribeCurrencyPairs(cps ...types.CurrencyPair) error {
 }
 
 // GetTickerPrices returns the tickerPrices based on the provided pairs.
-func (p *MexcProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
-	tickerPrices := make(map[string]types.TickerPrice, len(pairs))
-
-	for _, cp := range pairs {
-		key := strings.ToUpper(cp.Join("_"))
-		price, err := p.getTickerPrice(key)
-		if err != nil {
-			return nil, err
-		}
-		tickerPrices[cp.String()] = price
-	}
-
-	return tickerPrices, nil
+func (p *MexcProvider) GetTickerPrices(cps ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
+	return getTickerPrices(p, cps)
 }
 
-func (p *MexcProvider) getTickerPrice(key string) (types.TickerPrice, error) {
+func (p *MexcProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPrice, error) {
 	p.mtx.RLock()
 	defer p.mtx.RUnlock()
+
+	key := cp.Join("_")
 
 	ticker, ok := p.tickers[key]
 	if !ok {
@@ -210,11 +201,8 @@ func (p *MexcProvider) setTickerPair(symbol string, ticker MexcTicker) {
 	}
 }
 
-// setSubscribedPairs sets N currency pairs to the map of subscribed pairs.
-func (p *MexcProvider) setSubscribedPairs(cps ...types.CurrencyPair) {
-	for _, cp := range cps {
-		p.subscribedPairs[cp.String()] = cp
-	}
+func (p *MexcProvider) SetSubscribedPair(cp types.CurrencyPair) {
+	p.subscribedPairs[cp.String()] = cp
 }
 
 // GetAvailablePairs returns all pairs to which the provider can subscribe.

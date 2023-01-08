@@ -175,7 +175,7 @@ func (p *OkxProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[string]t
 	tickerPrices := make(map[string]types.TickerPrice, len(pairs))
 
 	for _, currencyPair := range pairs {
-		price, err := p.getTickerPrice(currencyPair)
+		price, err := p.GetTickerPrice(currencyPair)
 		if err != nil {
 			return nil, err
 		}
@@ -186,7 +186,7 @@ func (p *OkxProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[string]t
 	return tickerPrices, nil
 }
 
-func (p *OkxProvider) getTickerPrice(cp types.CurrencyPair) (types.TickerPrice, error) {
+func (p *OkxProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPrice, error) {
 	p.mtx.RLock()
 	defer p.mtx.RUnlock()
 

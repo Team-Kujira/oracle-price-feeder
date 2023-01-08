@@ -312,7 +312,7 @@ func GetComputedPrices(
 		return nil, err
 	}
 
-	// debugAggregatedProviderPrices(logger, convertedTickers)
+	debugAggregatedProviderPrices(logger, convertedTickers)
 
 	filteredProviderPrices, err := FilterTickerDeviations(
 		logger,
@@ -508,6 +508,9 @@ func NewProvider(
 
 	case provider.ProviderKucoin:
 		return provider.NewKucoinProvider(ctx, logger, endpoint, providerPairs...)
+
+	case provider.ProviderBitforex:
+		return provider.NewBitforexProvider(ctx, logger, endpoint, providerPairs...)
 
 	case provider.ProviderMock:
 		return provider.NewMockProvider(), nil

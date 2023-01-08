@@ -187,7 +187,7 @@ func (p *BitgetProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[strin
 	tickerPrices := make(map[string]types.TickerPrice, len(pairs))
 
 	for _, cp := range pairs {
-		price, err := p.getTickerPrice(cp)
+		price, err := p.GetTickerPrice(cp)
 		if err != nil {
 			return nil, err
 		}
@@ -245,7 +245,7 @@ func (p *BitgetProvider) setTickerPair(ticker BitgetTicker) {
 	p.tickers[ticker.Arg.InstID] = ticker
 }
 
-func (p *BitgetProvider) getTickerPrice(cp types.CurrencyPair) (types.TickerPrice, error) {
+func (p *BitgetProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPrice, error) {
 	p.mtx.RLock()
 	defer p.mtx.RUnlock()
 

@@ -65,6 +65,10 @@ func NewFinProvider(endpoint Endpoint) *FinProvider {
 	}
 }
 
+func (p FinProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPrice, error) {
+	return types.TickerPrice{}, nil
+}
+
 func (p FinProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
 	path := fmt.Sprintf("%s%s", p.baseURL, finTickersEndpoint)
 	tickerResponse, err := p.client.Get(path)

@@ -9,10 +9,11 @@ import (
 	"strings"
 	"sync"
 
+	"price-feeder/oracle/types"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/gorilla/websocket"
 	"github.com/rs/zerolog"
-	"price-feeder/oracle/types"
 )
 
 const (
@@ -127,8 +128,7 @@ func (p *OsmosisV2Provider) GetTickerPrices(pairs ...types.CurrencyPair) (map[st
 	tickerPrices := make(map[string]types.TickerPrice, len(pairs))
 
 	for _, cp := range pairs {
-		key := currencyPairToOsmosisV2Pair(cp)
-		price, err := p.getTickerPrice(key)
+		price, err := p.GetTickerPrice(cp)
 		if err != nil {
 			return nil, err
 		}
@@ -154,9 +154,11 @@ func (p *OsmosisV2Provider) GetCandlePrices(pairs ...types.CurrencyPair) (map[st
 	return candlePrices, nil
 }
 
-func (p *OsmosisV2Provider) getTickerPrice(key string) (types.TickerPrice, error) {
+func (p *OsmosisV2Provider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPrice, error) {
 	p.mtx.RLock()
 	defer p.mtx.RUnlock()
+
+	key := currencyPairToOsmosisV2Pair(cp)
 
 	ticker, ok := p.tickers[key]
 	if !ok {
@@ -355,3 +357,5 @@ func (p *OsmosisV2Provider) GetAvailablePairs() (map[string]struct{}, error) {
 func currencyPairToOsmosisV2Pair(cp types.CurrencyPair) string {
 	return strings.ToUpper(cp.Base + "/" + cp.Quote)
 }
+
+func (p *OsmosisV2Provider) SetSubscribedPair(types.CurrencyPair) {}

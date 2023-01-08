@@ -171,22 +171,28 @@ func (p *KrakenProvider) SubscribeCurrencyPairs(cps ...types.CurrencyPair) error
 }
 
 // GetTickerPrices returns the tickerPrices based on the saved map.
-func (p *KrakenProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
-	p.mtx.RLock()
-	defer p.mtx.RUnlock()
+func (p *KrakenProvider) GetTickerPrices(cps ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
+	return getTickerPrices(p, cps)
+}
 
-	tickerPrices := make(map[string]types.TickerPrice, len(pairs))
+func (p *KrakenProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPrice, error) {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
 
-	for _, cp := range pairs {
-		key := cp.String()
-		tickerPrice, ok := p.tickers[key]
-		if !ok {
-			return nil, fmt.Errorf("kraken failed to get ticker price for %s", key)
-		}
-		tickerPrices[key] = tickerPrice
+	key := cp.String()
+
+	ticker, ok := p.tickers[key]
+	if !ok {
+		return types.TickerPrice{}, fmt.Errorf("kraken failed to get ticker price for %s", key)
 	}
 
-	return tickerPrices, nil
+	return types.NewTickerPrice(
+		string(ProviderKucoin),
+		key,
+		fmt.Sprintf("%f", ticker.Price),
+		fmt.Sprintf("%f", ticker.Volume),
+		ticker.Time,
+	)
 }
 
 // messageReceived handles any message sent by the provider.

@@ -191,7 +191,7 @@ func (p *BitfinexProvider) setTickerPair(channel uint64, data [10]float64) {
 	}
 }
 
-func (p *BitfinexProvider) getTickerPrice(cp types.CurrencyPair) (types.TickerPrice, error) {
+func (p *BitfinexProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPrice, error) {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 
@@ -214,18 +214,8 @@ func (p *BitfinexProvider) getTickerPrice(cp types.CurrencyPair) (types.TickerPr
 	)
 }
 
-func (p *BitfinexProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
-	tickerPrices := make(map[string]types.TickerPrice, len(pairs))
-
-	for _, cp := range pairs {
-		price, err := p.getTickerPrice(cp)
-		if err != nil {
-			return nil, err
-		}
-		tickerPrices[cp.String()] = price
-	}
-
-	return tickerPrices, nil
+func (p *BitfinexProvider) GetTickerPrices(cps ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
+	return getTickerPrices(p, cps)
 }
 
 func (p *BitfinexProvider) GetAvailablePairs() (map[string]struct{}, error) {
