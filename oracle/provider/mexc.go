@@ -175,7 +175,7 @@ func (p *MexcProvider) messageReceived(messageType int, bz []byte) {
 
 	tickerErr = json.Unmarshal(bz, &tickerResp)
 	for _, cp := range p.subscribedPairs {
-		mexcPair := strings.ToUpper(cp.Join("_"))
+		mexcPair := cp.Join("_")
 		if tickerResp.Symbol[mexcPair].LastPrice != 0 {
 			p.setTickerPair(
 				mexcPair,

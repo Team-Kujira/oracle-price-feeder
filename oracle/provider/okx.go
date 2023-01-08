@@ -132,13 +132,13 @@ func NewOkxProvider(
 func (p *OkxProvider) GetSubscriptionMsgs(cps ...types.CurrencyPair) []interface{} {
 	subscriptionMsgs := make([]interface{}, 1)
 
-	okxTopics := []OkxSubscriptionTopic{}
+	okxTopics := make([]OkxSubscriptionTopic, len(cps))
 
-	for _, cp := range cps {
-		okxTopics = append(okxTopics, OkxSubscriptionTopic{
+	for i, cp := range cps {
+		okxTopics[i] = OkxSubscriptionTopic{
 			Channel: "tickers",
-			InstID:  strings.ToUpper(cp.Join("-")),
-		})
+			InstID:  cp.Join("-"),
+		}
 	}
 
 	subscriptionMsgs[0] = OkxSubscriptionMsg{
@@ -184,7 +184,7 @@ func (p *OkxProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPrice, 
 	p.mtx.RLock()
 	defer p.mtx.RUnlock()
 
-	instrumentID := strings.ToUpper(cp.Join("-"))
+	instrumentID := cp.Join("-")
 	tickerPair, ok := p.tickers[instrumentID]
 	if !ok {
 		return types.TickerPrice{}, fmt.Errorf("okx failed to get ticker price for %s", instrumentID)

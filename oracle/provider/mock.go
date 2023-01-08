@@ -63,7 +63,7 @@ func (p MockProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[string]t
 
 	tickerMap := make(map[string]struct{})
 	for _, cp := range pairs {
-		tickerMap[strings.ToUpper(cp.String())] = struct{}{}
+		tickerMap[cp.String()] = struct{}{}
 	}
 
 	// Records are of the form [base, quote, price, volume] and we skip the first

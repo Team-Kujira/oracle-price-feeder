@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"strings"
 	"sync"
 	"time"
 
@@ -149,7 +148,7 @@ func (p *BitgetProvider) GetSubscriptionMsgs(cps ...types.CurrencyPair) []interf
 		args[i] = BitgetSubscriptionArg{
 			InstType: "SP",
 			Channel:  "ticker",
-			InstID:   strings.ToUpper(cp.String()),
+			InstID:   cp.String(),
 		}
 	}
 

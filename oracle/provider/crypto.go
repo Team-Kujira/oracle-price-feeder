@@ -140,7 +140,7 @@ func (p *CryptoProvider) GetSubscriptionMsgs(cps ...types.CurrencyPair) []interf
 	channels := make([]string, len(cps))
 
 	for i, cp := range cps {
-		channels[i] = "ticker." + strings.ToUpper(cp.Join("_"))
+		channels[i] = "ticker." + cp.Join("_")
 	}
 
 	subscriptionMsgs[0] = CryptoSubscriptionMsg{

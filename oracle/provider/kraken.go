@@ -132,10 +132,10 @@ func NewKrakenProvider(
 func (p *KrakenProvider) GetSubscriptionMsgs(cps ...types.CurrencyPair) []interface{} {
 	subscriptionMsgs := make([]interface{}, 1)
 
-	pairs := []string{}
+	pairs := make([]string, len(cps))
 
-	for _, cp := range cps {
-		pairs = append(pairs, strings.ToUpper(cp.Join("/")))
+	for i, cp := range cps {
+		pairs[i] = cp.Join("/")
 	}
 
 	subscriptionMsgs[0] = KrakenSubscriptionMsg{

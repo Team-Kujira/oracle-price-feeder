@@ -3,7 +3,6 @@ package provider
 import (
 	"context"
 	"encoding/json"
-	"strings"
 	"testing"
 
 	"price-feeder/oracle/types"
@@ -88,7 +87,7 @@ func TestOkxProvider_GetTickerPrices(t *testing.T) {
 
 func TestOkxCurrencyPairToOkxPair(t *testing.T) {
 	cp := types.CurrencyPair{Base: "ATOM", Quote: "USDT"}
-	okxSymbol := strings.ToUpper(cp.Join("-"))
+	okxSymbol := cp.Join("-")
 	require.Equal(t, okxSymbol, "ATOM-USDT")
 }
 

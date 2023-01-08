@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"strings"
 	"sync"
 
 	"price-feeder/oracle/types"
@@ -127,7 +126,7 @@ func (p *BybitProvider) GetSubscriptionMsgs(cps ...types.CurrencyPair) []interfa
 	args := make([]string, len(cps))
 
 	for i, cp := range cps {
-		args[i] = "tickers." + strings.ToUpper(cp.String())
+		args[i] = "tickers." + cp.String()
 	}
 
 	subscriptionMsgs[0] = BybitSubscriptionMsg{

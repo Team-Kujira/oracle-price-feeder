@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/url"
 	"price-feeder/oracle/types"
-	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -111,7 +110,7 @@ func (p *BitfinexProvider) GetSubscriptionMsgs(cps ...types.CurrencyPair) []inte
 		subscriptionMsgs[i] = BitfinexSubscriptionMsg{
 			Event:   "subscribe",
 			Channel: "ticker",
-			Symbol:  strings.ToUpper(cp.String()),
+			Symbol:  cp.String(),
 		}
 	}
 
@@ -149,7 +148,7 @@ func (p *BitfinexProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPr
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 
-	channel, ok := p.channels[strings.ToUpper(cp.String())]
+	channel, ok := p.channels[cp.String()]
 	if !ok {
 		return types.TickerPrice{}, fmt.Errorf("bitfinex failed to get channel id for %s", cp.String())
 	}
@@ -161,7 +160,7 @@ func (p *BitfinexProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPr
 
 	return types.NewTickerPrice(
 		string(ProviderBitfinex),
-		strings.ToUpper(cp.String()),
+		cp.String(),
 		fmt.Sprintf("%f", ticker.Price),
 		fmt.Sprintf("%f", ticker.Volume),
 		ticker.Time,

@@ -3,7 +3,6 @@ package provider
 import (
 	"context"
 	"encoding/json"
-	"strings"
 	"testing"
 
 	"price-feeder/oracle/types"
@@ -82,7 +81,7 @@ func TestGateProvider_GetTickerPrices(t *testing.T) {
 
 func TestGateCurrencyPairToGatePair(t *testing.T) {
 	cp := types.CurrencyPair{Base: "ATOM", Quote: "USDT"}
-	GateSymbol := strings.ToUpper(cp.Join("_"))
+	GateSymbol := cp.Join("_")
 	require.Equal(t, GateSymbol, "ATOM_USDT")
 }
 

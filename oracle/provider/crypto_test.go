@@ -2,7 +2,6 @@ package provider
 
 import (
 	"context"
-	"strings"
 	"testing"
 
 	"price-feeder/oracle/types"
@@ -79,6 +78,6 @@ func TestCryptoProvider_GetTickerPrices(t *testing.T) {
 
 func TestCryptoCurrencyPairToCryptoPair(t *testing.T) {
 	cp := types.CurrencyPair{Base: "ATOM", Quote: "USDT"}
-	cryptoSymbol := strings.ToUpper(cp.Join("_"))
+	cryptoSymbol := cp.Join("_")
 	require.Equal(t, cryptoSymbol, "ATOM_USDT")
 }

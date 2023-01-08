@@ -132,7 +132,7 @@ func (p *GateProvider) GetSubscriptionMsgs(cps ...types.CurrencyPair) []interfac
 	params := make([]string, len(cps))
 
 	for i, cp := range cps {
-		params[i] = strings.ToUpper(cp.Join("_"))
+		params[i] = cp.Join("_")
 	}
 
 	subscriptionMsgs[0] = GateTickerSubscriptionMsg{
@@ -176,7 +176,7 @@ func (p *GateProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPrice,
 	p.mtx.RLock()
 	defer p.mtx.RUnlock()
 
-	gp := strings.ToUpper(cp.Join("_"))
+	gp := cp.Join("_")
 	if tickerPair, ok := p.tickers[gp]; ok {
 		return tickerPair.toTickerPrice()
 	}
