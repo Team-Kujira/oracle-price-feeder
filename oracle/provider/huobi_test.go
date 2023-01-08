@@ -84,14 +84,14 @@ func TestHuobiProvider_GetTickerPrices(t *testing.T) {
 	})
 }
 
-func TestHuobiProvider_getSubscriptionMsgs(t *testing.T) {
+func TestHuobiProvider_GetSubscriptionMsgs(t *testing.T) {
 	provider := &HuobiProvider{
 		subscribedPairs: map[string]types.CurrencyPair{},
 	}
 	cps := []types.CurrencyPair{
 		{Base: "ATOM", Quote: "USDT"},
 	}
-	subMsgs := provider.getSubscriptionMsgs(cps...)
+	subMsgs := provider.GetSubscriptionMsgs(cps...)
 
 	msg, _ := json.Marshal(subMsgs[0])
 	require.Equal(t, "{\"sub\":\"market.atomusdt.ticker\"}", string(msg))

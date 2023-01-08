@@ -91,14 +91,14 @@ func TestOkxCurrencyPairToOkxPair(t *testing.T) {
 	require.Equal(t, okxSymbol, "ATOM-USDT")
 }
 
-func TestOkxProvider_getSubscriptionMsgs(t *testing.T) {
+func TestOkxProvider_GetSubscriptionMsgs(t *testing.T) {
 	provider := &OkxProvider{
 		subscribedPairs: map[string]types.CurrencyPair{},
 	}
 	cps := []types.CurrencyPair{
 		{Base: "ATOM", Quote: "USDT"},
 	}
-	subMsgs := provider.getSubscriptionMsgs(cps...)
+	subMsgs := provider.GetSubscriptionMsgs(cps...)
 
 	msg, _ := json.Marshal(subMsgs[0])
 	require.Equal(t, "{\"op\":\"subscribe\",\"args\":[{\"channel\":\"candle1m\",\"instId\":\"ATOM-USDT\"}]}", string(msg))

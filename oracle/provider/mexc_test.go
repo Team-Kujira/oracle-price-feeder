@@ -83,14 +83,14 @@ func TestMexcCurrencyPairToMexcPair(t *testing.T) {
 	require.Equal(t, MexcSymbol, "ATOM_USDT")
 }
 
-func TestMexcProvider_getSubscriptionMsgs(t *testing.T) {
+func TestMexcProvider_GetSubscriptionMsgs(t *testing.T) {
 	provider := &MexcProvider{
 		subscribedPairs: map[string]types.CurrencyPair{},
 	}
 	cps := []types.CurrencyPair{
 		{Base: "ATOM", Quote: "USDT"},
 	}
-	subMsgs := provider.getSubscriptionMsgs(cps...)
+	subMsgs := provider.GetSubscriptionMsgs(cps...)
 
 	msg, _ := json.Marshal(subMsgs[0])
 	require.Equal(t, "{\"op\":\"sub.kline\",\"symbol\":\"ATOM_USDT\",\"interval\":\"Min1\"}", string(msg))

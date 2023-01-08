@@ -96,14 +96,14 @@ func TestNormalizeKrakenBTCPair(t *testing.T) {
 	require.Equal(t, atomSymbol, "ATOM/USDT")
 }
 
-func TestKrakenProvider_getSubscriptionMsgs(t *testing.T) {
+func TestKrakenProvider_GetSubscriptionMsgs(t *testing.T) {
 	provider := &KrakenProvider{
 		subscribedPairs: map[string]types.CurrencyPair{},
 	}
 	cps := []types.CurrencyPair{
 		{Base: "ATOM", Quote: "USDT"},
 	}
-	subMsgs := provider.getSubscriptionMsgs(cps...)
+	subMsgs := provider.GetSubscriptionMsgs(cps...)
 
 	msg, _ := json.Marshal(subMsgs[0])
 	require.Equal(t, "{\"event\":\"subscribe\",\"pair\":[\"ATOM/USDT\"],\"subscription\":{\"name\":\"ticker\"}}", string(msg))

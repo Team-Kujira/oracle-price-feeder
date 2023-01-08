@@ -85,14 +85,14 @@ func TestGateCurrencyPairToGatePair(t *testing.T) {
 	require.Equal(t, GateSymbol, "ATOM_USDT")
 }
 
-func TestGateProvider_getSubscriptionMsgs(t *testing.T) {
+func TestGateProvider_GetSubscriptionMsgs(t *testing.T) {
 	provider := &GateProvider{
 		subscribedPairs: map[string]types.CurrencyPair{},
 	}
 	cps := []types.CurrencyPair{
 		{Base: "ATOM", Quote: "USDT"},
 	}
-	subMsgs := provider.getSubscriptionMsgs(cps...)
+	subMsgs := provider.GetSubscriptionMsgs(cps...)
 
 	msg, _ := json.Marshal(subMsgs[0])
 	require.Equal(t, "{\"method\":\"ticker.subscribe\",\"params\":[\"ATOM_USDT\"],\"id\":1}", string(msg))

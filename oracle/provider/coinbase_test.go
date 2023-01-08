@@ -76,14 +76,14 @@ func TestCoinbaseProvider_GetTickerPrices(t *testing.T) {
 	})
 }
 
-func TestCoinbaseProvider_getSubscriptionMsgs(t *testing.T) {
+func TestCoinbaseProvider_GetSubscriptionMsgs(t *testing.T) {
 	provider := &CoinbaseProvider{
 		subscribedPairs: map[string]types.CurrencyPair{},
 	}
 	cps := []types.CurrencyPair{
 		{Base: "ATOM", Quote: "USDT"},
 	}
-	subMsgs := provider.getSubscriptionMsgs(cps...)
+	subMsgs := provider.GetSubscriptionMsgs(cps...)
 
 	msg, _ := json.Marshal(subMsgs[0])
 	require.Equal(t, "{\"type\":\"subscribe\",\"product_ids\":[\"ATOM-USDT\"],\"channels\":[\"matches\",\"ticker\"]}", string(msg))
