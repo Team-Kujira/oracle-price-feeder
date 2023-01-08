@@ -555,12 +555,12 @@ func (o *Oracle) tick(ctx context.Context) error {
 	currentVotePeriod := math.Floor(float64(nextBlockHeight) / float64(oracleVotePeriod))
 	indexInVotePeriod := nextBlockHeight % oracleVotePeriod
 
-	o.logger.Info().
+	o.logger.Debug().
 		Int64("vote_period", oracleVotePeriod).
 		Float64("previous_vote_period", o.previousVotePeriod).
 		Float64("current_vote_period", currentVotePeriod).
 		Int64("indexInVotePeriod", indexInVotePeriod).
-		Msg("tick")
+		Msg("")
 
 	// Skip until new voting period. Specifically, skip when:
 	// index [0, oracleVotePeriod - 1] > oracleVotePeriod - 2 OR index is 0
