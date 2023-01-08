@@ -45,21 +45,30 @@ type (
 		// GetTickerPrices returns the tickerPrices based on the provided pairs.
 		GetTickerPrices(...types.CurrencyPair) (map[string]types.TickerPrice, error)
 
+		// GetTickerPrice returns the last ticker price for given currency pair
 		GetTickerPrice(types.CurrencyPair) (types.TickerPrice, error)
 
 		// GetAvailablePairs return all available pairs symbol to subscribe.
 		GetAvailablePairs() (map[string]struct{}, error)
 
+		// GetSubscribedPair returns the currency pair and true for given
+		// symbol if found in 'subscribedPairs' otherwise returns an
+		// empty currency pair and false
 		GetSubscribedPair(s string) (types.CurrencyPair, bool)
 
+		// SetSubscribedPair adds the currency pair to subscribedPairs map
 		SetSubscribedPair(types.CurrencyPair)
 
 		// SubscribeCurrencyPairs sends subscription messages for the new currency
 		// pairs and adds them to the providers subscribed pairs
 		SubscribeCurrencyPairs(...types.CurrencyPair) error
 
+		// GetSubscriptionMsgs returns all subscription messages needed to
+		// subscribe to the configured wss channels
 		GetSubscriptionMsgs(...types.CurrencyPair) []interface{}
 
+		// SendSubscriptionMsgs sends provided subscription messages
+		// to the websocket endpoint
 		SendSubscriptionMsgs(msgs []interface{}) error
 	}
 
