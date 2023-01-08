@@ -178,8 +178,6 @@ func (p *BitforexProvider) messageReceived(messageType int, bz []byte) {
 		tickerErr error
 	)
 
-	fmt.Println(string(bz))
-
 	tickerErr = json.Unmarshal(bz, &tickerMsg)
 	if tickerErr == nil && tickerMsg.Event == "ticker" {
 		p.setTickerPair(tickerMsg)
