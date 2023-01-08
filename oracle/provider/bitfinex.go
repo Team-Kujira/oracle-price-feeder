@@ -86,13 +86,13 @@ func NewBitfinexProvider(
 		subscribedPairs: map[string]types.CurrencyPair{},
 	}
 
-	provider.setSubscribedPairs(pairs...)
+	setSubscribedPairs(provider, pairs...)
 
 	provider.wsc = NewWebsocketController(
 		ctx,
 		ProviderBitfinex,
 		wsURL,
-		provider.getSubscriptionMsgs(pairs...),
+		provider.GetSubscriptionMsgs(pairs...),
 		provider.messageReceived,
 		defaultPingDuration,
 		websocket.TextMessage,
@@ -104,7 +104,7 @@ func NewBitfinexProvider(
 	return provider, nil
 }
 
-func (p *BitfinexProvider) getSubscriptionMsgs(cps ...types.CurrencyPair) []interface{} {
+func (p *BitfinexProvider) GetSubscriptionMsgs(cps ...types.CurrencyPair) []interface{} {
 	subscriptionMsgs := make([]interface{}, len(cps))
 
 	for i, cp := range cps {
@@ -118,29 +118,54 @@ func (p *BitfinexProvider) getSubscriptionMsgs(cps ...types.CurrencyPair) []inte
 	return subscriptionMsgs
 }
 
-func (p *BitfinexProvider) SubscribeCurrencyPairs(cps ...types.CurrencyPair) error {
+func (p *BitfinexProvider) GetSubscribedPair(s string) (types.CurrencyPair, bool) {
+	cp, ok := p.subscribedPairs[s]
+	return cp, ok
+}
+
+func (p *BitfinexProvider) SetSubscribedPair(cp types.CurrencyPair) {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 
-	newPairs := []types.CurrencyPair{}
-	for _, cp := range cps {
-		if _, ok := p.subscribedPairs[cp.String()]; !ok {
-			newPairs = append(newPairs, cp)
-		}
-	}
-
-	newSubscriptionMsgs := p.getSubscriptionMsgs(newPairs...)
-	if err := p.wsc.AddSubscriptionMsgs(newSubscriptionMsgs); err != nil {
-		return err
-	}
-	p.setSubscribedPairs(newPairs...)
-	return nil
+	p.subscribedPairs[cp.String()] = cp
 }
 
-func (p *BitfinexProvider) setSubscribedPairs(cps ...types.CurrencyPair) {
-	for _, cp := range cps {
-		p.subscribedPairs[cp.String()] = cp
+func (p *BitfinexProvider) SubscribeCurrencyPairs(cps ...types.CurrencyPair) error {
+	return subscribeCurrencyPairs(p, cps)
+}
+
+func (p *BitfinexProvider) SendSubscriptionMsgs(msgs []interface{}) error {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+
+	return p.wsc.AddSubscriptionMsgs(msgs)
+}
+
+func (p *BitfinexProvider) GetTickerPrices(cps ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
+	return getTickerPrices(p, cps)
+}
+
+func (p *BitfinexProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPrice, error) {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+
+	channel, ok := p.channels[strings.ToUpper(cp.String())]
+	if !ok {
+		return types.TickerPrice{}, fmt.Errorf("bitfinex failed to get channel id for %s", cp.String())
 	}
+
+	ticker, ok := p.tickers[channel]
+	if !ok {
+		return types.TickerPrice{}, fmt.Errorf("bitfinex failed to get ticker price for %s", cp.String())
+	}
+
+	return types.NewTickerPrice(
+		string(ProviderBitfinex),
+		strings.ToUpper(cp.String()),
+		fmt.Sprintf("%f", ticker.Price),
+		fmt.Sprintf("%f", ticker.Volume),
+		ticker.Time,
+	)
 }
 
 func (p *BitfinexProvider) messageReceived(MessageType int, bz []byte) {
@@ -189,33 +214,6 @@ func (p *BitfinexProvider) setTickerPair(channel uint64, data [10]float64) {
 		Volume: data[7],
 		Time:   time.Now().UnixMilli(),
 	}
-}
-
-func (p *BitfinexProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPrice, error) {
-	p.mtx.Lock()
-	defer p.mtx.Unlock()
-
-	channel, ok := p.channels[strings.ToUpper(cp.String())]
-	if !ok {
-		return types.TickerPrice{}, fmt.Errorf("bitfinex failed to get channel id for %s", cp.String())
-	}
-
-	ticker, ok := p.tickers[channel]
-	if !ok {
-		return types.TickerPrice{}, fmt.Errorf("bitfinex failed to get ticker price for %s", cp.String())
-	}
-
-	return types.NewTickerPrice(
-		string(ProviderBitfinex),
-		strings.ToUpper(cp.String()),
-		fmt.Sprintf("%f", ticker.Price),
-		fmt.Sprintf("%f", ticker.Volume),
-		ticker.Time,
-	)
-}
-
-func (p *BitfinexProvider) GetTickerPrices(cps ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
-	return getTickerPrices(p, cps)
 }
 
 func (p *BitfinexProvider) GetAvailablePairs() (map[string]struct{}, error) {

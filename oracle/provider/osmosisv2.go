@@ -358,4 +358,25 @@ func currencyPairToOsmosisV2Pair(cp types.CurrencyPair) string {
 	return strings.ToUpper(cp.Base + "/" + cp.Quote)
 }
 
-func (p *OsmosisV2Provider) SetSubscribedPair(types.CurrencyPair) {}
+func (p *OsmosisV2Provider) GetSubscribedPair(s string) (types.CurrencyPair, bool) {
+	cp, ok := p.subscribedPairs[s]
+	return cp, ok
+}
+
+func (p *OsmosisV2Provider) SendSubscriptionMsgs(msgs []interface{}) error {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+
+	return p.wsc.AddSubscriptionMsgs(msgs)
+}
+
+func (p *OsmosisV2Provider) SetSubscribedPair(cp types.CurrencyPair) {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+
+	p.subscribedPairs[cp.String()] = cp
+}
+
+func (p *OsmosisV2Provider) GetSubscriptionMsgs(cps ...types.CurrencyPair) []interface{} {
+	return nil
+}

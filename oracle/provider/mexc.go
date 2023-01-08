@@ -92,13 +92,13 @@ func NewMexcProvider(
 		subscribedPairs: map[string]types.CurrencyPair{},
 	}
 
-	provider.setSubscribedPairs(pairs...)
+	setSubscribedPairs(provider, pairs...)
 
 	provider.wsc = NewWebsocketController(
 		ctx,
 		ProviderMexc,
 		wsURL,
-		provider.getSubscriptionMsgs(pairs...),
+		provider.GetSubscriptionMsgs(pairs...),
 		provider.messageReceived,
 		defaultPingDuration,
 		websocket.PingMessage,
@@ -109,7 +109,7 @@ func NewMexcProvider(
 	return provider, nil
 }
 
-func (p *MexcProvider) getSubscriptionMsgs(cps ...types.CurrencyPair) []interface{} {
+func (p *MexcProvider) GetSubscriptionMsgs(cps ...types.CurrencyPair) []interface{} {
 	subscriptionMsgs := make([]interface{}, 1)
 
 	subscriptionMsgs[0] = MexcTickerSubscription{
@@ -119,25 +119,29 @@ func (p *MexcProvider) getSubscriptionMsgs(cps ...types.CurrencyPair) []interfac
 	return subscriptionMsgs
 }
 
-// SubscribeCurrencyPairs sends the new subscription messages to the websocket
-// and adds them to the providers subscribedPairs array
-func (p *MexcProvider) SubscribeCurrencyPairs(cps ...types.CurrencyPair) error {
+func (p *MexcProvider) GetSubscribedPair(s string) (types.CurrencyPair, bool) {
+	cp, ok := p.subscribedPairs[s]
+	return cp, ok
+}
+
+func (p *MexcProvider) SetSubscribedPair(cp types.CurrencyPair) {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 
-	newPairs := []types.CurrencyPair{}
-	for _, cp := range cps {
-		if _, ok := p.subscribedPairs[cp.String()]; !ok {
-			newPairs = append(newPairs, cp)
-		}
-	}
+	p.subscribedPairs[cp.String()] = cp
+}
 
-	newSubscriptionMsgs := p.getSubscriptionMsgs(newPairs...)
-	if err := p.wsc.AddSubscriptionMsgs(newSubscriptionMsgs); err != nil {
-		return err
-	}
-	p.setSubscribedPairs(newPairs...)
-	return nil
+// SubscribeCurrencyPairs sends the new subscription messages to the websocket
+// and adds them to the providers subscribedPairs array
+func (p *MexcProvider) SubscribeCurrencyPairs(cps ...types.CurrencyPair) error {
+	return subscribeCurrencyPairs(p, cps)
+}
+
+func (p *MexcProvider) SendSubscriptionMsgs(msgs []interface{}) error {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+
+	return p.wsc.AddSubscriptionMsgs(msgs)
 }
 
 // GetTickerPrices returns the tickerPrices based on the provided pairs.
@@ -199,10 +203,6 @@ func (p *MexcProvider) setTickerPair(symbol string, ticker MexcTicker) {
 		Volume: floatToDec(ticker.Volume),
 		Time:   time.Now().UnixMilli(),
 	}
-}
-
-func (p *MexcProvider) SetSubscribedPair(cp types.CurrencyPair) {
-	p.subscribedPairs[cp.String()] = cp
 }
 
 // GetAvailablePairs returns all pairs to which the provider can subscribe.

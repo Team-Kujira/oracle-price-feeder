@@ -110,7 +110,7 @@ func NewBybitProvider(
 		ctx,
 		ProviderBybit,
 		wsURL,
-		provider.getSubscriptionMsgs(pairs...),
+		provider.GetSubscriptionMsgs(pairs...),
 		provider.messageReceived,
 		defaultPingDuration,
 		websocket.TextMessage,
@@ -121,7 +121,7 @@ func NewBybitProvider(
 	return provider, nil
 }
 
-func (p *BybitProvider) getSubscriptionMsgs(cps ...types.CurrencyPair) []interface{} {
+func (p *BybitProvider) GetSubscriptionMsgs(cps ...types.CurrencyPair) []interface{} {
 	subscriptionMsgs := make([]interface{}, 1)
 
 	args := make([]string, len(cps))
@@ -136,27 +136,6 @@ func (p *BybitProvider) getSubscriptionMsgs(cps ...types.CurrencyPair) []interfa
 	}
 
 	return subscriptionMsgs
-}
-
-// SubscribeCurrencyPairs sends the new subscription messages to the websocket
-// and adds them to the providers subscribedPairs array
-func (p *BybitProvider) SubscribeCurrencyPairs(cps ...types.CurrencyPair) error {
-	p.mtx.Lock()
-	defer p.mtx.Unlock()
-
-	newPairs := []types.CurrencyPair{}
-	for _, cp := range cps {
-		if _, ok := p.subscribedPairs[cp.String()]; !ok {
-			newPairs = append(newPairs, cp)
-		}
-	}
-
-	newSubscriptionMsgs := p.getSubscriptionMsgs(newPairs...)
-	if err := p.wsc.AddSubscriptionMsgs(newSubscriptionMsgs); err != nil {
-		return err
-	}
-	p.setSubscribedPairs(newPairs...)
-	return nil
 }
 
 // GetTickerPrices returns the tickerPrices based on the saved map.
@@ -261,4 +240,30 @@ func (ticker BybitTicker) toTickerPrice() (types.TickerPrice, error) {
 		ticker.Data.Volume,
 		ticker.Data.Time,
 	)
+}
+
+func (p *BybitProvider) SubscribeCurrencyPairs(cps ...types.CurrencyPair) error {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+
+	return subscribeCurrencyPairs(p, cps)
+}
+
+func (p *BybitProvider) GetSubscribedPair(s string) (types.CurrencyPair, bool) {
+	cp, ok := p.subscribedPairs[s]
+	return cp, ok
+}
+
+func (p *BybitProvider) SendSubscriptionMsgs(msgs []interface{}) error {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+
+	return p.wsc.AddSubscriptionMsgs(msgs)
+}
+
+func (p *BybitProvider) SetSubscribedPair(cp types.CurrencyPair) {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+
+	p.subscribedPairs[cp.String()] = cp
 }

@@ -85,13 +85,13 @@ func NewBitforexProvider(
 		subscribedPairs: map[string]types.CurrencyPair{},
 	}
 
-	provider.setSubscribedPairs(pairs...)
+	setSubscribedPairs(provider, pairs...)
 
 	provider.wsc = NewWebsocketController(
 		ctx,
 		ProviderBitforex,
 		wsURL,
-		provider.getSubscriptionMsgs(pairs...),
+		provider.GetSubscriptionMsgs(pairs...),
 		provider.messageReceived,
 		defaultPingDuration,
 		websocket.TextMessage,
@@ -103,7 +103,7 @@ func NewBitforexProvider(
 	return provider, nil
 }
 
-func (p *BitforexProvider) getSubscriptionMsgs(cps ...types.CurrencyPair) []interface{} {
+func (p *BitforexProvider) GetSubscriptionMsgs(cps ...types.CurrencyPair) []interface{} {
 	subscriptionMsgs := make([]interface{}, 1)
 
 	subscriptionMsg := make([]BitforexSubscriptionConfig, len(cps))
@@ -125,29 +125,51 @@ func (p *BitforexProvider) getSubscriptionMsgs(cps ...types.CurrencyPair) []inte
 	return subscriptionMsgs
 }
 
-func (p *BitforexProvider) SubscribeCurrencyPairs(cps ...types.CurrencyPair) error {
+func (p *BitforexProvider) GetSubscribedPair(s string) (types.CurrencyPair, bool) {
+	cp, ok := p.subscribedPairs[s]
+	return cp, ok
+}
+
+func (p *BitforexProvider) SetSubscribedPair(cp types.CurrencyPair) {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 
-	newPairs := []types.CurrencyPair{}
-	for _, cp := range cps {
-		if _, ok := p.subscribedPairs[cp.String()]; !ok {
-			newPairs = append(newPairs, cp)
-		}
-	}
-
-	newSubscriptionMsgs := p.getSubscriptionMsgs(newPairs...)
-	if err := p.wsc.AddSubscriptionMsgs(newSubscriptionMsgs); err != nil {
-		return err
-	}
-	p.setSubscribedPairs(newPairs...)
-	return nil
+	p.subscribedPairs[cp.String()] = cp
 }
 
-func (p *BitforexProvider) setSubscribedPairs(cps ...types.CurrencyPair) {
-	for _, cp := range cps {
-		p.subscribedPairs[cp.String()] = cp
+func (p *BitforexProvider) SubscribeCurrencyPairs(cps ...types.CurrencyPair) error {
+	return subscribeCurrencyPairs(p, cps)
+}
+func (p *BitforexProvider) SendSubscriptionMsgs(msgs []interface{}) error {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+
+	return p.wsc.AddSubscriptionMsgs(msgs)
+}
+
+func (p *BitforexProvider) GetTickerPrices(cps ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
+	return getTickerPrices(p, cps)
+}
+
+func (p *BitforexProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPrice, error) {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+
+	businessType := "coin-" + strings.ToLower(cp.Quote+"-"+cp.Base)
+
+	ticker, ok := p.tickers[businessType]
+	if !ok {
+		err := fmt.Errorf("bitforex failed to get ticker price for %s", cp)
+		return types.TickerPrice{}, err
 	}
+
+	return types.NewTickerPrice(
+		string(ProviderBitforex),
+		cp.String(),
+		fmt.Sprintf("%f", ticker.Price),
+		fmt.Sprintf("%f", ticker.Volume),
+		ticker.Time,
+	)
 }
 
 func (p *BitforexProvider) messageReceived(messageType int, bz []byte) {
@@ -176,31 +198,6 @@ func (p *BitforexProvider) setTickerPair(ticker BitforexTickerMsg) {
 	defer p.mtx.Unlock()
 
 	p.tickers[ticker.Param.BusinessType] = ticker.Data
-}
-
-func (p *BitforexProvider) GetTickerPrices(cps ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
-	return getTickerPrices(p, cps)
-}
-
-func (p *BitforexProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPrice, error) {
-	p.mtx.Lock()
-	defer p.mtx.Unlock()
-
-	businessType := "coin-" + strings.ToLower(cp.Quote+"-"+cp.Base)
-
-	ticker, ok := p.tickers[businessType]
-	if !ok {
-		err := fmt.Errorf("bitforex failed to get ticker price for %s", cp)
-		return types.TickerPrice{}, err
-	}
-
-	return types.NewTickerPrice(
-		string(ProviderBitforex),
-		cp.String(),
-		fmt.Sprintf("%f", ticker.Price),
-		fmt.Sprintf("%f", ticker.Volume),
-		ticker.Time,
-	)
 }
 
 func (p *BitforexProvider) GetAvailablePairs() (map[string]struct{}, error) {

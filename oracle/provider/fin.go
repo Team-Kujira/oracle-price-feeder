@@ -65,8 +65,23 @@ func NewFinProvider(endpoint Endpoint) *FinProvider {
 	}
 }
 
-func (p FinProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPrice, error) {
-	return types.TickerPrice{}, nil
+func (p FinProvider) GetSubscriptionMsgs(cps ...types.CurrencyPair) []interface{} {
+	return nil
+}
+
+func (p FinProvider) GetSubscribedPair(s string) (types.CurrencyPair, bool) {
+	return types.CurrencyPair{}, true
+}
+
+func (p FinProvider) SetSubscribedPair(cp types.CurrencyPair) {}
+
+// SubscribeCurrencyPairs performs a no-op since fin does not use websockets
+func (p FinProvider) SubscribeCurrencyPairs(cps ...types.CurrencyPair) error {
+	return nil
+}
+
+func (p FinProvider) SendSubscriptionMsgs(msgs []interface{}) error {
+	return nil
 }
 
 func (p FinProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
@@ -117,6 +132,10 @@ func (p FinProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[string]ty
 	return tickerPrices, nil
 }
 
+func (p FinProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPrice, error) {
+	return types.TickerPrice{}, nil
+}
+
 func (p FinProvider) GetAvailablePairs() (map[string]struct{}, error) {
 	finPairs, err := p.getFinPairs()
 	if err != nil {
@@ -146,9 +165,4 @@ func (p FinProvider) getFinPairs() (FinPairs, error) {
 		return FinPairs{}, err
 	}
 	return pairs, nil
-}
-
-// SubscribeCurrencyPairs performs a no-op since fin does not use websockets
-func (p FinProvider) SubscribeCurrencyPairs(pairs ...types.CurrencyPair) error {
-	return nil
 }

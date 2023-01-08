@@ -80,13 +80,13 @@ func NewHitbtcProvider(
 		subscribedPairs: map[string]types.CurrencyPair{},
 	}
 
-	provider.setSubscribedPairs(pairs...)
+	setSubscribedPairs(provider, pairs...)
 
 	provider.wsc = NewWebsocketController(
 		ctx,
 		ProviderHitbtc,
 		wsURL,
-		provider.getSubscriptionMsgs(pairs...),
+		provider.GetSubscriptionMsgs(pairs...),
 		provider.messageReceived,
 		defaultPingDuration,
 		websocket.TextMessage,
@@ -98,7 +98,7 @@ func NewHitbtcProvider(
 	return provider, nil
 }
 
-func (p *HitbtcProvider) getSubscriptionMsgs(cps ...types.CurrencyPair) []interface{} {
+func (p *HitbtcProvider) GetSubscriptionMsgs(cps ...types.CurrencyPair) []interface{} {
 	subscriptionMsgs := make([]interface{}, len(cps))
 
 	symbols := make([]string, len(cps))
@@ -118,29 +118,51 @@ func (p *HitbtcProvider) getSubscriptionMsgs(cps ...types.CurrencyPair) []interf
 	return subscriptionMsgs
 }
 
-func (p *HitbtcProvider) SubscribeCurrencyPairs(cps ...types.CurrencyPair) error {
+func (p *HitbtcProvider) GetSubscribedPair(s string) (types.CurrencyPair, bool) {
+	cp, ok := p.subscribedPairs[s]
+	return cp, ok
+}
+
+func (p *HitbtcProvider) SetSubscribedPair(cp types.CurrencyPair) {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 
-	newPairs := []types.CurrencyPair{}
-	for _, cp := range cps {
-		if _, ok := p.subscribedPairs[cp.String()]; !ok {
-			newPairs = append(newPairs, cp)
-		}
-	}
-
-	newSubscriptionMsgs := p.getSubscriptionMsgs(newPairs...)
-	if err := p.wsc.AddSubscriptionMsgs(newSubscriptionMsgs); err != nil {
-		return err
-	}
-	p.setSubscribedPairs(newPairs...)
-	return nil
+	p.subscribedPairs[cp.String()] = cp
 }
 
-func (p *HitbtcProvider) setSubscribedPairs(cps ...types.CurrencyPair) {
-	for _, cp := range cps {
-		p.subscribedPairs[cp.String()] = cp
+func (p *HitbtcProvider) SubscribeCurrencyPairs(cps ...types.CurrencyPair) error {
+	return subscribeCurrencyPairs(p, cps)
+}
+
+func (p *HitbtcProvider) SendSubscriptionMsgs(msgs []interface{}) error {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+
+	return p.wsc.AddSubscriptionMsgs(msgs)
+}
+
+func (p *HitbtcProvider) GetTickerPrices(cps ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
+	return getTickerPrices(p, cps)
+}
+
+func (p *HitbtcProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPrice, error) {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+
+	key := cp.String()
+
+	ticker, ok := p.tickers[key]
+	if !ok {
+		return types.TickerPrice{}, fmt.Errorf("hitbtc failed to get ticker price for %s", key)
 	}
+
+	return types.NewTickerPrice(
+		string(ProviderHitbtc),
+		key,
+		ticker.Price,
+		ticker.Volume,
+		ticker.Time,
+	)
 }
 
 func (p *HitbtcProvider) messageReceived(messageType int, bz []byte) {
@@ -169,30 +191,6 @@ func (p *HitbtcProvider) setTickerPair(ticker HitbtcTickerMsg) {
 	for symbol := range ticker.Data {
 		p.tickers[symbol] = ticker.Data[symbol]
 	}
-}
-
-func (p *HitbtcProvider) GetTickerPrices(cps ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
-	return getTickerPrices(p, cps)
-}
-
-func (p *HitbtcProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPrice, error) {
-	p.mtx.Lock()
-	defer p.mtx.Unlock()
-
-	key := cp.String()
-
-	ticker, ok := p.tickers[key]
-	if !ok {
-		return types.TickerPrice{}, fmt.Errorf("hitbtc failed to get ticker price for %s", key)
-	}
-
-	return types.NewTickerPrice(
-		string(ProviderHitbtc),
-		key,
-		ticker.Price,
-		ticker.Volume,
-		ticker.Time,
-	)
 }
 
 func (p *HitbtcProvider) GetAvailablePairs() (map[string]struct{}, error) {

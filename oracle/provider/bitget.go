@@ -123,13 +123,13 @@ func NewBitgetProvider(
 		subscribedPairs: map[string]types.CurrencyPair{},
 	}
 
-	provider.setSubscribedPairs(pairs...)
+	setSubscribedPairs(provider, pairs...)
 
 	provider.wsc = NewWebsocketController(
 		ctx,
 		ProviderBitget,
 		wsURL,
-		provider.getSubscriptionMsgs(pairs...),
+		provider.GetSubscriptionMsgs(pairs...),
 		provider.messageReceived,
 		defaultPingDuration,
 		websocket.TextMessage,
@@ -140,7 +140,7 @@ func NewBitgetProvider(
 	return provider, nil
 }
 
-func (p *BitgetProvider) getSubscriptionMsgs(cps ...types.CurrencyPair) []interface{} {
+func (p *BitgetProvider) GetSubscriptionMsgs(cps ...types.CurrencyPair) []interface{} {
 	subscriptionMsgs := make([]interface{}, 1)
 
 	args := make([]BitgetSubscriptionArg, len(cps))
@@ -161,40 +161,44 @@ func (p *BitgetProvider) getSubscriptionMsgs(cps ...types.CurrencyPair) []interf
 	return subscriptionMsgs
 }
 
-// SubscribeCurrencyPairs sends the new subscription messages to the websocket
-// and adds them to the providers subscribedPairs array
 func (p *BitgetProvider) SubscribeCurrencyPairs(cps ...types.CurrencyPair) error {
+	return subscribeCurrencyPairs(p, cps)
+}
+
+func (p *BitgetProvider) GetSubscribedPair(s string) (types.CurrencyPair, bool) {
+	cp, ok := p.subscribedPairs[s]
+	return cp, ok
+}
+
+func (p *BitgetProvider) SendSubscriptionMsgs(msgs []interface{}) error {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 
-	newPairs := []types.CurrencyPair{}
-	for _, cp := range cps {
-		if _, ok := p.subscribedPairs[cp.String()]; !ok {
-			newPairs = append(newPairs, cp)
-		}
-	}
+	return p.wsc.AddSubscriptionMsgs(msgs)
+}
 
-	newSubscriptionMsgs := p.getSubscriptionMsgs(newPairs...)
-	if err := p.wsc.AddSubscriptionMsgs(newSubscriptionMsgs); err != nil {
-		return err
-	}
-	p.setSubscribedPairs(newPairs...)
-	return nil
+func (p *BitgetProvider) SetSubscribedPair(cp types.CurrencyPair) {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+
+	p.subscribedPairs[cp.String()] = cp
 }
 
 // GetTickerPrices returns the tickerPrices based on the saved map.
-func (p *BitgetProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
-	tickerPrices := make(map[string]types.TickerPrice, len(pairs))
+func (p *BitgetProvider) GetTickerPrices(cps ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
+	return getTickerPrices(p, cps)
+}
 
-	for _, cp := range pairs {
-		price, err := p.GetTickerPrice(cp)
-		if err != nil {
-			return nil, err
-		}
-		tickerPrices[cp.String()] = price
+func (p *BitgetProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPrice, error) {
+	p.mtx.RLock()
+	defer p.mtx.RUnlock()
+
+	ticker, ok := p.tickers[cp.String()]
+	if !ok {
+		return types.TickerPrice{}, fmt.Errorf("bitget failed to get ticker price for %s", cp.String())
 	}
 
-	return tickerPrices, nil
+	return ticker.toTickerPrice()
 }
 
 // messageReceived handles the received data from the Bitget websocket.
@@ -243,25 +247,6 @@ func (p *BitgetProvider) setTickerPair(ticker BitgetTicker) {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 	p.tickers[ticker.Arg.InstID] = ticker
-}
-
-func (p *BitgetProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPrice, error) {
-	p.mtx.RLock()
-	defer p.mtx.RUnlock()
-
-	ticker, ok := p.tickers[cp.String()]
-	if !ok {
-		return types.TickerPrice{}, fmt.Errorf("bitget failed to get ticker price for %s", cp.String())
-	}
-
-	return ticker.toTickerPrice()
-}
-
-// setSubscribedPairs sets N currency pairs to the map of subscribed pairs.
-func (p *BitgetProvider) setSubscribedPairs(cps ...types.CurrencyPair) {
-	for _, cp := range cps {
-		p.subscribedPairs[cp.String()] = cp
-	}
 }
 
 // GetAvailablePairs returns all pairs to which the provider can subscribe.

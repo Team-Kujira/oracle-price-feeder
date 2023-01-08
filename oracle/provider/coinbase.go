@@ -102,13 +102,13 @@ func NewCoinbaseProvider(
 		subscribedPairs: map[string]types.CurrencyPair{},
 	}
 
-	provider.setSubscribedPairs(pairs...)
+	setSubscribedPairs(provider, pairs...)
 
 	provider.wsc = NewWebsocketController(
 		ctx,
 		ProviderCoinbase,
 		wsURL,
-		provider.getSubscriptionMsgs(pairs...),
+		provider.GetSubscriptionMsgs(pairs...),
 		provider.messageReceived,
 		defaultPingDuration,
 		websocket.PingMessage,
@@ -119,75 +119,50 @@ func NewCoinbaseProvider(
 	return provider, nil
 }
 
-func (p *CoinbaseProvider) getSubscriptionMsgs(cps ...types.CurrencyPair) []interface{} {
-	subscriptionMsgs := make([]interface{}, 0, 1)
+func (p *CoinbaseProvider) GetSubscriptionMsgs(cps ...types.CurrencyPair) []interface{} {
+	subscriptionMsgs := make([]interface{}, 1)
 
 	productIDs := make([]string, len(cps))
-	index := 0
 
-	for _, cp := range cps {
-		productIDs[index] = cp.Join("-")
-		index++
+	for i, cp := range cps {
+		productIDs[i] = cp.Join("-")
 	}
 
-	msg := CoinbaseSubscriptionMsg{
+	subscriptionMsgs[0] = CoinbaseSubscriptionMsg{
 		Type:       "subscribe",
 		ProductIDs: productIDs,
 		Channels:   []string{"ticker"},
 	}
-	subscriptionMsgs = append(subscriptionMsgs, msg)
+
 	return subscriptionMsgs
 }
 
-// SubscribeCurrencyPairs sends the new subscription messages to the websocket
-// and adds them to the providers subscribedPairs array
-func (p *CoinbaseProvider) SubscribeCurrencyPairs(cps ...types.CurrencyPair) error {
+func (p *CoinbaseProvider) GetSubscribedPair(s string) (types.CurrencyPair, bool) {
+	cp, ok := p.subscribedPairs[s]
+	return cp, ok
+}
+
+func (p *CoinbaseProvider) SetSubscribedPair(cp types.CurrencyPair) {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 
-	newPairs := []types.CurrencyPair{}
-	for _, cp := range cps {
-		if _, ok := p.subscribedPairs[cp.String()]; !ok {
-			newPairs = append(newPairs, cp)
-		}
-	}
+	p.subscribedPairs[cp.String()] = cp
+}
 
-	newSubscriptionMsgs := p.getSubscriptionMsgs(newPairs...)
-	if err := p.wsc.AddSubscriptionMsgs(newSubscriptionMsgs); err != nil {
-		return err
-	}
-	p.setSubscribedPairs(newPairs...)
-	return nil
+func (p *CoinbaseProvider) SubscribeCurrencyPairs(cps ...types.CurrencyPair) error {
+	return subscribeCurrencyPairs(p, cps)
+}
+
+func (p *CoinbaseProvider) SendSubscriptionMsgs(msgs []interface{}) error {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+
+	return p.wsc.AddSubscriptionMsgs(msgs)
 }
 
 // GetTickerPrices returns the tickerPrices based on the saved map.
 func (p *CoinbaseProvider) GetTickerPrices(cps ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
 	return getTickerPrices(p, cps)
-}
-
-// GetAvailablePairs returns all pairs to which the provider can subscribe.
-func (p *CoinbaseProvider) GetAvailablePairs() (map[string]struct{}, error) {
-	resp, err := http.Get(p.endpoints.Rest + coinbaseRestPath)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	var pairsSummary []CoinbasePairSummary
-	if err := json.NewDecoder(resp.Body).Decode(&pairsSummary); err != nil {
-		return nil, err
-	}
-
-	availablePairs := make(map[string]struct{}, len(pairsSummary))
-	for _, pair := range pairsSummary {
-		cp := types.CurrencyPair{
-			Base:  strings.ToUpper(pair.Base),
-			Quote: strings.ToUpper(pair.Quote),
-		}
-		availablePairs[cp.String()] = struct{}{}
-	}
-
-	return availablePairs, nil
 }
 
 func (p *CoinbaseProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPrice, error) {
@@ -228,11 +203,29 @@ func (p *CoinbaseProvider) setTickerPair(ticker CoinbaseTicker) {
 	p.tickers[ticker.ProductID] = ticker
 }
 
-// setSubscribedPairs sets N currency pairs to the map of subscribed pairs.
-func (p *CoinbaseProvider) setSubscribedPairs(cps ...types.CurrencyPair) {
-	for _, cp := range cps {
-		p.subscribedPairs[cp.String()] = cp
+// GetAvailablePairs returns all pairs to which the provider can subscribe.
+func (p *CoinbaseProvider) GetAvailablePairs() (map[string]struct{}, error) {
+	resp, err := http.Get(p.endpoints.Rest + coinbaseRestPath)
+	if err != nil {
+		return nil, err
 	}
+	defer resp.Body.Close()
+
+	var pairsSummary []CoinbasePairSummary
+	if err := json.NewDecoder(resp.Body).Decode(&pairsSummary); err != nil {
+		return nil, err
+	}
+
+	availablePairs := make(map[string]struct{}, len(pairsSummary))
+	for _, pair := range pairsSummary {
+		cp := types.CurrencyPair{
+			Base:  strings.ToUpper(pair.Base),
+			Quote: strings.ToUpper(pair.Quote),
+		}
+		availablePairs[cp.String()] = struct{}{}
+	}
+
+	return availablePairs, nil
 }
 
 func (ticker CoinbaseTicker) toTickerPrice() (types.TickerPrice, error) {

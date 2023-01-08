@@ -111,13 +111,13 @@ func NewBinanceProvider(
 		subscribedPairs: map[string]types.CurrencyPair{},
 	}
 
-	provider.setSubscribedPairs(pairs...)
+	setSubscribedPairs(provider, pairs...)
 
 	provider.wsc = NewWebsocketController(
 		ctx,
 		ProviderBinance,
 		wsURL,
-		provider.getSubscriptionMsgs(pairs...),
+		provider.GetSubscriptionMsgs(pairs...),
 		provider.messageReceived,
 		disabledPingDuration,
 		websocket.PingMessage,
@@ -128,7 +128,7 @@ func NewBinanceProvider(
 	return provider, nil
 }
 
-func (p *BinanceProvider) getSubscriptionMsgs(cps ...types.CurrencyPair) []interface{} {
+func (p *BinanceProvider) GetSubscriptionMsgs(cps ...types.CurrencyPair) []interface{} {
 	msg := BinanceSubscriptionMsg{
 		Method: "SUBSCRIBE",
 		Params: make([]string, len(cps)),
@@ -140,25 +140,27 @@ func (p *BinanceProvider) getSubscriptionMsgs(cps ...types.CurrencyPair) []inter
 	return []interface{}{msg}
 }
 
-// SubscribeCurrencyPairs sends the new subscription messages to the websocket
-// and adds them to the providers subscribedPairs array
-func (p *BinanceProvider) SubscribeCurrencyPairs(cps ...types.CurrencyPair) error {
+func (p *BinanceProvider) GetSubscribedPair(s string) (types.CurrencyPair, bool) {
+	cp, ok := p.subscribedPairs[s]
+	return cp, ok
+}
+
+func (p *BinanceProvider) SetSubscribedPair(cp types.CurrencyPair) {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 
-	newPairs := []types.CurrencyPair{}
-	for _, cp := range cps {
-		if _, ok := p.subscribedPairs[cp.String()]; !ok {
-			newPairs = append(newPairs, cp)
-		}
-	}
+	p.subscribedPairs[cp.String()] = cp
+}
 
-	newSubscriptionMsgs := p.getSubscriptionMsgs(newPairs...)
-	if err := p.wsc.AddSubscriptionMsgs(newSubscriptionMsgs); err != nil {
-		return err
-	}
-	p.setSubscribedPairs(newPairs...)
-	return nil
+func (p *BinanceProvider) SubscribeCurrencyPairs(cps ...types.CurrencyPair) error {
+	return subscribeCurrencyPairs(p, cps)
+}
+
+func (p *BinanceProvider) SendSubscriptionMsgs(msgs []interface{}) error {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+
+	return p.wsc.AddSubscriptionMsgs(msgs)
 }
 
 // GetTickerPrices returns the tickerPrices based on the provided pairs.
@@ -213,27 +215,6 @@ func (p *BinanceProvider) setTickerPair(ticker BinanceTicker) {
 	p.tickers[ticker.Symbol] = ticker
 }
 
-func (ticker BinanceTicker) toTickerPrice() (types.TickerPrice, error) {
-	tickerPrice, err := types.NewTickerPrice(
-		string(ProviderBinance),
-		ticker.Symbol,
-		ticker.LastPrice,
-		ticker.Volume,
-		int64(ticker.Time),
-	)
-	if err != nil {
-		return types.TickerPrice{}, err
-	}
-	return tickerPrice, nil
-}
-
-// setSubscribedPairs sets N currency pairs to the map of subscribed pairs.
-func (p *BinanceProvider) setSubscribedPairs(cps ...types.CurrencyPair) {
-	for _, cp := range cps {
-		p.subscribedPairs[cp.String()] = cp
-	}
-}
-
 // GetAvailablePairs returns all pairs to which the provider can subscribe.
 // ex.: map["ATOMUSDT" => {}, "UMEEUSDC" => {}].
 func (p *BinanceProvider) GetAvailablePairs() (map[string]struct{}, error) {
@@ -254,4 +235,18 @@ func (p *BinanceProvider) GetAvailablePairs() (map[string]struct{}, error) {
 	}
 
 	return availablePairs, nil
+}
+
+func (ticker BinanceTicker) toTickerPrice() (types.TickerPrice, error) {
+	tickerPrice, err := types.NewTickerPrice(
+		string(ProviderBinance),
+		ticker.Symbol,
+		ticker.LastPrice,
+		ticker.Volume,
+		int64(ticker.Time),
+	)
+	if err != nil {
+		return types.TickerPrice{}, err
+	}
+	return tickerPrice, nil
 }

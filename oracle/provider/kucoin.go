@@ -126,13 +126,13 @@ func NewKucoinProvider(
 		subscribedPairs: map[string]types.CurrencyPair{},
 	}
 
-	provider.setSubscribedPairs(pairs...)
+	setSubscribedPairs(provider, pairs...)
 
 	provider.wsc = NewWebsocketController(
 		ctx,
 		ProviderKucoin,
 		wsURL,
-		provider.getSubscriptionMsgs(pairs...),
+		provider.GetSubscriptionMsgs(pairs...),
 		provider.messageReceived,
 		defaultPingDuration,
 		websocket.TextMessage,
@@ -144,7 +144,7 @@ func NewKucoinProvider(
 	return provider, nil
 }
 
-func (p *KucoinProvider) getSubscriptionMsgs(cps ...types.CurrencyPair) []interface{} {
+func (p *KucoinProvider) GetSubscriptionMsgs(cps ...types.CurrencyPair) []interface{} {
 	subscriptionMsgs := make([]interface{}, len(cps))
 
 	symbols := make([]string, len(cps))
@@ -162,29 +162,54 @@ func (p *KucoinProvider) getSubscriptionMsgs(cps ...types.CurrencyPair) []interf
 	return subscriptionMsgs
 }
 
+func (p *KucoinProvider) GetSubscribedPair(s string) (types.CurrencyPair, bool) {
+	cp, ok := p.subscribedPairs[s]
+	return cp, ok
+}
+
+func (p *KucoinProvider) SetSubscribedPair(cp types.CurrencyPair) {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+
+	p.subscribedPairs[cp.String()] = cp
+}
+
 func (p *KucoinProvider) SubscribeCurrencyPairs(cps ...types.CurrencyPair) error {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 
-	newPairs := []types.CurrencyPair{}
-	for _, cp := range cps {
-		if _, ok := p.subscribedPairs[cp.String()]; !ok {
-			newPairs = append(newPairs, cp)
-		}
-	}
-
-	newSubscriptionMsgs := p.getSubscriptionMsgs(newPairs...)
-	if err := p.wsc.AddSubscriptionMsgs(newSubscriptionMsgs); err != nil {
-		return err
-	}
-	p.setSubscribedPairs(newPairs...)
-	return nil
+	return subscribeCurrencyPairs(p, cps)
 }
 
-func (p *KucoinProvider) setSubscribedPairs(cps ...types.CurrencyPair) {
-	for _, cp := range cps {
-		p.subscribedPairs[cp.String()] = cp
+func (p *KucoinProvider) SendSubscriptionMsgs(msgs []interface{}) error {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+
+	return p.wsc.AddSubscriptionMsgs(msgs)
+}
+
+func (p *KucoinProvider) GetTickerPrices(cps ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
+	return getTickerPrices(p, cps)
+}
+
+func (p *KucoinProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPrice, error) {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+
+	key := cp.String()
+
+	ticker, ok := p.tickers[key]
+	if !ok {
+		return types.TickerPrice{}, fmt.Errorf("kucoin failed to get ticker price for %s", key)
 	}
+
+	return types.NewTickerPrice(
+		string(ProviderKucoin),
+		key,
+		fmt.Sprintf("%f", ticker.Price),
+		fmt.Sprintf("%f", ticker.Volume),
+		ticker.Time,
+	)
 }
 
 func (p *KucoinProvider) messageReceived(messageType int, bz []byte) {
@@ -211,30 +236,6 @@ func (p *KucoinProvider) setTickerPair(data KucoinSnapshotDataData) {
 	defer p.mtx.Unlock()
 
 	p.tickers[data.Base+data.Quote] = data
-}
-
-func (p *KucoinProvider) GetTickerPrices(cps ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
-	return getTickerPrices(p, cps)
-}
-
-func (p *KucoinProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPrice, error) {
-	p.mtx.Lock()
-	defer p.mtx.Unlock()
-
-	key := cp.String()
-
-	ticker, ok := p.tickers[key]
-	if !ok {
-		return types.TickerPrice{}, fmt.Errorf("kucoin failed to get ticker price for %s", key)
-	}
-
-	return types.NewTickerPrice(
-		string(ProviderKucoin),
-		key,
-		fmt.Sprintf("%f", ticker.Price),
-		fmt.Sprintf("%f", ticker.Volume),
-		ticker.Time,
-	)
 }
 
 func (p *KucoinProvider) GetAvailablePairs() (map[string]struct{}, error) {

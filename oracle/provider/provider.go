@@ -50,11 +50,17 @@ type (
 		// GetAvailablePairs return all available pairs symbol to subscribe.
 		GetAvailablePairs() (map[string]struct{}, error)
 
+		GetSubscribedPair(s string) (types.CurrencyPair, bool)
+
+		SetSubscribedPair(types.CurrencyPair)
+
 		// SubscribeCurrencyPairs sends subscription messages for the new currency
 		// pairs and adds them to the providers subscribed pairs
 		SubscribeCurrencyPairs(...types.CurrencyPair) error
 
-		SetSubscribedPair(types.CurrencyPair)
+		GetSubscriptionMsgs(...types.CurrencyPair) []interface{}
+
+		SendSubscriptionMsgs(msgs []interface{}) error
 	}
 
 	// Name name of an oracle provider. Usually it is an exchange
@@ -104,6 +110,22 @@ func setSubscribedPairs(p Provider, cps ...types.CurrencyPair) {
 	for _, cp := range cps {
 		p.SetSubscribedPair(cp)
 	}
+}
+
+func subscribeCurrencyPairs(p Provider, cps []types.CurrencyPair) error {
+	newPairs := []types.CurrencyPair{}
+	for _, cp := range cps {
+		if _, ok := p.GetSubscribedPair(cp.String()); !ok {
+			newPairs = append(newPairs, cp)
+		}
+	}
+
+	newSubscriptionMsgs := p.GetSubscriptionMsgs(newPairs...)
+	if err := p.SendSubscriptionMsgs(newSubscriptionMsgs); err != nil {
+		return err
+	}
+	setSubscribedPairs(p, newPairs...)
+	return nil
 }
 
 // String cast provider name to string.
