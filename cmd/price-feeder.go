@@ -17,8 +17,8 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
-	"golang.org/x/crypto/ssh/terminal"
 	"golang.org/x/sync/errgroup"
+	"golang.org/x/term"
 
 	"price-feeder/config"
 	"price-feeder/oracle"
@@ -211,7 +211,7 @@ func getKeyringPassword() (string, error) {
 	pass := os.Getenv(envVariablePass)
 	if pass == "" {
 		fmt.Print("Enter keyring password: ")
-		bytePassword, err := terminal.ReadPassword(int(syscall.Stdin))
+		bytePassword, err := term.ReadPassword(int(syscall.Stdin))
 		if err != nil {
 			return "", err
 		}
