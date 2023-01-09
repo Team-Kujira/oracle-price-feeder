@@ -312,7 +312,16 @@ func GetComputedPrices(
 		return nil, err
 	}
 
-	debugAggregatedProviderPrices(logger, convertedTickers)
+	for providerName, tickerPrices := range convertedTickers {
+		for denom, tickerPrice := range tickerPrices {
+			provider.TelemetryProviderPrice(
+				providerName,
+				denom,
+				float32(tickerPrice.Price.MustFloat64()),
+				float32(tickerPrice.Volume.MustFloat64()),
+			)
+		}
+	}
 
 	filteredProviderPrices, err := FilterTickerDeviations(
 		logger,
@@ -511,6 +520,9 @@ func NewProvider(
 
 	case provider.ProviderBitforex:
 		return provider.NewBitforexProvider(ctx, logger, endpoint, providerPairs...)
+
+	case provider.ProviderPoloniex:
+		return provider.NewPoloniexProvider(ctx, logger, endpoint, providerPairs...)
 
 	case provider.ProviderMock:
 		return provider.NewMockProvider(), nil

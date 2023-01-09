@@ -97,3 +97,13 @@ func TelemetryFailure(n Name, mt MessageType) {
 		},
 	)
 }
+
+func TelemetryProviderPrice(name Name, denom string, price float32, volume float32) {
+	labels := []metrics.Label{
+		providerLabel(name),
+		telemetry.NewLabel("denom", denom),
+	}
+
+	telemetry.SetGaugeWithLabels([]string{"provider", "price"}, price, labels)
+	telemetry.SetGaugeWithLabels([]string{"provider", "volume"}, volume, labels)
+}
