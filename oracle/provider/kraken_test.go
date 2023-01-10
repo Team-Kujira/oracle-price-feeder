@@ -77,22 +77,14 @@ func TestKrakenProvider_GetTickerPrices(t *testing.T) {
 
 func TestKrakenPairToCurrencyPairSymbol(t *testing.T) {
 	cp := types.CurrencyPair{Base: "ATOM", Quote: "USDT"}
-	currencyPairSymbol := krakenPairToCurrencyPairSymbol("ATOM/USDT")
-	require.Equal(t, cp.String(), currencyPairSymbol)
+	currencyPair := krakenPairToCurrencyPair("ATOM/USDT")
+	require.Equal(t, cp, currencyPair)
 }
 
 func TestKrakenCurrencyPairToKrakenPair(t *testing.T) {
 	cp := types.CurrencyPair{Base: "ATOM", Quote: "USDT"}
 	krakenSymbol := currencyPairToKrakenPair(cp)
 	require.Equal(t, krakenSymbol, "ATOM/USDT")
-}
-
-func TestNormalizeKrakenBTCPair(t *testing.T) {
-	btcSymbol := normalizeKrakenBTCPair("XBT/USDT")
-	require.Equal(t, btcSymbol, "BTC/USDT")
-
-	atomSymbol := normalizeKrakenBTCPair("ATOM/USDT")
-	require.Equal(t, atomSymbol, "ATOM/USDT")
 }
 
 func TestKrakenProvider_getSubscriptionMsgs(t *testing.T) {
