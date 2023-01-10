@@ -25,6 +25,11 @@ const (
 )
 
 var _ Provider = (*KrakenProvider)(nil)
+var krakenSymbolTranslations map[string]string = map[string]string{
+	"BTC": "XBT",
+	"LUNA": "LUNA2",
+	"LUNC": "LUNA",
+}
 
 type (
 	// KrakenProvider defines an Oracle provider implemented by the Kraken public
@@ -313,17 +318,13 @@ func (p *KrakenProvider) messageReceivedTickerPrice(bz []byte) error {
 		p.logger.Debug().Msg("received an unexpected pair")
 		return err
 	}
-
-	krakenPair = normalizeKrakenBTCPair(krakenPair)
-	currencyPairSymbol := krakenPairToCurrencyPairSymbol(krakenPair)
-
-	tickerPrice, err := krakenTicker.toTickerPrice(currencyPairSymbol)
+	currencyPair := krakenPairToCurrencyPair(krakenPair)
+	tickerPrice, err := krakenTicker.toTickerPrice(currencyPair.String())
 	if err != nil {
 		p.logger.Err(err).Msg("could not parse kraken ticker to ticker price")
 		return err
 	}
-
-	p.setTickerPair(currencyPairSymbol, tickerPrice)
+	p.setTickerPair(currencyPair.String(), tickerPrice)
 	telemetryWebsocketMessage(ProviderKraken, MessageTypeTicker)
 	return nil
 }
@@ -395,11 +396,7 @@ func (p *KrakenProvider) messageReceivedCandle(bz []byte) error {
 	if !ok {
 		return fmt.Errorf("received an unexpected pair")
 	}
-
-	krakenPair = normalizeKrakenBTCPair(krakenPair)
-	currencyPairSymbol := krakenPairToCurrencyPairSymbol(krakenPair)
-	krakenCandle.Symbol = currencyPairSymbol
-
+	krakenCandle.Symbol = krakenPair
 	telemetryWebsocketMessage(ProviderKraken, MessageTypeCandle)
 	p.setCandlePair(krakenCandle)
 	return nil
@@ -417,11 +414,11 @@ func (p *KrakenProvider) messageReceivedSubscriptionStatus(bz []byte) {
 	switch subscriptionStatus.Status {
 	case "error":
 		p.logger.Error().Msg(subscriptionStatus.ErrorMessage)
-		p.removeSubscribedTickers(krakenPairToCurrencyPairSymbol(subscriptionStatus.Pair))
+		p.removeSubscribedTickers(krakenPairToCurrencyPair(subscriptionStatus.Pair).String())
 		return
 	case "unsubscribed":
 		p.logger.Debug().Msgf("ticker %s was unsubscribed", subscriptionStatus.Pair)
-		p.removeSubscribedTickers(krakenPairToCurrencyPairSymbol(subscriptionStatus.Pair))
+		p.removeSubscribedTickers(krakenPairToCurrencyPair(subscriptionStatus.Pair).String())
 		return
 	}
 }
@@ -440,14 +437,14 @@ func (p *KrakenProvider) setCandlePair(candle KrakenCandle) {
 	candle.TimeStamp = SecondsToMilli(candle.TimeStamp)
 	staleTime := PastUnixTime(providerCandlePeriod)
 	candleList := []KrakenCandle{}
-
 	candleList = append(candleList, candle)
 	for _, c := range p.candles[candle.Symbol] {
 		if staleTime < c.TimeStamp {
 			candleList = append(candleList, c)
 		}
 	}
-	p.candles[candle.Symbol] = candleList
+	pair := krakenPairToCurrencyPair(candle.Symbol)
+	p.candles[pair.String()] = candleList
 }
 
 // setSubscribedPairs sets N currency pairs to the map of subscribed pairs.
@@ -482,15 +479,7 @@ func (p *KrakenProvider) GetAvailablePairs() (map[string]struct{}, error) {
 
 	availablePairs := make(map[string]struct{}, len(pairsSummary.Result))
 	for _, pair := range pairsSummary.Result {
-		splitPair := strings.Split(pair.WsName, "/")
-		if len(splitPair) != 2 {
-			continue
-		}
-
-		cp := types.CurrencyPair{
-			Base:  strings.ToUpper(splitPair[0]),
-			Quote: strings.ToUpper(splitPair[1]),
-		}
+		cp := krakenPairToCurrencyPair(pair.WsName)
 		availablePairs[cp.String()] = struct{}{}
 	}
 
@@ -529,20 +518,34 @@ func newKrakenCandleSubscriptionMsg(pairs ...string) KrakenSubscriptionMsg {
 	}
 }
 
-// krakenPairToCurrencyPairSymbol receives a kraken pair formated
-// ex.: ATOM/USDT and return currencyPair Symbol ATOMUSDT.
-func krakenPairToCurrencyPairSymbol(krakenPair string) string {
-	return strings.ReplaceAll(krakenPair, "/", "")
-}
-
-// currencyPairToKrakenPair receives a currency pair
-// and return kraken ticker symbol ATOM/USDT.
 func currencyPairToKrakenPair(cp types.CurrencyPair) string {
-	return strings.ToUpper(cp.Base + "/" + cp.Quote)
+	return currencySymbolToKrakenSymbol(cp.Base) + "/" + currencySymbolToKrakenSymbol(cp.Quote)
 }
 
-// normalizeKrakenBTCPair changes XBT pairs to BTC,
-// since other providers list bitcoin as BTC.
-func normalizeKrakenBTCPair(ticker string) string {
-	return strings.Replace(ticker, "XBT", "BTC", 1)
+func currencySymbolToKrakenSymbol(currencySymbol string) string {
+	translation, ok := krakenSymbolTranslations[currencySymbol]
+	if ok {
+		return translation
+	}
+	return currencySymbol
+}
+
+func krakenPairToCurrencyPair(krakenPair string) types.CurrencyPair {
+	krakenPairFields := strings.Split(krakenPair, "/")
+	if len(krakenPairFields) != 2 {
+		return types.CurrencyPair{}
+	}
+	return types.CurrencyPair{
+		Base: krakenSymbolToCurrencySymbol(krakenPairFields[0]),
+		Quote: krakenSymbolToCurrencySymbol(krakenPairFields[1]),
+	}
+}
+
+func krakenSymbolToCurrencySymbol(krakenSymbol string) string {
+	for symbol, translation := range krakenSymbolTranslations {
+		if translation == krakenSymbol {
+			return symbol
+		}
+	}
+	return krakenSymbol
 }
