@@ -37,6 +37,7 @@ var (
 		provider.ProviderBitfinex:  {},
 		provider.ProviderBitforex:  {},
 		provider.ProviderPoloniex:  {},
+		provider.ProviderPhemex:    {},
 		provider.ProviderHitbtc:    {},
 		provider.ProviderKraken:    {},
 		provider.ProviderKucoin:    {},
