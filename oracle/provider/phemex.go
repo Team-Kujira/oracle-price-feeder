@@ -98,7 +98,7 @@ func NewPhemexProvider(
 }
 
 func (p *PhemexProvider) GetSubscriptionMsgs(cps ...types.CurrencyPair) []interface{} {
-	subscriptionMsgs := make([]interface{}, len(cps))
+	subscriptionMsgs := make([]interface{}, 1)
 
 	subscriptionMsgs[0] = PhemexSubscriptionMsg{
 		ID:     1,
