@@ -31,6 +31,10 @@ const (
 )
 
 var _ Provider = (*CryptoProvider)(nil)
+var cryptoSymbolTranslations map[string]string = map[string]string{
+	"LUNA": "LUNA2",
+	"LUNC": "LUNA",
+}
 
 type (
 	// CryptoProvider defines an Oracle provider implemented by the Crypto.com public
@@ -191,8 +195,7 @@ func (p *CryptoProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[strin
 	tickerPrices := make(map[string]types.TickerPrice, len(pairs))
 
 	for _, cp := range pairs {
-		key := currencyPairToCryptoPair(cp)
-		price, err := p.getTickerPrice(key)
+		price, err := p.getTickerPrice(cp.String())
 		if err != nil {
 			return nil, err
 		}
@@ -207,8 +210,7 @@ func (p *CryptoProvider) GetCandlePrices(pairs ...types.CurrencyPair) (map[strin
 	candlePrices := make(map[string][]types.CandlePrice, len(pairs))
 
 	for _, cp := range pairs {
-		key := currencyPairToCryptoPair(cp)
-		prices, err := p.getCandlePrices(key)
+		prices, err := p.getCandlePrices(cp.String())
 		if err != nil {
 			return nil, err
 		}
@@ -337,8 +339,8 @@ func (p *CryptoProvider) setTickerPair(symbol string, tickerPair CryptoTicker) {
 		p.logger.Warn().Err(err).Msg("crypto: failed to parse ticker")
 		return
 	}
-
-	p.tickers[symbol] = tickerPrice
+	pair := cryptoPairToCurrencyPair(symbol)
+	p.tickers[pair.String()] = tickerPrice
 }
 
 func (p *CryptoProvider) setCandlePair(symbol string, candlePair CryptoCandle) {
@@ -366,8 +368,8 @@ func (p *CryptoProvider) setCandlePair(symbol string, candlePair CryptoCandle) {
 			candleList = append(candleList, c)
 		}
 	}
-
-	p.candles[symbol] = candleList
+	pair := cryptoPairToCurrencyPair(symbol)
+	p.candles[pair.String()] = candleList
 }
 
 // setSubscribedPairs sets N currency pairs to the map of subscribed pairs.
@@ -393,26 +395,44 @@ func (p *CryptoProvider) GetAvailablePairs() (map[string]struct{}, error) {
 
 	availablePairs := make(map[string]struct{}, len(pairsSummary.Result.Data))
 	for _, pair := range pairsSummary.Result.Data {
-		splitInstName := strings.Split(pair.InstrumentName, "_")
-		if len(splitInstName) != 2 {
-			continue
-		}
-
-		cp := types.CurrencyPair{
-			Base:  strings.ToUpper(splitInstName[0]),
-			Quote: strings.ToUpper(splitInstName[1]),
-		}
-
+		cp := cryptoPairToCurrencyPair(pair.InstrumentName)
 		availablePairs[cp.String()] = struct{}{}
 	}
 
 	return availablePairs, nil
 }
 
-// currencyPairToCryptoPair receives a currency pair and return crypto
-// ticker symbol atomusdt@ticker.
+
 func currencyPairToCryptoPair(cp types.CurrencyPair) string {
-	return strings.ToUpper(cp.Base + "_" + cp.Quote)
+	return currencySymbolToCryptoSymbol(cp.Base) + "_" + currencySymbolToCryptoSymbol(cp.Quote)
+}
+
+func currencySymbolToCryptoSymbol(currencySymbol string) string {
+	translation, ok := cryptoSymbolTranslations[currencySymbol]
+	if ok {
+		return translation
+	}
+	return currencySymbol
+}
+
+func cryptoPairToCurrencyPair(cryptoPair string) types.CurrencyPair {
+	cryptoPairFields := strings.Split(cryptoPair, "_")
+	if len(cryptoPairFields) != 2 {
+		return types.CurrencyPair{}
+	}
+	return types.CurrencyPair{
+		Base: cryptoSymbolToCurrencySymbol(cryptoPairFields[0]),
+		Quote: cryptoSymbolToCurrencySymbol(cryptoPairFields[1]),
+	}
+}
+
+func cryptoSymbolToCurrencySymbol(cryptoSymbol string) string {
+	for symbol, translation := range cryptoSymbolTranslations {
+		if translation == cryptoSymbol {
+			return symbol
+		}
+	}
+	return cryptoSymbol
 }
 
 // newCryptoSubscriptionMsg returns a new subscription Msg.

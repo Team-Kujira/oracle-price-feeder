@@ -24,7 +24,7 @@ func TestCryptoProvider_GetTickerPrices(t *testing.T) {
 		volume := sdk.MustNewDecFromStr("2396974.02000000")
 
 		tickerMap := map[string]types.TickerPrice{}
-		tickerMap["ATOM_USDT"] = types.TickerPrice{
+		tickerMap["ATOMUSDT"] = types.TickerPrice{
 			Price:  lastPrice,
 			Volume: volume,
 		}
@@ -44,12 +44,12 @@ func TestCryptoProvider_GetTickerPrices(t *testing.T) {
 		volume := sdk.MustNewDecFromStr("2396974.02000000")
 
 		tickerMap := map[string]types.TickerPrice{}
-		tickerMap["ATOM_USDT"] = types.TickerPrice{
+		tickerMap["ATOMUSDT"] = types.TickerPrice{
 			Price:  lastPriceAtom,
 			Volume: volume,
 		}
 
-		tickerMap["LUNA_USDT"] = types.TickerPrice{
+		tickerMap["LUNAUSDT"] = types.TickerPrice{
 			Price:  lastPriceLuna,
 			Volume: volume,
 		}
@@ -70,7 +70,7 @@ func TestCryptoProvider_GetTickerPrices(t *testing.T) {
 	t.Run("invalid_request_invalid_ticker", func(t *testing.T) {
 		prices, err := p.GetTickerPrices(types.CurrencyPair{Base: "FOO", Quote: "BAR"})
 		require.Error(t, err)
-		require.Equal(t, "crypto failed to get ticker price for FOO_BAR", err.Error())
+		require.Equal(t, "crypto failed to get ticker price for FOOBAR", err.Error())
 		require.Nil(t, prices)
 	})
 }
@@ -110,7 +110,7 @@ func TestCryptoProvider_GetCandlePrices(t *testing.T) {
 
 	t.Run("invalid_request_invalid_candle", func(t *testing.T) {
 		prices, err := p.GetCandlePrices(types.CurrencyPair{Base: "FOO", Quote: "BAR"})
-		require.EqualError(t, err, "crypto failed to get candle price for FOO_BAR")
+		require.EqualError(t, err, "crypto failed to get candle price for FOOBAR")
 		require.Nil(t, prices)
 	})
 }
