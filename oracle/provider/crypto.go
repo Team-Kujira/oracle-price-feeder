@@ -140,7 +140,11 @@ func (p *CryptoProvider) GetSubscriptionMsgs(cps ...types.CurrencyPair) []interf
 	channels := make([]string, len(cps))
 
 	for i, cp := range cps {
-		channels[i] = "ticker." + cp.Join("_")
+		if cp.Base == "LUNA" {
+			channels[i] = "ticker.LUNA2_" + cp.Quote
+		} else {
+			channels[i] = "ticker." + cp.Join("_")
+		}
 	}
 
 	subscriptionMsgs[0] = CryptoSubscriptionMsg{
@@ -188,6 +192,10 @@ func (p *CryptoProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPric
 	defer p.mtx.RUnlock()
 
 	key := cp.Join("_")
+
+	if cp.Base == "LUNA" {
+		key = "LUNA2_" + cp.Quote
+	}
 
 	ticker, ok := p.tickers[key]
 	if !ok {

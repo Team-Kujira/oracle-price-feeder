@@ -135,7 +135,12 @@ func (p *KrakenProvider) GetSubscriptionMsgs(cps ...types.CurrencyPair) []interf
 	pairs := make([]string, len(cps))
 
 	for i, cp := range cps {
-		pairs[i] = cp.Join("/")
+		if cp.Base == "LUNA" {
+			pairs[i] = "LUNA2/" + cp.Quote
+		} else {
+			pairs[i] = cp.Join("/")
+		}
+
 	}
 
 	subscriptionMsgs[0] = KrakenSubscriptionMsg{
@@ -182,6 +187,9 @@ func (p *KrakenProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPric
 	defer p.mtx.Unlock()
 
 	key := cp.String()
+	if cp.Base == "LUNA" {
+		key = "LUNA2" + cp.Quote
+	}
 
 	ticker, ok := p.tickers[key]
 	if !ok {

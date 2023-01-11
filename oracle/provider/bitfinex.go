@@ -107,10 +107,16 @@ func (p *BitfinexProvider) GetSubscriptionMsgs(cps ...types.CurrencyPair) []inte
 	subscriptionMsgs := make([]interface{}, len(cps))
 
 	for i, cp := range cps {
+		symbol := cp.String()
+
+		if cp.Base == "LUNA" {
+			symbol = "LUNA2:" + cp.Quote
+		}
+
 		subscriptionMsgs[i] = BitfinexSubscriptionMsg{
 			Event:   "subscribe",
 			Channel: "ticker",
-			Symbol:  cp.String(),
+			Symbol:  symbol,
 		}
 	}
 
@@ -148,14 +154,20 @@ func (p *BitfinexProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPr
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 
-	channel, ok := p.channels[cp.String()]
+	key := cp.String()
+
+	if cp.Base == "LUNA" {
+		key = "LUNA2:" + cp.Quote
+	}
+
+	channel, ok := p.channels[key]
 	if !ok {
-		return types.TickerPrice{}, fmt.Errorf("bitfinex failed to get channel id for %s", cp.String())
+		return types.TickerPrice{}, fmt.Errorf("bitfinex failed to get channel id for %s", key)
 	}
 
 	ticker, ok := p.tickers[channel]
 	if !ok {
-		return types.TickerPrice{}, fmt.Errorf("bitfinex failed to get ticker price for %s", cp.String())
+		return types.TickerPrice{}, fmt.Errorf("bitfinex failed to get ticker price for %s", key)
 	}
 
 	return types.NewTickerPrice(
