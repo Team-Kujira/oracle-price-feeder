@@ -244,6 +244,7 @@ func (p *CryptoProvider) messageReceived(messageType int, bz []byte) {
 		Int("length", len(bz)).
 		AnErr("heartbeat", heartbeatErr).
 		AnErr("ticker", tickerErr).
+		Str("msg", string(bz)).
 		Msg("Error on receive message")
 }
 

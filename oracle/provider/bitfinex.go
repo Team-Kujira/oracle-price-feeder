@@ -214,6 +214,7 @@ func (p *BitfinexProvider) messageReceived(MessageType int, bz []byte) {
 	p.logger.Error().
 		Int("length", len(bz)).
 		AnErr("ticker", err).
+		Str("msg", string(bz)).
 		Msg("Error on receive message")
 }
 

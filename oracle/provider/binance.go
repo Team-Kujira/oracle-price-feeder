@@ -206,6 +206,7 @@ func (p *BinanceProvider) messageReceived(messageType int, bz []byte) {
 		Int("length", len(bz)).
 		AnErr("ticker", tickerErr).
 		AnErr("subscribeResp", subscribeRespErr).
+		Str("msg", string(bz)).
 		Msg("Error on receive message")
 }
 

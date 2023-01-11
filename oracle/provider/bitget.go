@@ -239,6 +239,7 @@ func (p *BitgetProvider) messageReceived(messageType int, bz []byte) {
 	p.logger.Error().
 		Int("length", len(bz)).
 		AnErr("ticker", tickerErr).
+		Str("msg", string(bz)).
 		Msg("Error on receive message")
 }
 

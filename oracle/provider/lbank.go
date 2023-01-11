@@ -100,7 +100,7 @@ func NewLbankProvider(
 		wsURL,
 		provider.GetSubscriptionMsgs(pairs...),
 		provider.messageReceived,
-		defaultPingDuration,
+		disabledPingDuration,
 		websocket.TextMessage,
 		lbankLogger,
 	)
@@ -198,15 +198,14 @@ func (p *LbankProvider) messageReceived(messageType int, bz []byte) {
 
 	err := json.Unmarshal(bz, &pingMsg)
 	if err == nil && pingMsg.Ping != "" {
-		fmt.Println(pingMsg)
 		p.pong(pingMsg.Ping)
 		return
 	}
 
 	p.logger.Error().
 		Int("length", len(bz)).
+		Str("msg", string(bz)).
 		AnErr("ticker", tickerErr).
-		Str("message", string(bz)).
 		Msg("Error on receive message")
 }
 

@@ -36,6 +36,10 @@ type (
 		Symbols []string `json:"symbols"`
 	}
 
+	PoloniexWsGenericResponse struct {
+		Event string `json:"event"`
+	}
+
 	PoloniexTickerMsg struct {
 		Channel string           `json:"channel"`
 		Data    []PoloniexTicker `json:"data"`
@@ -91,13 +95,15 @@ func NewPoloniexProvider(
 		poloniexLogger,
 	)
 
+	provider.wsc.pingMessage = `{"event":"ping"}`
+
 	go provider.wsc.Start()
 
 	return provider, nil
 }
 
 func (p *PoloniexProvider) GetSubscriptionMsgs(cps ...types.CurrencyPair) []interface{} {
-	subscriptionMsgs := make([]interface{}, len(cps))
+	subscriptionMsgs := make([]interface{}, 1)
 
 	symbols := make([]string, len(cps))
 
@@ -163,8 +169,9 @@ func (p *PoloniexProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPr
 
 func (p *PoloniexProvider) messageReceived(messageType int, bz []byte) {
 	var (
-		tickerMsg PoloniexTickerMsg
-		tickerErr error
+		tickerMsg   PoloniexTickerMsg
+		genericResp PoloniexWsGenericResponse
+		tickerErr   error
 	)
 
 	tickerErr = json.Unmarshal(bz, &tickerMsg)
@@ -174,9 +181,20 @@ func (p *PoloniexProvider) messageReceived(messageType int, bz []byte) {
 		return
 	}
 
+	err := json.Unmarshal(bz, &genericResp)
+	if err == nil {
+		switch genericResp.Event {
+		case "subscribe":
+			return
+		case "pong":
+			return
+		}
+	}
+
 	p.logger.Error().
 		Int("length", len(bz)).
 		AnErr("ticker", tickerErr).
+		Str("msg", string(bz)).
 		Msg("Error on receive message")
 }
 

@@ -38,6 +38,16 @@ type (
 		Params []string `json:"params"`
 	}
 
+	PhemexGenericMsg struct {
+		Error *PhemexWsError `json:"error"`
+		ID    uint           `json:"id"`
+	}
+
+	PhemexWsError struct {
+		Code    int64  `json:"code"`
+		Message string `json:"message"`
+	}
+
 	PhemexTickerMsg struct {
 		Data      PhemexTicker `json:"spot_market24h"`
 		Timestamp uint64       `json:"timestamp"`
@@ -91,6 +101,8 @@ func NewPhemexProvider(
 		websocket.TextMessage,
 		phemexLogger,
 	)
+
+	provider.wsc.pingMessage = `{"id":0,"method":"server.ping","params":[]}`
 
 	go provider.wsc.Start()
 
@@ -172,8 +184,9 @@ func (p *PhemexProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPric
 
 func (p *PhemexProvider) messageReceived(messageType int, bz []byte) {
 	var (
-		tickerMsg PhemexTickerMsg
-		tickerErr error
+		tickerMsg  PhemexTickerMsg
+		genericMsg PhemexGenericMsg
+		tickerErr  error
 	)
 
 	tickerErr = json.Unmarshal(bz, &tickerMsg)
@@ -187,9 +200,15 @@ func (p *PhemexProvider) messageReceived(messageType int, bz []byte) {
 		return
 	}
 
+	err := json.Unmarshal(bz, &genericMsg)
+	if err == nil && genericMsg.Error == nil {
+		return
+	}
+
 	p.logger.Error().
 		Int("length", len(bz)).
 		AnErr("ticker", tickerErr).
+		Str("msg", string(bz)).
 		Msg("Error on receive message")
 }
 

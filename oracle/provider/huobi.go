@@ -223,6 +223,7 @@ func (p *HuobiProvider) messageReceived(messageType int, bz []byte) {
 		Int("length", len(bz)).
 		AnErr("ticker", tickerErr).
 		AnErr("subscribeResp", err).
+		Str("msg", string(bz)).
 		Msg("Error on receive message")
 }
 

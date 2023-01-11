@@ -139,13 +139,15 @@ func NewKucoinProvider(
 		kucoinLogger,
 	)
 
+	provider.wsc.pingMessage = `{"id":"1","type":"ping"}`
+
 	go provider.wsc.Start()
 
 	return provider, nil
 }
 
 func (p *KucoinProvider) GetSubscriptionMsgs(cps ...types.CurrencyPair) []interface{} {
-	subscriptionMsgs := make([]interface{}, len(cps))
+	subscriptionMsgs := make([]interface{}, 1)
 
 	symbols := make([]string, len(cps))
 
@@ -228,6 +230,7 @@ func (p *KucoinProvider) messageReceived(messageType int, bz []byte) {
 	p.logger.Error().
 		Int("length", len(bz)).
 		AnErr("snapshot", snapshotErr).
+		Str("msg", string(bz)).
 		Msg("Error on receive message")
 }
 

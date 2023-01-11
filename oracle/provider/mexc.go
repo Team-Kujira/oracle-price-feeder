@@ -190,6 +190,7 @@ func (p *MexcProvider) messageReceived(messageType int, bz []byte) {
 		p.logger.Error().
 			Int("length", len(bz)).
 			AnErr("ticker", tickerErr).
+			Str("msg", string(bz)).
 			Msg("mexc: Error on receive message")
 	}
 }

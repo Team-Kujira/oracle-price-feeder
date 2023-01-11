@@ -238,6 +238,7 @@ func (p *KrakenProvider) messageReceived(messageType int, bz []byte) {
 		Int("length", len(bz)).
 		AnErr("ticker", tickerErr).
 		AnErr("event", krakenErr).
+		Str("msg", string(bz)).
 		Msg("Error on receive message")
 }
 

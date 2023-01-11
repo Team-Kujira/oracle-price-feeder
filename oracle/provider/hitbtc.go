@@ -40,6 +40,15 @@ type (
 		Symbols []string `json:"symbols"`
 	}
 
+	HitbtcWsSubscriptionResponse struct {
+		Result HitbtcWsSubscriptionResult `json:"result"`
+	}
+
+	HitbtcWsSubscriptionResult struct {
+		Channel       string   `json:"ch"`
+		Subscriptions []string `json:"subscriptions"`
+	}
+
 	HitbtcTicker struct {
 		Price  string `json:"c"`
 		Volume string `json:"v"`
@@ -88,7 +97,7 @@ func NewHitbtcProvider(
 		wsURL,
 		provider.GetSubscriptionMsgs(pairs...),
 		provider.messageReceived,
-		defaultPingDuration,
+		disabledPingDuration,
 		websocket.TextMessage,
 		hitbtcLogger,
 	)
@@ -99,7 +108,7 @@ func NewHitbtcProvider(
 }
 
 func (p *HitbtcProvider) GetSubscriptionMsgs(cps ...types.CurrencyPair) []interface{} {
-	subscriptionMsgs := make([]interface{}, len(cps))
+	subscriptionMsgs := make([]interface{}, 1)
 
 	symbols := make([]string, len(cps))
 
@@ -167,8 +176,9 @@ func (p *HitbtcProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPric
 
 func (p *HitbtcProvider) messageReceived(messageType int, bz []byte) {
 	var (
-		tickerMsg HitbtcTickerMsg
-		tickerErr error
+		tickerMsg        HitbtcTickerMsg
+		subscriptionResp HitbtcWsSubscriptionResponse
+		tickerErr        error
 	)
 
 	tickerErr = json.Unmarshal(bz, &tickerMsg)
@@ -178,9 +188,15 @@ func (p *HitbtcProvider) messageReceived(messageType int, bz []byte) {
 		return
 	}
 
+	err := json.Unmarshal(bz, &subscriptionResp)
+	if err == nil && len(subscriptionResp.Result.Subscriptions) > 0 {
+		return
+	}
+
 	p.logger.Error().
 		Int("length", len(bz)).
 		AnErr("ticker", tickerErr).
+		Str("msg", string(bz)).
 		Msg("Error on receive message")
 }
 

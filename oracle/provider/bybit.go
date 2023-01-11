@@ -38,10 +38,9 @@ type (
 		Args      []string `json:"args"` // Arguments to subscribe to
 	}
 
-	BybitSubscriptionResponse struct {
+	BybitWsGenericResponse struct {
 		Operation string `json:"op"`
 		Success   bool   `json:"success"`
-		Message   string `json:"ret_msg"`
 	}
 
 	BybitTicker struct {
@@ -115,6 +114,9 @@ func NewBybitProvider(
 		websocket.TextMessage,
 		bybitLogger,
 	)
+
+	provider.wsc.pingMessage = `{"op":"ping"}`
+
 	go provider.wsc.Start()
 
 	return provider, nil
@@ -145,23 +147,14 @@ func (p *BybitProvider) GetTickerPrices(cps ...types.CurrencyPair) (map[string]t
 // messageReceived handles the received data from the Bybit websocket.
 func (p *BybitProvider) messageReceived(messageType int, bz []byte) {
 	var (
-		tickerResp           BybitTicker
-		tickerErr            error
-		subscriptionResponse BybitSubscriptionResponse
+		tickerResp  BybitTicker
+		tickerErr   error
+		genericResp BybitWsGenericResponse
 	)
 
-	err := json.Unmarshal(bz, &subscriptionResponse)
-	if err == nil && subscriptionResponse.Operation == "subscribe" {
-		if subscriptionResponse.Success {
-			p.logger.Debug().
-				Str("provider", "bybit").
-				Msg("Bybit subscription confirmed")
-			return
-		} else {
-			p.logger.Error().
-				Str("provider", "bybit").
-				Msg(subscriptionResponse.Message)
-		}
+	err := json.Unmarshal(bz, &genericResp)
+	if err == nil && genericResp.Success {
+		return
 	}
 
 	tickerErr = json.Unmarshal(bz, &tickerResp)
@@ -174,6 +167,7 @@ func (p *BybitProvider) messageReceived(messageType int, bz []byte) {
 	p.logger.Error().
 		Int("length", len(bz)).
 		AnErr("ticker", tickerErr).
+		Str("msg", string(bz)).
 		Msg("Error on receive message")
 }
 

@@ -188,7 +188,8 @@ func (p *BitforexProvider) messageReceived(messageType int, bz []byte) {
 	p.logger.Error().
 		Int("length", len(bz)).
 		AnErr("ticker", tickerErr).
-		Msg(string(bz))
+		Str("msg", string(bz)).
+		Msg("Error on receive message")
 }
 
 func (p *BitforexProvider) setTickerPair(ticker BitforexTickerMsg) {
