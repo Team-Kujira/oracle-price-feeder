@@ -32,6 +32,7 @@ const (
 	ProviderHitbtc    Name = "hitbtc"
 	ProviderPoloniex  Name = "poloniex"
 	ProviderPhemex    Name = "phemex"
+	ProviderLbank     Name = "lbank"
 	ProviderKucoin    Name = "kucoin"
 	ProviderBybit     Name = "bybit"
 	ProviderMexc      Name = "mexc"

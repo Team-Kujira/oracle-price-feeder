@@ -527,6 +527,9 @@ func NewProvider(
 	case provider.ProviderPhemex:
 		return provider.NewPhemexProvider(ctx, logger, endpoint, providerPairs...)
 
+	case provider.ProviderLbank:
+		return provider.NewLbankProvider(ctx, logger, endpoint, providerPairs...)
+
 	case provider.ProviderMock:
 		return provider.NewMockProvider(), nil
 
