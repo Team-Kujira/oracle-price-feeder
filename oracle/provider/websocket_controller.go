@@ -8,9 +8,10 @@ import (
 	"sync"
 	"time"
 
+	"price-feeder/oracle/types"
+
 	"github.com/gorilla/websocket"
 	"github.com/rs/zerolog"
-	"price-feeder/oracle/types"
 )
 
 const (
@@ -36,6 +37,7 @@ type (
 		subscriptionMsgs    []interface{}
 		messageHandler      MessageHandler
 		pingDuration        time.Duration
+		pingMessage         string
 		pingMessageType     uint
 		logger              zerolog.Logger
 
@@ -64,6 +66,7 @@ func NewWebsocketController(
 		subscriptionMsgs: subscriptionMsgs,
 		messageHandler:   messageHandler,
 		pingDuration:     pingDuration,
+		pingMessage:      "ping",
 		pingMessageType:  pingMessageType,
 		logger:           logger,
 	}
@@ -158,7 +161,11 @@ func (wsc *WebsocketController) SendJSON(msg interface{}) error {
 	if wsc.client == nil {
 		return fmt.Errorf("unable to send JSON on a closed connection")
 	}
-	wsc.logger.Debug().Interface("msg", msg).Msg("sending websocket message")
+
+	wsc.logger.Debug().
+		Interface("msg", msg).
+		Msg("sending websocket message")
+
 	if err := wsc.client.WriteJSON(msg); err != nil {
 		return fmt.Errorf(types.ErrWebsocketSend.Error(), wsc.providerName, err)
 	}
@@ -194,10 +201,16 @@ func (wsc *WebsocketController) ping() error {
 	if wsc.client == nil {
 		return fmt.Errorf("unable to ping closed connection")
 	}
-	err := wsc.client.WriteMessage(int(wsc.pingMessageType), ping)
+
+	err := wsc.client.WriteMessage(
+		int(wsc.pingMessageType),
+		[]byte(wsc.pingMessage),
+	)
+
 	if err != nil {
 		wsc.logger.Err(fmt.Errorf(types.ErrWebsocketSend.Error(), wsc.providerName, err)).Send()
 	}
+
 	return err
 }
 
