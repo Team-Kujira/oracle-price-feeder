@@ -100,10 +100,12 @@ func NewLbankProvider(
 		wsURL,
 		provider.GetSubscriptionMsgs(pairs...),
 		provider.messageReceived,
-		disabledPingDuration,
+		defaultPingDuration,
 		websocket.TextMessage,
 		lbankLogger,
 	)
+
+	provider.wsc.pingMessage = `{"action":"ping","ping":"1"}`
 
 	go provider.wsc.Start()
 
@@ -186,6 +188,7 @@ func (p *LbankProvider) messageReceived(messageType int, bz []byte) {
 		tickerMsg LbankTickerMsg
 		tickerErr error
 		pingMsg   LbankPingMsg
+		pongMsg   LbankPongMsg
 	)
 
 	tickerErr = json.Unmarshal(bz, &tickerMsg)
@@ -199,6 +202,11 @@ func (p *LbankProvider) messageReceived(messageType int, bz []byte) {
 	err := json.Unmarshal(bz, &pingMsg)
 	if err == nil && pingMsg.Ping != "" {
 		p.pong(pingMsg.Ping)
+		return
+	}
+
+	err = json.Unmarshal(bz, &pongMsg)
+	if err == nil && pongMsg.Pong == "1" {
 		return
 	}
 
