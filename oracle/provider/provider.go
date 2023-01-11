@@ -51,8 +51,10 @@ var (
 
 	testAtomPriceFloat64  = float64(12.3456)
 	testAtomPriceString   = "12.3456"
+	testAtomPriceInt64    = uint64(1234560000)
 	testAtomVolumeFloat64 = float64(7654321.98765)
 	testAtomVolumeString  = "7654321.98765"
+	testAtomVolumeInt64   = uint64(765432198765000)
 
 	testBtcUsdtCurrencyPair = types.CurrencyPair{
 		Base:  "BTC",
@@ -61,8 +63,10 @@ var (
 
 	testBtcPriceFloat64  = float64(12345.6789)
 	testBtcPriceString   = "12345.6789"
+	testBtcPriceInt64    = uint64(1234567890000)
 	testBtcVolumeFloat64 = float64(7654.32198765)
 	testBtcVolumeString  = "7654.32198765"
+	testBtcVolumeInt64   = uint64(765432198765)
 )
 
 type (
