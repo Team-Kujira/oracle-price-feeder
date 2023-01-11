@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"io"
@@ -12,7 +11,6 @@ import (
 	"syscall"
 	"time"
 
-	input "github.com/cosmos/cosmos-sdk/client/input"
 	"github.com/ignite-hq/cli/ignite/pkg/cosmoscmd"
 	"github.com/mitchellh/mapstructure"
 
@@ -20,6 +18,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
+	"golang.org/x/term"
 
 	"price-feeder/config"
 	"price-feeder/oracle"
@@ -209,11 +208,14 @@ func priceFeederCmdHandler(cmd *cobra.Command, args []string) error {
 }
 
 func getKeyringPassword() (string, error) {
-	reader := bufio.NewReader(os.Stdin)
-
 	pass := os.Getenv(envVariablePass)
 	if pass == "" {
-		return input.GetString("Enter keyring password", reader)
+		fmt.Print("Enter keyring password: ")
+		bytePassword, err := term.ReadPassword(int(syscall.Stdin))
+		if err != nil {
+			return "", err
+		}
+		pass = string(bytePassword)
 	}
 	return pass, nil
 }
