@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"testing"
 
+	"price-feeder/oracle/types"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
-	"price-feeder/oracle/types"
 )
 
 func TestKrakenProvider_GetTickerPrices(t *testing.T) {
@@ -77,24 +78,32 @@ func TestKrakenProvider_GetTickerPrices(t *testing.T) {
 
 func TestKrakenPairToCurrencyPairSymbol(t *testing.T) {
 	cp := types.CurrencyPair{Base: "ATOM", Quote: "USDT"}
-	currencyPair := krakenPairToCurrencyPair("ATOM/USDT")
-	require.Equal(t, cp, currencyPair)
+	currencyPairSymbol := krakenPairToCurrencyPairSymbol("ATOM/USDT")
+	require.Equal(t, cp.String(), currencyPairSymbol)
 }
 
 func TestKrakenCurrencyPairToKrakenPair(t *testing.T) {
 	cp := types.CurrencyPair{Base: "ATOM", Quote: "USDT"}
-	krakenSymbol := currencyPairToKrakenPair(cp)
+	krakenSymbol := cp.Join("/")
 	require.Equal(t, krakenSymbol, "ATOM/USDT")
 }
 
-func TestKrakenProvider_getSubscriptionMsgs(t *testing.T) {
+func TestNormalizeKrakenBTCPair(t *testing.T) {
+	btcSymbol := normalizeKrakenBTCPair("XBT/USDT")
+	require.Equal(t, btcSymbol, "BTC/USDT")
+
+	atomSymbol := normalizeKrakenBTCPair("ATOM/USDT")
+	require.Equal(t, atomSymbol, "ATOM/USDT")
+}
+
+func TestKrakenProvider_GetSubscriptionMsgs(t *testing.T) {
 	provider := &KrakenProvider{
 		subscribedPairs: map[string]types.CurrencyPair{},
 	}
 	cps := []types.CurrencyPair{
 		{Base: "ATOM", Quote: "USDT"},
 	}
-	subMsgs := provider.getSubscriptionMsgs(cps...)
+	subMsgs := provider.GetSubscriptionMsgs(cps...)
 
 	msg, _ := json.Marshal(subMsgs[0])
 	require.Equal(t, "{\"event\":\"subscribe\",\"pair\":[\"ATOM/USDT\"],\"subscription\":{\"name\":\"ticker\"}}", string(msg))

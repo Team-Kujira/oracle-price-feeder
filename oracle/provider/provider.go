@@ -3,11 +3,12 @@ package provider
 import (
 	"fmt"
 	"net/http"
-	"time"
-	"strings"
 	"strconv"
+	"strings"
+	"time"
 
 	"price-feeder/oracle/types"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
@@ -15,7 +16,7 @@ const (
 	defaultTimeout       = 10 * time.Second
 	providerCandlePeriod = 10 * time.Minute
 
-	ProviderFin		  Name = "fin"
+	ProviderFin       Name = "fin"
 	ProviderKraken    Name = "kraken"
 	ProviderBinance   Name = "binance"
 	ProviderBinanceUS Name = "binanceus"
@@ -26,12 +27,47 @@ const (
 	ProviderGate      Name = "gate"
 	ProviderCoinbase  Name = "coinbase"
 	ProviderBitget    Name = "bitget"
+	ProviderBitfinex  Name = "bitfinex"
+	ProviderBitforex  Name = "bitforex"
+	ProviderHitbtc    Name = "hitbtc"
+	ProviderPoloniex  Name = "poloniex"
+	ProviderPhemex    Name = "phemex"
+	ProviderLbank     Name = "lbank"
+	ProviderKucoin    Name = "kucoin"
+	ProviderBybit     Name = "bybit"
 	ProviderMexc      Name = "mexc"
 	ProviderCrypto    Name = "crypto"
 	ProviderMock      Name = "mock"
 )
 
-var ping = []byte("ping")
+var (
+	ping = []byte("ping")
+
+	// vars to be used in the provider specific tests
+	testAtomUsdtCurrencyPair = types.CurrencyPair{
+		Base:  "ATOM",
+		Quote: "USDT",
+	}
+
+	testAtomPriceFloat64  = float64(12.3456)
+	testAtomPriceString   = "12.3456"
+	testAtomPriceInt64    = uint64(1234560000)
+	testAtomVolumeFloat64 = float64(7654321.98765)
+	testAtomVolumeString  = "7654321.98765"
+	testAtomVolumeInt64   = uint64(765432198765000)
+
+	testBtcUsdtCurrencyPair = types.CurrencyPair{
+		Base:  "BTC",
+		Quote: "USDT",
+	}
+
+	testBtcPriceFloat64  = float64(12345.6789)
+	testBtcPriceString   = "12345.6789"
+	testBtcPriceInt64    = uint64(1234567890000)
+	testBtcVolumeFloat64 = float64(7654.32198765)
+	testBtcVolumeString  = "7654.32198765"
+	testBtcVolumeInt64   = uint64(765432198765)
+)
 
 type (
 	// Provider defines an interface an exchange price provider must implement.
@@ -39,15 +75,31 @@ type (
 		// GetTickerPrices returns the tickerPrices based on the provided pairs.
 		GetTickerPrices(...types.CurrencyPair) (map[string]types.TickerPrice, error)
 
-		// GetCandlePrices returns the candlePrices based on the provided pairs.
-		GetCandlePrices(...types.CurrencyPair) (map[string][]types.CandlePrice, error)
+		// GetTickerPrice returns the last ticker price for given currency pair
+		GetTickerPrice(types.CurrencyPair) (types.TickerPrice, error)
 
 		// GetAvailablePairs return all available pairs symbol to subscribe.
 		GetAvailablePairs() (map[string]struct{}, error)
 
+		// GetSubscribedPair returns the currency pair and true for given
+		// symbol if found in 'subscribedPairs' otherwise returns an
+		// empty currency pair and false
+		GetSubscribedPair(s string) (types.CurrencyPair, bool)
+
+		// SetSubscribedPair adds the currency pair to subscribedPairs map
+		SetSubscribedPair(types.CurrencyPair)
+
 		// SubscribeCurrencyPairs sends subscription messages for the new currency
 		// pairs and adds them to the providers subscribed pairs
 		SubscribeCurrencyPairs(...types.CurrencyPair) error
+
+		// GetSubscriptionMsgs returns all subscription messages needed to
+		// subscribe to the configured wss channels
+		GetSubscriptionMsgs(...types.CurrencyPair) []interface{}
+
+		// SendSubscriptionMsgs sends provided subscription messages
+		// to the websocket endpoint
+		SendSubscriptionMsgs(msgs []interface{}) error
 	}
 
 	// Name name of an oracle provider. Usually it is an exchange
@@ -76,6 +128,44 @@ type (
 		Websocket string `toml:"websocket"`
 	}
 )
+
+func getTickerPrices(p Provider, cps []types.CurrencyPair) (map[string]types.TickerPrice, error) {
+	tickerPrices := make(map[string]types.TickerPrice, len(cps))
+
+	for _, cp := range cps {
+
+		price, err := p.GetTickerPrice(cp)
+		if err != nil {
+			return nil, err
+		}
+		tickerPrices[cp.String()] = price
+	}
+
+	return tickerPrices, nil
+}
+
+// setSubscribedPairs sets N currency pairs to the map of subscribed pairs.
+func setSubscribedPairs(p Provider, cps ...types.CurrencyPair) {
+	for _, cp := range cps {
+		p.SetSubscribedPair(cp)
+	}
+}
+
+func subscribeCurrencyPairs(p Provider, cps []types.CurrencyPair) error {
+	newPairs := []types.CurrencyPair{}
+	for _, cp := range cps {
+		if _, ok := p.GetSubscribedPair(cp.String()); !ok {
+			newPairs = append(newPairs, cp)
+		}
+	}
+
+	newSubscriptionMsgs := p.GetSubscriptionMsgs(newPairs...)
+	if err := p.SendSubscriptionMsgs(newSubscriptionMsgs); err != nil {
+		return err
+	}
+	setSubscribedPairs(p, newPairs...)
+	return nil
+}
 
 // String cast provider name to string.
 func (n Name) String() string {

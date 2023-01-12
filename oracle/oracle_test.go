@@ -21,8 +21,26 @@ type mockProvider struct {
 	prices map[string]types.TickerPrice
 }
 
+func (m mockProvider) GetSubscriptionMsgs(cps ...types.CurrencyPair) []interface{} {
+	return nil
+}
+
+func (m mockProvider) SendSubscriptionMsgs(msgs []interface{}) error {
+	return nil
+}
+
+func (m mockProvider) SetSubscribedPair(types.CurrencyPair) {}
+
+func (m mockProvider) GetSubscribedPair(s string) (types.CurrencyPair, bool) {
+	return types.CurrencyPair{}, true
+}
+
 func (m mockProvider) GetTickerPrices(_ ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
 	return m.prices, nil
+}
+
+func (m mockProvider) GetTickerPrice(_ types.CurrencyPair) (types.TickerPrice, error) {
+	return types.TickerPrice{}, nil
 }
 
 func (m mockProvider) GetCandlePrices(_ ...types.CurrencyPair) (map[string][]types.CandlePrice, error) {
@@ -51,8 +69,26 @@ type failingProvider struct {
 	prices map[string]types.TickerPrice
 }
 
+func (m failingProvider) GetSubscriptionMsgs(cps ...types.CurrencyPair) []interface{} {
+	return nil
+}
+
+func (m failingProvider) SendSubscriptionMsgs(msgs []interface{}) error {
+	return fmt.Errorf("unable to send subscription messages")
+}
+
+func (m failingProvider) SetSubscribedPair(types.CurrencyPair) {}
+
+func (m failingProvider) GetSubscribedPair(s string) (types.CurrencyPair, bool) {
+	return types.CurrencyPair{}, false
+}
+
 func (m failingProvider) GetTickerPrices(_ ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
 	return nil, fmt.Errorf("unable to get ticker prices")
+}
+
+func (m failingProvider) GetTickerPrice(_ types.CurrencyPair) (types.TickerPrice, error) {
+	return types.TickerPrice{}, fmt.Errorf("unable to get ticker price")
 }
 
 func (m failingProvider) GetCandlePrices(_ ...types.CurrencyPair) (map[string][]types.CandlePrice, error) {
@@ -469,7 +505,6 @@ func TestSuccessGetComputedPricesCandles(t *testing.T) {
 
 	prices, err := GetComputedPrices(
 		zerolog.Nop(),
-		providerCandles,
 		make(provider.AggregatedProviderPrices, 1),
 		providerPair,
 		make(map[string]sdk.Dec),
@@ -502,7 +537,6 @@ func TestSuccessGetComputedPricesTickers(t *testing.T) {
 
 	prices, err := GetComputedPrices(
 		zerolog.Nop(),
-		make(provider.AggregatedProviderCandles, 1),
 		providerPrices,
 		providerPair,
 		make(map[string]sdk.Dec),
@@ -598,7 +632,6 @@ func TestGetComputedPricesCandlesConversion(t *testing.T) {
 
 	prices, err := GetComputedPrices(
 		zerolog.Nop(),
-		providerCandles,
 		make(provider.AggregatedProviderPrices, 1),
 		providerPair,
 		make(map[string]sdk.Dec),
@@ -682,7 +715,6 @@ func TestGetComputedPricesTickersConversion(t *testing.T) {
 
 	prices, err := GetComputedPrices(
 		zerolog.Nop(),
-		make(provider.AggregatedProviderCandles, 1),
 		providerPrices,
 		providerPair,
 		make(map[string]sdk.Dec),

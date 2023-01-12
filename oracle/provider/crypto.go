@@ -31,10 +31,6 @@ const (
 )
 
 var _ Provider = (*CryptoProvider)(nil)
-var cryptoSymbolTranslations map[string]string = map[string]string{
-	"LUNA": "LUNA2",
-	"LUNC": "LUNA",
-}
 
 type (
 	// CryptoProvider defines an Oracle provider implemented by the Crypto.com public
@@ -46,9 +42,8 @@ type (
 		logger          zerolog.Logger
 		mtx             sync.RWMutex
 		endpoints       Endpoint
-		tickers         map[string]types.TickerPrice   // Symbol => TickerPrice
-		candles         map[string][]types.CandlePrice // Symbol => CandlePrice
-		subscribedPairs map[string]types.CurrencyPair  // Symbol => types.CurrencyPair
+		tickers         map[string]types.TickerPrice  // Symbol => TickerPrice
+		subscribedPairs map[string]types.CurrencyPair // Symbol => types.CurrencyPair
 	}
 
 	CryptoTickerResponse struct {
@@ -63,20 +58,7 @@ type (
 		InstrumentName string `json:"i"` // Instrument Name, e.g. BTC_USDT, ETH_CRO, etc.
 		Volume         string `json:"v"` // The total 24h traded volume
 		LatestTrade    string `json:"a"` // The price of the latest trade, null if there weren't any trades
-	}
-
-	CryptoCandleResponse struct {
-		Result CryptoCandleResult `json:"result"`
-	}
-	CryptoCandleResult struct {
-		InstrumentName string         `json:"instrument_name"` // ex.: ATOM_USDT
-		Channel        string         `json:"channel"`         // ex.: candlestick
-		Data           []CryptoCandle `json:"data"`            // candlestick data
-	}
-	CryptoCandle struct {
-		Close     string `json:"c"` // Price at close
-		Volume    string `json:"v"` // Volume during interval
-		Timestamp int64  `json:"t"` // End time of candlestick (Unix timestamp)
+		Timestamp      int64  `json:"t"` // Timestamp of the last trade
 	}
 
 	CryptoSubscriptionMsg struct {
@@ -132,17 +114,16 @@ func NewCryptoProvider(
 		logger:          cryptoLogger,
 		endpoints:       endpoints,
 		tickers:         map[string]types.TickerPrice{},
-		candles:         map[string][]types.CandlePrice{},
 		subscribedPairs: map[string]types.CurrencyPair{},
 	}
 
-	provider.setSubscribedPairs(pairs...)
+	setSubscribedPairs(provider, pairs...)
 
 	provider.wsc = NewWebsocketController(
 		ctx,
 		ProviderCrypto,
 		wsURL,
-		provider.getSubscriptionMsgs(pairs...),
+		provider.GetSubscriptionMsgs(pairs...),
 		provider.messageReceived,
 		disabledPingDuration,
 		websocket.PingMessage,
@@ -153,76 +134,68 @@ func NewCryptoProvider(
 	return provider, nil
 }
 
-func (p *CryptoProvider) getSubscriptionMsgs(cps ...types.CurrencyPair) []interface{} {
-	subscriptionMsgs := make([]interface{}, 0, len(cps)*2)
-	for _, cp := range cps {
-		cryptoPair := currencyPairToCryptoPair(cp)
-		channel := cryptoTickerMsgPrefix + cryptoPair
-		msg := newCryptoSubscriptionMsg([]string{channel})
-		subscriptionMsgs = append(subscriptionMsgs, msg)
+func (p *CryptoProvider) GetSubscriptionMsgs(cps ...types.CurrencyPair) []interface{} {
+	subscriptionMsgs := make([]interface{}, 1)
 
-		cryptoPair = currencyPairToCryptoPair(cp)
-		channel = cryptoCandleMsgPrefix + cryptoPair
-		msg = newCryptoSubscriptionMsg([]string{channel})
-		subscriptionMsgs = append(subscriptionMsgs, msg)
+	channels := make([]string, len(cps))
+
+	for i, cp := range cps {
+		if cp.Base == "LUNA" {
+			channels[i] = "ticker.LUNA2_" + cp.Quote
+		} else {
+			channels[i] = "ticker." + cp.Join("_")
+		}
 	}
+
+	subscriptionMsgs[0] = CryptoSubscriptionMsg{
+		ID:     1,
+		Method: "subscribe",
+		Params: CryptoSubscriptionParams{
+			Channels: channels,
+		},
+		Nonce: time.Now().UnixMilli(),
+	}
+
 	return subscriptionMsgs
 }
 
-// SubscribeCurrencyPairs sends the new subscription messages to the websocket
-// and adds them to the providers subscribedPairs array
-func (p *CryptoProvider) SubscribeCurrencyPairs(cps ...types.CurrencyPair) error {
+func (p *CryptoProvider) GetSubscribedPair(s string) (types.CurrencyPair, bool) {
+	cp, ok := p.subscribedPairs[s]
+	return cp, ok
+}
+
+func (p *CryptoProvider) SetSubscribedPair(cp types.CurrencyPair) {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 
-	newPairs := []types.CurrencyPair{}
-	for _, cp := range cps {
-		if _, ok := p.subscribedPairs[cp.String()]; !ok {
-			newPairs = append(newPairs, cp)
-		}
-	}
+	p.subscribedPairs[cp.String()] = cp
+}
 
-	newSubscriptionMsgs := p.getSubscriptionMsgs(newPairs...)
-	if err := p.wsc.AddSubscriptionMsgs(newSubscriptionMsgs); err != nil {
-		return err
-	}
-	p.setSubscribedPairs(newPairs...)
-	return nil
+func (p *CryptoProvider) SubscribeCurrencyPairs(cps ...types.CurrencyPair) error {
+	return subscribeCurrencyPairs(p, cps)
+}
+
+func (p *CryptoProvider) SendSubscriptionMsgs(msgs []interface{}) error {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+
+	return p.wsc.AddSubscriptionMsgs(msgs)
 }
 
 // GetTickerPrices returns the tickerPrices based on the saved map.
-func (p *CryptoProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
-	tickerPrices := make(map[string]types.TickerPrice, len(pairs))
-
-	for _, cp := range pairs {
-		price, err := p.getTickerPrice(cp.String())
-		if err != nil {
-			return nil, err
-		}
-		tickerPrices[cp.String()] = price
-	}
-
-	return tickerPrices, nil
+func (p *CryptoProvider) GetTickerPrices(cps ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
+	return getTickerPrices(p, cps)
 }
 
-// GetCandlePrices returns the candlePrices based on the saved map
-func (p *CryptoProvider) GetCandlePrices(pairs ...types.CurrencyPair) (map[string][]types.CandlePrice, error) {
-	candlePrices := make(map[string][]types.CandlePrice, len(pairs))
-
-	for _, cp := range pairs {
-		prices, err := p.getCandlePrices(cp.String())
-		if err != nil {
-			return nil, err
-		}
-		candlePrices[cp.String()] = prices
-	}
-
-	return candlePrices, nil
-}
-
-func (p *CryptoProvider) getTickerPrice(key string) (types.TickerPrice, error) {
+func (p *CryptoProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPrice, error) {
 	p.mtx.RLock()
 	defer p.mtx.RUnlock()
+
+	key := cp.Join("_")
+
+	if cp.Base == "LUNA" {
+		key = "LUNA2_" + cp.Quote
+	}
 
 	ticker, ok := p.tickers[key]
 	if !ok {
@@ -236,25 +209,6 @@ func (p *CryptoProvider) getTickerPrice(key string) (types.TickerPrice, error) {
 	return ticker, nil
 }
 
-func (p *CryptoProvider) getCandlePrices(key string) ([]types.CandlePrice, error) {
-	p.mtx.RLock()
-	defer p.mtx.RUnlock()
-
-	candles, ok := p.candles[key]
-	if !ok {
-		return []types.CandlePrice{}, fmt.Errorf(
-			types.ErrCandleNotFound.Error(),
-			ProviderCrypto,
-			key,
-		)
-	}
-
-	candleList := []types.CandlePrice{}
-	candleList = append(candleList, candles...)
-
-	return candleList, nil
-}
-
 func (p *CryptoProvider) messageReceived(messageType int, bz []byte) {
 	if messageType != websocket.TextMessage {
 		return
@@ -265,8 +219,6 @@ func (p *CryptoProvider) messageReceived(messageType int, bz []byte) {
 		heartbeatErr  error
 		tickerResp    CryptoTickerResponse
 		tickerErr     error
-		candleResp    CryptoCandleResponse
-		candleErr     error
 	)
 
 	// sometimes the message received is not a ticker or a candle response.
@@ -288,23 +240,11 @@ func (p *CryptoProvider) messageReceived(messageType int, bz []byte) {
 		return
 	}
 
-	candleErr = json.Unmarshal(bz, &candleResp)
-	if candleResp.Result.Channel == cryptoCandleChannel {
-		for _, candlePair := range candleResp.Result.Data {
-			p.setCandlePair(
-				candleResp.Result.InstrumentName,
-				candlePair,
-			)
-			telemetryWebsocketMessage(ProviderCrypto, MessageTypeCandle)
-		}
-		return
-	}
-
 	p.logger.Error().
 		Int("length", len(bz)).
 		AnErr("heartbeat", heartbeatErr).
 		AnErr("ticker", tickerErr).
-		AnErr("candle", candleErr).
+		Str("msg", string(bz)).
 		Msg("Error on receive message")
 }
 
@@ -334,49 +274,14 @@ func (p *CryptoProvider) setTickerPair(symbol string, tickerPair CryptoTicker) {
 		symbol,
 		tickerPair.LatestTrade,
 		tickerPair.Volume,
+		tickerPair.Timestamp,
 	)
 	if err != nil {
 		p.logger.Warn().Err(err).Msg("crypto: failed to parse ticker")
 		return
 	}
-	pair := cryptoPairToCurrencyPair(symbol)
-	p.tickers[pair.String()] = tickerPrice
-}
 
-func (p *CryptoProvider) setCandlePair(symbol string, candlePair CryptoCandle) {
-	p.mtx.Lock()
-	defer p.mtx.Unlock()
-
-	candle, err := types.NewCandlePrice(
-		string(ProviderCrypto),
-		symbol,
-		candlePair.Close,
-		candlePair.Volume,
-		SecondsToMilli(candlePair.Timestamp),
-	)
-	if err != nil {
-		p.logger.Warn().Err(err).Msg("crypto: failed to parse candle")
-		return
-	}
-
-	staleTime := PastUnixTime(providerCandlePeriod)
-	candleList := []types.CandlePrice{}
-	candleList = append(candleList, candle)
-
-	for _, c := range p.candles[symbol] {
-		if staleTime < c.TimeStamp {
-			candleList = append(candleList, c)
-		}
-	}
-	pair := cryptoPairToCurrencyPair(symbol)
-	p.candles[pair.String()] = candleList
-}
-
-// setSubscribedPairs sets N currency pairs to the map of subscribed pairs.
-func (p *CryptoProvider) setSubscribedPairs(cps ...types.CurrencyPair) {
-	for _, cp := range cps {
-		p.subscribedPairs[cp.String()] = cp
-	}
+	p.tickers[symbol] = tickerPrice
 }
 
 // GetAvailablePairs returns all pairs to which the provider can subscribe.
@@ -395,54 +300,18 @@ func (p *CryptoProvider) GetAvailablePairs() (map[string]struct{}, error) {
 
 	availablePairs := make(map[string]struct{}, len(pairsSummary.Result.Data))
 	for _, pair := range pairsSummary.Result.Data {
-		cp := cryptoPairToCurrencyPair(pair.InstrumentName)
+		splitInstName := strings.Split(pair.InstrumentName, "_")
+		if len(splitInstName) != 2 {
+			continue
+		}
+
+		cp := types.CurrencyPair{
+			Base:  strings.ToUpper(splitInstName[0]),
+			Quote: strings.ToUpper(splitInstName[1]),
+		}
+
 		availablePairs[cp.String()] = struct{}{}
 	}
 
 	return availablePairs, nil
-}
-
-
-func currencyPairToCryptoPair(cp types.CurrencyPair) string {
-	return currencySymbolToCryptoSymbol(cp.Base) + "_" + currencySymbolToCryptoSymbol(cp.Quote)
-}
-
-func currencySymbolToCryptoSymbol(currencySymbol string) string {
-	translation, ok := cryptoSymbolTranslations[currencySymbol]
-	if ok {
-		return translation
-	}
-	return currencySymbol
-}
-
-func cryptoPairToCurrencyPair(cryptoPair string) types.CurrencyPair {
-	cryptoPairFields := strings.Split(cryptoPair, "_")
-	if len(cryptoPairFields) != 2 {
-		return types.CurrencyPair{}
-	}
-	return types.CurrencyPair{
-		Base: cryptoSymbolToCurrencySymbol(cryptoPairFields[0]),
-		Quote: cryptoSymbolToCurrencySymbol(cryptoPairFields[1]),
-	}
-}
-
-func cryptoSymbolToCurrencySymbol(cryptoSymbol string) string {
-	for symbol, translation := range cryptoSymbolTranslations {
-		if translation == cryptoSymbol {
-			return symbol
-		}
-	}
-	return cryptoSymbol
-}
-
-// newCryptoSubscriptionMsg returns a new subscription Msg.
-func newCryptoSubscriptionMsg(channels []string) CryptoSubscriptionMsg {
-	return CryptoSubscriptionMsg{
-		ID:     1,
-		Method: "subscribe",
-		Params: CryptoSubscriptionParams{
-			Channels: channels,
-		},
-		Nonce: time.Now().UnixMilli(),
-	}
 }

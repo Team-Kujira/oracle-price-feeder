@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"testing"
 
+	"price-feeder/oracle/types"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
-	"price-feeder/oracle/types"
 )
 
 func TestOkxProvider_GetTickerPrices(t *testing.T) {
@@ -86,18 +87,18 @@ func TestOkxProvider_GetTickerPrices(t *testing.T) {
 
 func TestOkxCurrencyPairToOkxPair(t *testing.T) {
 	cp := types.CurrencyPair{Base: "ATOM", Quote: "USDT"}
-	okxSymbol := currencyPairToOkxPair(cp)
+	okxSymbol := cp.Join("-")
 	require.Equal(t, okxSymbol, "ATOM-USDT")
 }
 
-func TestOkxProvider_getSubscriptionMsgs(t *testing.T) {
+func TestOkxProvider_GetSubscriptionMsgs(t *testing.T) {
 	provider := &OkxProvider{
 		subscribedPairs: map[string]types.CurrencyPair{},
 	}
 	cps := []types.CurrencyPair{
 		{Base: "ATOM", Quote: "USDT"},
 	}
-	subMsgs := provider.getSubscriptionMsgs(cps...)
+	subMsgs := provider.GetSubscriptionMsgs(cps...)
 
 	msg, _ := json.Marshal(subMsgs[0])
 	require.Equal(t, "{\"op\":\"subscribe\",\"args\":[{\"channel\":\"candle1m\",\"instId\":\"ATOM-USDT\"}]}", string(msg))

@@ -7,19 +7,20 @@ import (
 	"strings"
 	"time"
 
+	"price-feeder/oracle/provider"
+
 	"github.com/BurntSushi/toml"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/go-playground/validator/v10"
-	"price-feeder/oracle/provider"
 )
 
 const (
 	DenomUSD = "USD"
 
-	defaultListenAddr      = "0.0.0.0:7171"
-	defaultSrvWriteTimeout = 15 * time.Second
-	defaultSrvReadTimeout  = 15 * time.Second
-	defaultProviderTimeout = 100 * time.Millisecond
+	defaultListenAddr         = "0.0.0.0:7171"
+	defaultSrvWriteTimeout    = 15 * time.Second
+	defaultSrvReadTimeout     = 15 * time.Second
+	defaultProviderTimeout    = 100 * time.Millisecond
 	defaultHeightPollInterval = 1 * time.Second
 )
 
@@ -32,7 +33,15 @@ var (
 	// SupportedProviders defines a lookup table of all the supported currency API
 	// providers.
 	SupportedProviders = map[provider.Name]struct{}{
+		provider.ProviderBybit:     {},
+		provider.ProviderBitfinex:  {},
+		provider.ProviderBitforex:  {},
+		provider.ProviderPoloniex:  {},
+		provider.ProviderPhemex:    {},
+		provider.ProviderLbank:     {},
+		provider.ProviderHitbtc:    {},
 		provider.ProviderKraken:    {},
+		provider.ProviderKucoin:    {},
 		provider.ProviderBinance:   {},
 		provider.ProviderBinanceUS: {},
 		provider.ProviderOsmosis:   {},
@@ -68,22 +77,22 @@ var (
 type (
 	// Config defines all necessary price-feeder configuration parameters.
 	Config struct {
-		Server            Server             `toml:"server"`
-		CurrencyPairs     []CurrencyPair     `toml:"currency_pairs" validate:"required,gt=0,dive,required"`
-		Deviations        []Deviation        `toml:"deviation_thresholds"`
-		Account           Account            `toml:"account" validate:"required,gt=0,dive,required"`
-		Keyring           Keyring            `toml:"keyring" validate:"required,gt=0,dive,required"`
-		RPC               RPC                `toml:"rpc" validate:"required,gt=0,dive,required"`
-		Telemetry         Telemetry          `toml:"telemetry"`
-		GasAdjustment     float64            `toml:"gas_adjustment" validate:"required"`
-		GasPrices         string             `toml:"gas_prices" validate:"required"`
-		ProviderTimeout   string             `toml:"provider_timeout"`
-		ProviderEndpoints []provider.Endpoint `toml:"provider_endpoints" validate:"dive"`
-		ProviderMinOverride bool `toml:"provider_min_override"`
-		EnableServer      bool               `toml:"enable_server"`
-		EnableVoter       bool               `toml:"enable_voter"`
-		Healthchecks      []Healthchecks     `toml:"healthchecks" validate:"dive"`
-		HeightPollInterval string `toml:"height_poll_interval"`
+		Server              Server              `toml:"server"`
+		CurrencyPairs       []CurrencyPair      `toml:"currency_pairs" validate:"required,gt=0,dive,required"`
+		Deviations          []Deviation         `toml:"deviation_thresholds"`
+		Account             Account             `toml:"account" validate:"required,gt=0,dive,required"`
+		Keyring             Keyring             `toml:"keyring" validate:"required,gt=0,dive,required"`
+		RPC                 RPC                 `toml:"rpc" validate:"required,gt=0,dive,required"`
+		Telemetry           Telemetry           `toml:"telemetry"`
+		GasAdjustment       float64             `toml:"gas_adjustment" validate:"required"`
+		GasPrices           string              `toml:"gas_prices" validate:"required"`
+		ProviderTimeout     string              `toml:"provider_timeout"`
+		ProviderEndpoints   []provider.Endpoint `toml:"provider_endpoints" validate:"dive"`
+		ProviderMinOverride bool                `toml:"provider_min_override"`
+		EnableServer        bool                `toml:"enable_server"`
+		EnableVoter         bool                `toml:"enable_voter"`
+		Healthchecks        []Healthchecks      `toml:"healthchecks" validate:"dive"`
+		HeightPollInterval  string              `toml:"height_poll_interval"`
 	}
 
 	// Server defines the API server configuration.
@@ -98,8 +107,8 @@ type (
 	// CurrencyPair defines a price quote of the exchange rate for two different
 	// currencies and the supported providers for getting the exchange rate.
 	CurrencyPair struct {
-		Base      string   `toml:"base" validate:"required"`
-		Quote     string   `toml:"quote" validate:"required"`
+		Base      string          `toml:"base" validate:"required"`
+		Quote     string          `toml:"quote" validate:"required"`
 		Providers []provider.Name `toml:"providers" validate:"required,gt=0,dive,required"`
 	}
 
@@ -165,7 +174,7 @@ type (
 	}
 
 	Healthchecks struct {
-		URL string `toml:"url" validate:"required"`
+		URL     string `toml:"url" validate:"required"`
 		Timeout string `toml:"timeout" validate:"required"`
 	}
 )
@@ -271,16 +280,6 @@ func ParseConfig(configPath string) (Config, error) {
 				return cfg, fmt.Errorf("must have at least three providers for %s", base)
 			}
 		}
-	}
-
-	gatePairs := []string{}
-	for base, providers := range pairs {
-		if _, ok := providers["gate"]; ok {
-			gatePairs = append(gatePairs, base)
-		}
-	}
-	if len(gatePairs) > 1 {
-		return cfg, fmt.Errorf("gate provider does not support multiple pairs: %v", gatePairs)
 	}
 
 	for _, deviation := range cfg.Deviations {

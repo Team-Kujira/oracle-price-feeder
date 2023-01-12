@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"price-feeder/oracle/types"
 )
@@ -71,9 +72,8 @@ func NewOsmosisProvider(endpoint Endpoint) *OsmosisProvider {
 	}
 }
 
-// SubscribeCurrencyPairs performs a no-op since osmosis does not use websockets
-func (p OsmosisProvider) SubscribeCurrencyPairs(pairs ...types.CurrencyPair) error {
-	return nil
+func (p OsmosisProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPrice, error) {
+	return types.TickerPrice{}, nil
 }
 
 func (p OsmosisProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
@@ -106,6 +106,7 @@ func (p OsmosisProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[strin
 	}
 
 	tickerPrices := make(map[string]types.TickerPrice, len(pairs))
+	timestamp := time.Now().UnixMilli()
 	for _, tr := range tokensResp {
 		symbol := strings.ToUpper(tr.Symbol) // symbol == base in a currency pair
 
@@ -120,8 +121,9 @@ func (p OsmosisProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[strin
 		}
 
 		tickerPrices[cp.String()] = types.TickerPrice{
-			Price: floatToDec(tr.Price),
+			Price:  floatToDec(tr.Price),
 			Volume: floatToDec(tr.Volume),
+			Time:   timestamp,
 		}
 	}
 
@@ -132,56 +134,6 @@ func (p OsmosisProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[strin
 	}
 
 	return tickerPrices, nil
-}
-
-func (p OsmosisProvider) GetCandlePrices(pairs ...types.CurrencyPair) (map[string][]types.CandlePrice, error) {
-	candles := make(map[string][]types.CandlePrice)
-	for _, pair := range pairs {
-		if _, ok := candles[pair.Base]; !ok {
-			candles[pair.String()] = []types.CandlePrice{}
-		}
-
-		path := fmt.Sprintf("%s%s/%s/chart?tf=5", p.baseURL, osmosisCandleEndpoint, pair.Base)
-
-		resp, err := p.client.Get(path)
-		if err != nil {
-			return nil, fmt.Errorf("failed to make Osmosis request: %w", err)
-		}
-		err = checkHTTPStatus(resp)
-		if err != nil {
-			return nil, err
-		}
-
-		defer resp.Body.Close()
-
-		bz, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read Osmosis response body: %w", err)
-		}
-
-		var candlesResp []OsmosisCandleResponse
-		if err := json.Unmarshal(bz, &candlesResp); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal Osmosis response body: %w", err)
-		}
-
-		staleTime := PastUnixTime(providerCandlePeriod)
-
-		candlePrices := []types.CandlePrice{}
-		for _, responseCandle := range candlesResp {
-			if staleTime >= responseCandle.Time {
-				continue
-			}
-			candlePrices = append(candlePrices, types.CandlePrice{
-				Price:  floatToDec(responseCandle.Close),
-				Volume: floatToDec(responseCandle.Volume),
-				// convert osmosis timestamp seconds -> milliseconds
-				TimeStamp: SecondsToMilli(responseCandle.Time),
-			})
-		}
-		candles[pair.String()] = candlePrices
-	}
-
-	return candles, nil
 }
 
 // GetAvailablePairs return all available pairs symbol to susbscribe.
@@ -214,3 +166,22 @@ func (p OsmosisProvider) GetAvailablePairs() (map[string]struct{}, error) {
 
 	return availablePairs, nil
 }
+
+// SubscribeCurrencyPairs performs a no-op since fin does not use websockets
+func (p OsmosisProvider) SubscribeCurrencyPairs(cps ...types.CurrencyPair) error {
+	return nil
+}
+
+func (p OsmosisProvider) GetSubscriptionMsgs(cps ...types.CurrencyPair) []interface{} {
+	return nil
+}
+
+func (p OsmosisProvider) GetSubscribedPair(s string) (types.CurrencyPair, bool) {
+	return types.CurrencyPair{}, true
+}
+
+func (p OsmosisProvider) SendSubscriptionMsgs(msgs []interface{}) error {
+	return nil
+}
+
+func (p OsmosisProvider) SetSubscribedPair(cp types.CurrencyPair) {}

@@ -5,9 +5,10 @@ import (
 	"encoding/json"
 	"testing"
 
+	"price-feeder/oracle/types"
+
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
-	"price-feeder/oracle/types"
 )
 
 func TestHuobiProvider_GetTickerPrices(t *testing.T) {
@@ -83,20 +84,14 @@ func TestHuobiProvider_GetTickerPrices(t *testing.T) {
 	})
 }
 
-func TestHuobiCurrencyPairToHuobiPair(t *testing.T) {
-	cp := types.CurrencyPair{Base: "ATOM", Quote: "USDT"}
-	binanceSymbol := currencyPairToHuobiTickerPair(cp)
-	require.Equal(t, binanceSymbol, "market.atomusdt.ticker")
-}
-
-func TestHuobiProvider_getSubscriptionMsgs(t *testing.T) {
+func TestHuobiProvider_GetSubscriptionMsgs(t *testing.T) {
 	provider := &HuobiProvider{
 		subscribedPairs: map[string]types.CurrencyPair{},
 	}
 	cps := []types.CurrencyPair{
 		{Base: "ATOM", Quote: "USDT"},
 	}
-	subMsgs := provider.getSubscriptionMsgs(cps...)
+	subMsgs := provider.GetSubscriptionMsgs(cps...)
 
 	msg, _ := json.Marshal(subMsgs[0])
 	require.Equal(t, "{\"sub\":\"market.atomusdt.ticker\"}", string(msg))

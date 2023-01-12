@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"testing"
 
+	"price-feeder/oracle/types"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
-	"price-feeder/oracle/types"
 )
 
 func TestBinanceProvider_GetTickerPrices(t *testing.T) {
@@ -79,7 +80,7 @@ func TestBinanceProvider_GetTickerPrices(t *testing.T) {
 	})
 }
 
-func TestBinanceProvider_getSubscriptionMsgs(t *testing.T) {
+func TestBinanceProvider_GetSubscriptionMsgs(t *testing.T) {
 	provider := &BinanceProvider{
 		subscribedPairs: map[string]types.CurrencyPair{},
 	}
@@ -87,7 +88,7 @@ func TestBinanceProvider_getSubscriptionMsgs(t *testing.T) {
 		{Base: "ATOM", Quote: "USDT"},
 	}
 
-	subMsgs := provider.getSubscriptionMsgs(cps...)
+	subMsgs := provider.GetSubscriptionMsgs(cps...)
 
 	msg, _ := json.Marshal(subMsgs[0])
 	require.Equal(t, "{\"method\":\"SUBSCRIBE\",\"params\":[\"atomusdt@ticker\",\"atomusdt@kline_1m\"],\"id\":1}", string(msg))

@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"strings"
 
 	"price-feeder/oracle/types"
 
@@ -144,47 +143,6 @@ func TestFinProvider_GetTickerPrices(t *testing.T) {
 		prices, err := p.GetTickerPrices(types.CurrencyPair{Base: "ATOM", Quote: "USDT"})
 		require.Error(t, err)
 		require.Nil(t, prices)
-	})
-}
-
-func TestFinProvideR_GetCandlePrices(t *testing.T) {
-	p := NewFinProvider(Endpoint{})
-
-	t.Run("valid_request_single_candle", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-			requestUrl := req.URL.String()
-			resp := ""
-			if requestUrl == "/api/coingecko/pairs" {
-				resp = `{
-					"pairs": [
-						{"base":"KUJI","pool_id":"kujiraTESTADDRESS","target":"axlUSDC","ticker_id":"KUJI_axlUSDC"}
-					]
-				}`
-			} else {
-				require.Equal(t, "/api/trades/candles?contract=kujiraTESTADDRESS", strings.Split(requestUrl, "&")[0])
-				resp = `{
-					"candles": [
-						{"bin":"2022-08-07T14:05:00.000000Z","close":"0.65600004530055243509","high":"0.65600004530055243509","low":"0.65600004530055243509","open":"0.65600004530055243509","volume":"7646000"},
-						{"bin":"2022-08-07T14:10:00.000000Z","close":"0.65600004530055243509","high":"0.65600004530055243509","low":"0.65600004530055243509","open":"0.65600004530055243509","volume":"0"},
-						{"bin":"2022-08-07T14:15:00.000000Z","close":"0.65928507215810458196","high":"0.65928507215810458196","low":"0.65928507215810458196","open":"0.65928507215810458196","volume":"622000000"}
-					]
-				}`
-			}
-			rw.Write([]byte(resp))
-		}))
-		defer server.Close()
-		p.client = server.Client()
-		p.baseURL = server.URL
-		prices, err := p.GetCandlePrices(types.CurrencyPair{Base: "KUJI", Quote: "AXLUSDC"})
-		require.NoError(t, err)
-		require.Len(t, prices, 1)
-		require.Len(t, prices["KUJIAXLUSDC"], 3)
-		require.Equal(t, sdk.MustNewDecFromStr("0.656000045300552435"), prices["KUJIAXLUSDC"][0].Price)
-		require.Equal(t, sdk.MustNewDecFromStr("0.659285072158104581"), prices["KUJIAXLUSDC"][2].Price)
-		require.Equal(t, sdk.MustNewDecFromStr("7646000"), prices["KUJIAXLUSDC"][0].Volume)
-		require.Equal(t, sdk.MustNewDecFromStr("0"), prices["KUJIAXLUSDC"][1].Volume)
-		require.Equal(t, int64(1659881100), prices["KUJIAXLUSDC"][0].TimeStamp)
-		require.Equal(t, int64(1659881700), prices["KUJIAXLUSDC"][2].TimeStamp)
 	})
 }
 

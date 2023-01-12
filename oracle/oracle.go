@@ -6,10 +6,10 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
-	"net/http"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/rs/zerolog"
@@ -189,7 +189,6 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 	g := new(errgroup.Group)
 	mtx := new(sync.Mutex)
 	providerPrices := make(provider.AggregatedProviderPrices)
-	providerCandles := make(provider.AggregatedProviderCandles)
 	requiredRates := make(map[string]struct{})
 
 	for providerName, currencyPairs := range o.providerPairs {
@@ -209,7 +208,6 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 
 		g.Go(func() error {
 			prices := make(map[string]types.TickerPrice, 0)
-			candles := make(map[string][]types.CandlePrice, 0)
 			ch := make(chan struct{})
 			errCh := make(chan error, 1)
 
@@ -221,11 +219,6 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 					errCh <- err
 				}
 
-				candles, err = priceProvider.GetCandlePrices(currencyPairs...)
-				if err != nil {
-					telemetry.IncrCounter(1, "failure", "provider", "type", "candle")
-					errCh <- err
-				}
 			}()
 
 			select {
@@ -243,10 +236,10 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 			// e.g.: {ProviderKraken: {"ATOM": <price, volume>, ...}}
 			mtx.Lock()
 			for _, pair := range currencyPairs {
-				success := SetProviderTickerPricesAndCandles(providerName, providerPrices, providerCandles, prices, candles, pair)
+				success := SetProviderTickerPrices(providerName, providerPrices, prices, pair)
 				if !success {
 					mtx.Unlock()
-					return fmt.Errorf("failed to find any exchange rates in provider responses")
+					return fmt.Errorf("failed to find any exchange rates in provider responses for '%s'", pair)
 				}
 			}
 
@@ -259,9 +252,18 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 		o.logger.Debug().Err(err).Msg("failed to get ticker prices from provider")
 	}
 
+	providerPrices, err := FilterStaleTickers(
+		o.logger,
+		providerPrices,
+		30,
+	)
+
+	if err != nil {
+		return err
+	}
+
 	computedPrices, err := GetComputedPrices(
 		o.logger,
-		providerCandles,
 		providerPrices,
 		o.providerPairs,
 		o.deviations,
@@ -271,15 +273,21 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 	}
 
 	if len(computedPrices) != len(requiredRates) {
-		return fmt.Errorf("unable to get prices for all exchange candles")
-	}
-	for base := range requiredRates {
-		if _, ok := computedPrices[base]; !ok {
-			return fmt.Errorf("reported prices were not equal to required rates, missed: %s", base)
+		missingPrices := []string{}
+		for base := range requiredRates {
+			if _, ok := computedPrices[base]; !ok {
+				missingPrices = append(missingPrices, base)
+			}
 		}
+
+		return fmt.Errorf(
+			"unable to get prices for: %s",
+			strings.Join(missingPrices, ", "),
+		)
 	}
 
 	o.prices = computedPrices
+
 	return nil
 }
 
@@ -289,15 +297,14 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 // and the VWAP formula instead.
 func GetComputedPrices(
 	logger zerolog.Logger,
-	providerCandles provider.AggregatedProviderCandles,
 	providerPrices provider.AggregatedProviderPrices,
 	providerPairs map[provider.Name][]types.CurrencyPair,
 	deviations map[string]sdk.Dec,
 ) (prices map[string]sdk.Dec, err error) {
-	// convert any non-USD denominated candles into USD
-	convertedCandles, err := convertCandlesToUSD(
+
+	convertedTickers, err := convertTickersToUSD(
 		logger,
-		providerCandles,
+		providerPrices,
 		providerPairs,
 		deviations,
 	)
@@ -305,53 +312,32 @@ func GetComputedPrices(
 		return nil, err
 	}
 
-	// filter out any erroneous candles
-	filteredCandles, err := FilterCandleDeviations(
+	for providerName, tickerPrices := range convertedTickers {
+		for denom, tickerPrice := range tickerPrices {
+			provider.TelemetryProviderPrice(
+				providerName,
+				denom,
+				float32(tickerPrice.Price.MustFloat64()),
+				float32(tickerPrice.Volume.MustFloat64()),
+			)
+		}
+	}
+
+	filteredProviderPrices, err := FilterTickerDeviations(
 		logger,
-		convertedCandles,
+		convertedTickers,
 		deviations,
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	// attempt to use candles for TVWAP calculations
-	tvwapPrices, err := ComputeTVWAP(filteredCandles)
+	vwapPrices, err := ComputeVWAP(filteredProviderPrices)
 	if err != nil {
 		return nil, err
 	}
 
-	// If TVWAP candles are not available or were filtered out due to staleness,
-	// use most recent prices & VWAP instead.
-	if len(tvwapPrices) == 0 {
-		convertedTickers, err := convertTickersToUSD(
-			logger,
-			providerPrices,
-			providerPairs,
-			deviations,
-		)
-		if err != nil {
-			return nil, err
-		}
-
-		filteredProviderPrices, err := FilterTickerDeviations(
-			logger,
-			convertedTickers,
-			deviations,
-		)
-		if err != nil {
-			return nil, err
-		}
-
-		vwapPrices, err := ComputeVWAP(filteredProviderPrices)
-		if err != nil {
-			return nil, err
-		}
-
-		return vwapPrices, nil
-	}
-
-	return tvwapPrices, nil
+	return vwapPrices, nil
 }
 
 // SetProviderTickerPricesAndCandles flattens and collects prices for
@@ -383,6 +369,28 @@ func SetProviderTickerPricesAndCandles(
 	}
 
 	return pricesOk || candlesOk
+}
+
+// SetProviderTickerPrices flattens and collects prices for
+// tickers based on the base currency per provider.
+// Returns true if at least one of price or candle exists.
+func SetProviderTickerPrices(
+	providerName provider.Name,
+	providerPrices provider.AggregatedProviderPrices,
+	prices map[string]types.TickerPrice,
+	pair types.CurrencyPair,
+) (success bool) {
+	if _, ok := providerPrices[providerName]; !ok {
+		providerPrices[providerName] = make(map[string]types.TickerPrice)
+	}
+
+	tp, pricesOk := prices[pair.String()]
+
+	if pricesOk {
+		providerPrices[providerName][pair.Base] = tp
+	}
+
+	return pricesOk
 }
 
 // GetParamCache returns the last updated parameters of the x/oracle module
@@ -474,11 +482,14 @@ func NewProvider(
 	case provider.ProviderOsmosis:
 		return provider.NewOsmosisProvider(endpoint), nil
 
-	case provider.ProviderOsmosisV2:
-		return provider.NewOsmosisV2Provider(ctx, logger, endpoint, providerPairs...)
+	// case provider.ProviderOsmosisV2:
+	// 	return provider.NewOsmosisV2Provider(ctx, logger, endpoint, providerPairs...)
 
 	case provider.ProviderHuobi:
 		return provider.NewHuobiProvider(ctx, logger, endpoint, providerPairs...)
+
+	case provider.ProviderBybit:
+		return provider.NewBybitProvider(ctx, logger, endpoint, providerPairs...)
 
 	case provider.ProviderCoinbase:
 		return provider.NewCoinbaseProvider(ctx, logger, endpoint, providerPairs...)
@@ -498,8 +509,33 @@ func NewProvider(
 	case provider.ProviderCrypto:
 		return provider.NewCryptoProvider(ctx, logger, endpoint, providerPairs...)
 
+	case provider.ProviderBitfinex:
+		return provider.NewBitfinexProvider(ctx, logger, endpoint, providerPairs...)
+
+	case provider.ProviderHitbtc:
+		return provider.NewHitbtcProvider(ctx, logger, endpoint, providerPairs...)
+
+	case provider.ProviderKucoin:
+		return provider.NewKucoinProvider(ctx, logger, endpoint, providerPairs...)
+
+	case provider.ProviderBitforex:
+		return provider.NewBitforexProvider(ctx, logger, endpoint, providerPairs...)
+
+	case provider.ProviderPoloniex:
+		return provider.NewPoloniexProvider(ctx, logger, endpoint, providerPairs...)
+
+	case provider.ProviderPhemex:
+		return provider.NewPhemexProvider(ctx, logger, endpoint, providerPairs...)
+
+	case provider.ProviderLbank:
+		return provider.NewLbankProvider(ctx, logger, endpoint, providerPairs...)
+
 	case provider.ProviderMock:
 		return provider.NewMockProvider(), nil
+
+	case provider.ProviderFin:
+		return provider.NewFinProvider(endpoint), nil
+
 	}
 
 	return nil, fmt.Errorf("provider %s not found", providerName)
@@ -530,10 +566,6 @@ func (o *Oracle) tick(ctx context.Context) error {
 		return err
 	}
 
-	if err := o.SetPrices(ctx); err != nil {
-		return err
-	}
-
 	// Get oracle vote period, next block height, current vote period, and index
 	// in the vote period.
 	oracleVotePeriod := int64(oracleParams.VotePeriod)
@@ -541,26 +573,32 @@ func (o *Oracle) tick(ctx context.Context) error {
 	currentVotePeriod := math.Floor(float64(nextBlockHeight) / float64(oracleVotePeriod))
 	indexInVotePeriod := nextBlockHeight % oracleVotePeriod
 
+	o.logger.Debug().
+		Int64("vote_period", oracleVotePeriod).
+		Float64("previous_vote_period", o.previousVotePeriod).
+		Float64("current_vote_period", currentVotePeriod).
+		Int64("indexInVotePeriod", indexInVotePeriod).
+		Msg("")
+
 	// Skip until new voting period. Specifically, skip when:
 	// index [0, oracleVotePeriod - 1] > oracleVotePeriod - 2 OR index is 0
 	if (o.previousVotePeriod != 0 && currentVotePeriod == o.previousVotePeriod) ||
-		oracleVotePeriod-indexInVotePeriod < 2 {
+		(indexInVotePeriod > 0 && oracleVotePeriod-indexInVotePeriod > 4) {
+		// oracleVotePeriod-indexInVotePeriod < 2 || (indexInVotePeriod > 0 && indexInVotePeriod < int64(float64(oracleVotePeriod)*0.75)) {
 		o.logger.Info().
-			Int64("vote_period", oracleVotePeriod).
-			Float64("previous_vote_period", o.previousVotePeriod).
-			Float64("current_vote_period", currentVotePeriod).
 			Msg("skipping until next voting period")
 
 		return nil
+	}
+
+	if err := o.SetPrices(ctx); err != nil {
+		return err
 	}
 
 	// If we're past the voting period we needed to hit, reset and submit another
 	// prevote.
 	if o.previousVotePeriod != 0 && currentVotePeriod-o.previousVotePeriod != 1 {
 		o.logger.Info().
-			Int64("vote_period", oracleVotePeriod).
-			Float64("previous_vote_period", o.previousVotePeriod).
-			Float64("current_vote_period", currentVotePeriod).
 			Msg("missing vote during voting period")
 		telemetry.IncrCounter(1, "vote", "failure", "missed")
 
@@ -644,7 +682,7 @@ func (o *Oracle) tick(ctx context.Context) error {
 }
 
 func (o *Oracle) healthchecksPing() {
-    for url, client := range o.healthchecks {
+	for url, client := range o.healthchecks {
 		o.logger.Info().Msg("updating healthcheck status")
 		_, err := client.Get(url)
 		if err != nil {

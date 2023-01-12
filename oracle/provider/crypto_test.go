@@ -4,10 +4,11 @@ import (
 	"context"
 	"testing"
 
+	"price-feeder/oracle/types"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
-	"price-feeder/oracle/types"
 )
 
 func TestCryptoProvider_GetTickerPrices(t *testing.T) {
@@ -24,7 +25,7 @@ func TestCryptoProvider_GetTickerPrices(t *testing.T) {
 		volume := sdk.MustNewDecFromStr("2396974.02000000")
 
 		tickerMap := map[string]types.TickerPrice{}
-		tickerMap["ATOMUSDT"] = types.TickerPrice{
+		tickerMap["ATOM_USDT"] = types.TickerPrice{
 			Price:  lastPrice,
 			Volume: volume,
 		}
@@ -44,12 +45,12 @@ func TestCryptoProvider_GetTickerPrices(t *testing.T) {
 		volume := sdk.MustNewDecFromStr("2396974.02000000")
 
 		tickerMap := map[string]types.TickerPrice{}
-		tickerMap["ATOMUSDT"] = types.TickerPrice{
+		tickerMap["ATOM_USDT"] = types.TickerPrice{
 			Price:  lastPriceAtom,
 			Volume: volume,
 		}
 
-		tickerMap["LUNAUSDT"] = types.TickerPrice{
+		tickerMap["LUNA_USDT"] = types.TickerPrice{
 			Price:  lastPriceLuna,
 			Volume: volume,
 		}
@@ -70,53 +71,13 @@ func TestCryptoProvider_GetTickerPrices(t *testing.T) {
 	t.Run("invalid_request_invalid_ticker", func(t *testing.T) {
 		prices, err := p.GetTickerPrices(types.CurrencyPair{Base: "FOO", Quote: "BAR"})
 		require.Error(t, err)
-		require.Equal(t, "crypto failed to get ticker price for FOOBAR", err.Error())
-		require.Nil(t, prices)
-	})
-}
-
-func TestCryptoProvider_GetCandlePrices(t *testing.T) {
-	p, err := NewCryptoProvider(
-		context.TODO(),
-		zerolog.Nop(),
-		Endpoint{},
-		types.CurrencyPair{Base: "ATOM", Quote: "USDT"},
-	)
-	require.NoError(t, err)
-
-	t.Run("valid_request_single_candle", func(t *testing.T) {
-		price := "34.689998626708984000"
-		volume := "2396974.000000000000000000"
-		timeStamp := int64(1000000)
-
-		candle := CryptoCandle{
-			Volume:    volume,
-			Close:     price,
-			Timestamp: timeStamp,
-		}
-
-		p.setCandlePair("ATOM_USDT", candle)
-
-		prices, err := p.GetCandlePrices(types.CurrencyPair{Base: "ATOM", Quote: "USDT"})
-		require.NoError(t, err)
-		require.Len(t, prices, 1)
-		priceDec, _ := sdk.NewDecFromStr(price)
-		volumeDec, _ := sdk.NewDecFromStr(volume)
-
-		require.Equal(t, priceDec, prices["ATOMUSDT"][0].Price)
-		require.Equal(t, volumeDec, prices["ATOMUSDT"][0].Volume)
-		require.Equal(t, timeStamp*1000, prices["ATOMUSDT"][0].TimeStamp)
-	})
-
-	t.Run("invalid_request_invalid_candle", func(t *testing.T) {
-		prices, err := p.GetCandlePrices(types.CurrencyPair{Base: "FOO", Quote: "BAR"})
-		require.EqualError(t, err, "crypto failed to get candle price for FOOBAR")
+		require.Equal(t, "crypto failed to get ticker price for FOO_BAR", err.Error())
 		require.Nil(t, prices)
 	})
 }
 
 func TestCryptoCurrencyPairToCryptoPair(t *testing.T) {
 	cp := types.CurrencyPair{Base: "ATOM", Quote: "USDT"}
-	cryptoSymbol := currencyPairToCryptoPair(cp)
+	cryptoSymbol := cp.Join("_")
 	require.Equal(t, cryptoSymbol, "ATOM_USDT")
 }

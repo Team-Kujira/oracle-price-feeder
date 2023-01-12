@@ -3,21 +3,20 @@ package provider
 import (
 	"context"
 	"encoding/json"
-	"testing"
-
 	"price-feeder/oracle/types"
+	"testing"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 )
 
-func TestCoinbaseProvider_GetTickerPrices(t *testing.T) {
-	p, err := NewCoinbaseProvider(
+func TestBybitProvider_GetTickerPrices(t *testing.T) {
+	p, err := NewBybitProvider(
 		context.TODO(),
 		zerolog.Nop(),
 		Endpoint{},
-		types.CurrencyPair{Base: "BTC", Quote: "USDT"},
+		types.CurrencyPair{Base: "ATOM", Quote: "USDT"},
 	)
 	require.NoError(t, err)
 
@@ -25,10 +24,15 @@ func TestCoinbaseProvider_GetTickerPrices(t *testing.T) {
 		lastPrice := "34.69000000"
 		volume := "2396974.02000000"
 
-		tickerMap := map[string]CoinbaseTicker{}
-		tickerMap["ATOM-USDT"] = CoinbaseTicker{
-			Price:  lastPrice,
-			Volume: volume,
+		tickerMap := map[string]BybitTicker{}
+		tickerMap["tickers.ATOMUSDT"] = BybitTicker{
+			Topic: "tickers.ATOMUSDT",
+			Data: BybitTickerData{
+				Price:  lastPrice,
+				Volume: volume,
+				Symbol: "ATOMUSDT",
+				Time:   16729462890000,
+			},
 		}
 
 		p.tickers = tickerMap
@@ -41,43 +45,54 @@ func TestCoinbaseProvider_GetTickerPrices(t *testing.T) {
 	})
 
 	t.Run("valid_request_multi_ticker", func(t *testing.T) {
-		lastPriceAtom := "34.69000000"
-		lastPriceUmee := "41.35000000"
-		volume := "2396974.02000000"
+		lastPriceAtom := "12.345"
+		lastPriceLuna := "6.7890"
+		volume := "12345678.9"
 
-		tickerMap := map[string]CoinbaseTicker{}
-		tickerMap["ATOM-USDT"] = CoinbaseTicker{
-			Price:  lastPriceAtom,
-			Volume: volume,
+		tickerMap := map[string]BybitTicker{}
+		tickerMap["tickers.ATOMUSDT"] = BybitTicker{
+			Topic: "tickers.ATOMUSDT",
+			Data: BybitTickerData{
+				Price:  lastPriceAtom,
+				Volume: volume,
+				Symbol: "ATOMUSDT",
+				Time:   16729462890000,
+			},
 		}
 
-		tickerMap["UMEE-USDT"] = CoinbaseTicker{
-			Price:  lastPriceUmee,
-			Volume: volume,
+		tickerMap["tickers.LUNAUSDT"] = BybitTicker{
+			Topic: "tickers.LUNAUSDT",
+			Data: BybitTickerData{
+				Price:  lastPriceLuna,
+				Volume: volume,
+				Symbol: "LUNAUSDT",
+				Time:   16729462890000,
+			},
 		}
 
 		p.tickers = tickerMap
 		prices, err := p.GetTickerPrices(
 			types.CurrencyPair{Base: "ATOM", Quote: "USDT"},
-			types.CurrencyPair{Base: "UMEE", Quote: "USDT"},
+			types.CurrencyPair{Base: "LUNA", Quote: "USDT"},
 		)
 		require.NoError(t, err)
 		require.Len(t, prices, 2)
 		require.Equal(t, sdk.MustNewDecFromStr(lastPriceAtom), prices["ATOMUSDT"].Price)
 		require.Equal(t, sdk.MustNewDecFromStr(volume), prices["ATOMUSDT"].Volume)
-		require.Equal(t, sdk.MustNewDecFromStr(lastPriceUmee), prices["UMEEUSDT"].Price)
-		require.Equal(t, sdk.MustNewDecFromStr(volume), prices["UMEEUSDT"].Volume)
+		require.Equal(t, sdk.MustNewDecFromStr(lastPriceLuna), prices["LUNAUSDT"].Price)
+		require.Equal(t, sdk.MustNewDecFromStr(volume), prices["LUNAUSDT"].Volume)
 	})
 
 	t.Run("invalid_request_invalid_ticker", func(t *testing.T) {
 		prices, err := p.GetTickerPrices(types.CurrencyPair{Base: "FOO", Quote: "BAR"})
-		require.EqualError(t, err, "coinbase failed to get ticker price for FOO-BAR")
+		require.Error(t, err)
+		require.Equal(t, "bybit failed to get ticker price for FOOBAR", err.Error())
 		require.Nil(t, prices)
 	})
 }
 
-func TestCoinbaseProvider_GetSubscriptionMsgs(t *testing.T) {
-	provider := &CoinbaseProvider{
+func TestBybitProvider_GetSubscriptionMsgs(t *testing.T) {
+	provider := &BybitProvider{
 		subscribedPairs: map[string]types.CurrencyPair{},
 	}
 	cps := []types.CurrencyPair{
@@ -86,5 +101,5 @@ func TestCoinbaseProvider_GetSubscriptionMsgs(t *testing.T) {
 	subMsgs := provider.GetSubscriptionMsgs(cps...)
 
 	msg, _ := json.Marshal(subMsgs[0])
-	require.Equal(t, "{\"type\":\"subscribe\",\"product_ids\":[\"ATOM-USDT\"],\"channels\":[\"matches\",\"ticker\"]}", string(msg))
+	require.Equal(t, "{\"op\":\"subscribe\",\"args\":[\"tickers.ATOMUSDT\"]}", string(msg))
 }

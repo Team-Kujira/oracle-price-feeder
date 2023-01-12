@@ -7,8 +7,9 @@ import (
 	"strings"
 	"time"
 
-	sdk "github.com/cosmos/cosmos-sdk/types"
 	"price-feeder/oracle/types"
+
+	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
 const (
@@ -40,9 +41,8 @@ func NewMockProvider() *MockProvider {
 	}
 }
 
-// SubscribeCurrencyPairs performs a no-op since mock does not use websockets
-func (p MockProvider) SubscribeCurrencyPairs(pairs ...types.CurrencyPair) error {
-	return nil
+func (p MockProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPrice, error) {
+	return types.TickerPrice{}, nil
 }
 
 func (p MockProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
@@ -63,7 +63,7 @@ func (p MockProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[string]t
 
 	tickerMap := make(map[string]struct{})
 	for _, cp := range pairs {
-		tickerMap[strings.ToUpper(cp.String())] = struct{}{}
+		tickerMap[cp.String()] = struct{}{}
 	}
 
 	// Records are of the form [base, quote, price, volume] and we skip the first
@@ -150,3 +150,22 @@ func (p MockProvider) GetAvailablePairs() (map[string]struct{}, error) {
 
 	return availablePairs, nil
 }
+
+// SubscribeCurrencyPairs performs a no-op since fin does not use websockets
+func (p MockProvider) SubscribeCurrencyPairs(cps ...types.CurrencyPair) error {
+	return nil
+}
+
+func (p MockProvider) GetSubscriptionMsgs(cps ...types.CurrencyPair) []interface{} {
+	return nil
+}
+
+func (p MockProvider) GetSubscribedPair(s string) (types.CurrencyPair, bool) {
+	return types.CurrencyPair{}, true
+}
+
+func (p MockProvider) SendSubscriptionMsgs(msgs []interface{}) error {
+	return nil
+}
+
+func (p MockProvider) SetSubscribedPair(cp types.CurrencyPair) {}
