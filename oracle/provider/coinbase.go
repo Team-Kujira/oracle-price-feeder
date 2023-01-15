@@ -41,19 +41,19 @@ type (
 		reconnectTimer  *time.Ticker
 		mtx             sync.RWMutex
 		endpoints       Endpoint
-		tickers         map[string]CoinbaseTicker     // Symbol => CoinbaseTicker
-		subscribedPairs map[string]types.CurrencyPair // Symbol => types.CurrencyPair
+		tickers         map[string]CoinbaseWsTickerMsg // Symbol => CoinbaseWsTickerMsg
+		subscribedPairs map[string]types.CurrencyPair  // Symbol => types.CurrencyPair
 	}
 
-	// CoinbaseSubscriptionMsg Msg to subscribe to all channels.
-	CoinbaseSubscriptionMsg struct {
+	// CoinbaseWsSubscriptionMsg Msg to subscribe to all channels.
+	CoinbaseWsSubscriptionMsg struct {
 		Type       string   `json:"type"`        // ex. "subscribe"
 		ProductIDs []string `json:"product_ids"` // streams to subscribe ex.: ["BOT-USDT", ...]
 		Channels   []string `json:"channels"`    // channels to subscribe to ex.: "ticker"
 	}
 
-	// CoinbaseTicker defines the ticker info we'd like to save.
-	CoinbaseTicker struct {
+	// CoinbaseWsTickerMsg defines the ticker info we'd like to save.
+	CoinbaseWsTickerMsg struct {
 		ProductID string `json:"product_id"` // ex.: ATOM-USDT
 		Price     string `json:"price"`      // ex.: 523.0
 		Volume    string `json:"volume_24h"` // 24-hour volume
@@ -98,7 +98,7 @@ func NewCoinbaseProvider(
 		logger:          coinbaseLogger,
 		reconnectTimer:  time.NewTicker(coinbasePingCheck),
 		endpoints:       endpoints,
-		tickers:         map[string]CoinbaseTicker{},
+		tickers:         map[string]CoinbaseWsTickerMsg{},
 		subscribedPairs: map[string]types.CurrencyPair{},
 	}
 
@@ -128,10 +128,10 @@ func (p *CoinbaseProvider) GetSubscriptionMsgs(cps ...types.CurrencyPair) []inte
 		productIDs[i] = cp.Join("-")
 	}
 
-	subscriptionMsgs[0] = CoinbaseSubscriptionMsg{
+	subscriptionMsgs[0] = CoinbaseWsSubscriptionMsg{
 		Type:       "subscribe",
 		ProductIDs: productIDs,
-		Channels:   []string{"ticker"},
+		Channels:   []string{"ticker_batch"},
 	}
 
 	return subscriptionMsgs
@@ -179,7 +179,7 @@ func (p *CoinbaseProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPr
 
 func (p *CoinbaseProvider) messageReceived(messageType int, bz []byte) {
 	var (
-		tickerResp CoinbaseTicker
+		tickerResp CoinbaseWsTickerMsg
 		tickerErr  error
 	)
 
@@ -197,7 +197,7 @@ func (p *CoinbaseProvider) messageReceived(messageType int, bz []byte) {
 		Msg("Error on receive message")
 }
 
-func (p *CoinbaseProvider) setTickerPair(ticker CoinbaseTicker) {
+func (p *CoinbaseProvider) setTickerPair(ticker CoinbaseWsTickerMsg) {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 
@@ -229,7 +229,7 @@ func (p *CoinbaseProvider) GetAvailablePairs() (map[string]struct{}, error) {
 	return availablePairs, nil
 }
 
-func (ticker CoinbaseTicker) toTickerPrice() (types.TickerPrice, error) {
+func (ticker CoinbaseWsTickerMsg) toTickerPrice() (types.TickerPrice, error) {
 	timestamp, err := time.Parse(CoinbaseTimeFormat, ticker.Time)
 	if err != nil {
 		fmt.Println(err)
