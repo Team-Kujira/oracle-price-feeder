@@ -54,6 +54,7 @@ var (
 		provider.ProviderMexc:      {},
 		provider.ProviderCrypto:    {},
 		provider.ProviderMock:      {},
+		provider.ProviderStride:    {},
 	}
 
 	// maxDeviationThreshold is the maxmimum allowed amount of standard

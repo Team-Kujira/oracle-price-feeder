@@ -38,6 +38,7 @@ const (
 	ProviderMexc      Name = "mexc"
 	ProviderCrypto    Name = "crypto"
 	ProviderMock      Name = "mock"
+	ProviderStride    Name = "stride"
 )
 
 var (

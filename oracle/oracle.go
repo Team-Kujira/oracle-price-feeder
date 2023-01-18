@@ -536,6 +536,9 @@ func NewProvider(
 	case provider.ProviderFin:
 		return provider.NewFinProvider(endpoint), nil
 
+	case provider.ProviderStride:
+		return provider.NewStrideProvider(endpoint), nil
+
 	}
 
 	return nil, fmt.Errorf("provider %s not found", providerName)
