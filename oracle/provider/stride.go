@@ -51,8 +51,6 @@ func (p *StrideProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPric
 }
 
 func (p *StrideProvider) GetTickerPrices(cps ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
-	fmt.Println(cps)
-
 	resp, err := http.Get(p.baseURL + "/api/Stride-Labs/stride/stakeibc/host_zone")
 	if err != nil {
 		return nil, err
@@ -88,8 +86,6 @@ func (p *StrideProvider) GetTickerPrices(cps ...types.CurrencyPair) (map[string]
 			}
 		}
 	}
-
-	fmt.Println(tickerPrices)
 
 	return tickerPrices, nil
 }
