@@ -9,13 +9,13 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"price-feeder/oracle/types"
 
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/gorilla/websocket"
 	"github.com/rs/zerolog"
 )
@@ -45,29 +45,43 @@ type (
 		subscribedPairs map[string]types.CurrencyPair // Symbol => types.CurrencyPair
 	}
 
-	// HuobiTicker defines the response type for the channel and the tick object for a
-	// given ticker/symbol.
 	HuobiTicker struct {
-		CH   string    `json:"ch"` // Channel name. Format：market.$symbol.ticker
-		Tick HuobiTick `json:"tick"`
-		TS   int64     `json:"ts"` // Timestamp
+		Price  float64
+		Volume float64
+		Time   int64
 	}
 
-	// HuobiTick defines the response type for the last 24h market summary and the last
-	// traded price for a given ticker/symbol.
-	HuobiTick struct {
-		Vol       float64 `json:"amount"`    // Accumulated trading volume of last 24 hours
-		LastPrice float64 `json:"lastPrice"` // Last traded price
-	}
-
-	// HuobiSubscriptionMsg Msg to subscribe to one ticker channel at time.
-	HuobiSubscriptionMsg struct {
+	HuobiWsSubscriptionMsg struct {
 		Sub string `json:"sub"` // channel to subscribe market.$symbol.ticker
 	}
 
-	// HuobiSubscriptionResp the response structure for a Huobi subscription response
-	HuobiSubscriptionResp struct {
+	// b'{"id":null,"status":"ok","subbed":"market.btcusdt.trade.detail","ts":1673949735621}'
+	HuobiWsSubscriptionResponse struct {
 		Status string `json:"status"`
+		Subbed string `json:"subbed"`
+	}
+
+	HuobiWsTradeMsg struct {
+		Channel string           `json:"ch"`
+		Tick    HuobiWsTradeTick `json:"tick"`
+	}
+
+	HuobiWsTradeTick struct {
+		Data []HuobiWsTradeTickData `json:"data"`
+	}
+
+	HuobiWsTradeTickData struct {
+		Price float64 `json:"price"`
+		Time  int64   `json:"ts"`
+	}
+
+	HuobiRestTickerResponse struct {
+		Data []HuobiRestTicker `json:"data"`
+	}
+
+	HuobiRestTicker struct {
+		Symbol string  `json:"symbol"`
+		Volume float64 `json:"amount"`
 	}
 
 	// HuobiPairsSummary defines the response structure for an Huobi pairs
@@ -132,8 +146,8 @@ func NewHuobiProvider(
 func (p *HuobiProvider) GetSubscriptionMsgs(cps ...types.CurrencyPair) []interface{} {
 	subscriptionMsgs := make([]interface{}, len(cps))
 	for i, cp := range cps {
-		subscriptionMsgs[i] = HuobiSubscriptionMsg{
-			Sub: strings.ToLower("market." + cp.String() + ".ticker"),
+		subscriptionMsgs[i] = HuobiWsSubscriptionMsg{
+			Sub: strings.ToLower("market." + cp.String() + ".trade.detail"),
 		}
 	}
 	return subscriptionMsgs
@@ -164,6 +178,37 @@ func (p *HuobiProvider) SendSubscriptionMsgs(msgs []interface{}) error {
 
 // GetTickerPrices returns the tickerPrices based on the saved map.
 func (p *HuobiProvider) GetTickerPrices(cps ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
+
+	go func(p *HuobiProvider) {
+		requiredSymbols := make(map[string]string, len(cps))
+
+		for _, cp := range cps {
+			symbol := strings.ToLower(cp.String())
+			requiredSymbols[symbol] = "market." + symbol + ".trade.detail"
+		}
+
+		resp, err := http.Get(p.endpoints.Rest + "/market/tickers")
+		if err != nil {
+			return
+		}
+		defer resp.Body.Close()
+
+		var tickerResp HuobiRestTickerResponse
+		err = json.NewDecoder(resp.Body).Decode(&tickerResp)
+		if err != nil {
+			return
+		}
+
+		for _, ticker := range tickerResp.Data {
+			if symbol, ok := requiredSymbols[ticker.Symbol]; ok {
+				p.setTickerVolume(symbol, ticker.Volume)
+			}
+		}
+
+		p.logger.Info().Msg("Done updating volumes")
+
+	}(p)
+
 	return getTickerPrices(p, cps)
 }
 
@@ -171,14 +216,18 @@ func (p *HuobiProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPrice
 	p.mtx.RLock()
 	defer p.mtx.RUnlock()
 
-	key := strings.ToLower("market." + cp.String() + ".ticker")
+	key := strings.ToLower("market." + cp.String() + ".trade.detail")
 
 	ticker, ok := p.tickers[key]
 	if !ok {
 		return types.TickerPrice{}, fmt.Errorf("huobi failed to get ticker price for %s", cp.String())
 	}
 
-	return ticker.toTickerPrice()
+	return types.TickerPrice{
+		Price:  sdk.MustNewDecFromStr(fmt.Sprintf("%f", ticker.Price)),
+		Volume: sdk.MustNewDecFromStr(fmt.Sprintf("%f", ticker.Volume)),
+		Time:   ticker.Time,
+	}, nil
 }
 
 // messageReceived handles the received data from the Huobi websocket. All return
@@ -201,28 +250,27 @@ func (p *HuobiProvider) messageReceived(messageType int, bz []byte) {
 	}
 
 	var (
-		tickerResp    HuobiTicker
-		tickerErr     error
-		subscribeResp HuobiSubscriptionResp
+		tradeMsg         HuobiWsTradeMsg
+		tradeErr         error
+		subscriptionResp HuobiWsSubscriptionResponse
 	)
 
 	// sometimes the message received is not a ticker or a candle response.
-	tickerErr = json.Unmarshal(bz, &tickerResp)
-	if tickerResp.Tick.LastPrice != 0 {
-		p.setTickerPair(tickerResp)
-		telemetryWebsocketMessage(ProviderHuobi, MessageTypeTicker)
+	tradeErr = json.Unmarshal(bz, &tradeMsg)
+	if err == nil && len(tradeMsg.Tick.Data) > 0 {
+		p.setTicker(tradeMsg)
+		telemetryWebsocketMessage(ProviderHuobi, MessageTypeTrade)
 		return
 	}
 
-	err = json.Unmarshal(bz, &subscribeResp)
-	if subscribeResp.Status == "ok" {
+	err = json.Unmarshal(bz, &subscriptionResp)
+	if err == nil && subscriptionResp.Status == "ok" {
 		return
 	}
 
 	p.logger.Error().
 		Int("length", len(bz)).
-		AnErr("ticker", tickerErr).
-		AnErr("subscribeResp", err).
+		AnErr("trade", tradeErr).
 		Str("msg", string(bz)).
 		Msg("Error on receive message")
 }
@@ -250,10 +298,35 @@ func (p *HuobiProvider) pong(bz []byte) {
 	}
 }
 
-func (p *HuobiProvider) setTickerPair(ticker HuobiTicker) {
+func (p *HuobiProvider) setTicker(tradeMsg HuobiWsTradeMsg) {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
-	p.tickers[ticker.CH] = ticker
+
+	symbol := tradeMsg.Channel
+	price := tradeMsg.Tick.Data[0].Price
+	timestamp := tradeMsg.Tick.Data[0].Time
+
+	if ticker, ok := p.tickers[symbol]; ok {
+		ticker.Price = price
+		ticker.Time = timestamp
+		p.tickers[symbol] = ticker
+	} else {
+		p.tickers[symbol] = HuobiTicker{
+			Price:  price,
+			Volume: 0,
+			Time:   timestamp,
+		}
+	}
+}
+
+func (p *HuobiProvider) setTickerVolume(symbol string, volume float64) {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+
+	if ticker, ok := p.tickers[symbol]; ok {
+		ticker.Volume = volume
+		p.tickers[symbol] = ticker
+	}
 }
 
 // GetAvailablePairs returns all pairs to which the provider can subscribe.
@@ -286,15 +359,4 @@ func decompressGzip(bz []byte) ([]byte, error) {
 	}
 
 	return io.ReadAll(r)
-}
-
-// toTickerPrice converts current HuobiTicker to TickerPrice.
-func (ticker HuobiTicker) toTickerPrice() (types.TickerPrice, error) {
-	return types.NewTickerPrice(
-		string(ProviderHuobi),
-		ticker.CH,
-		strconv.FormatFloat(ticker.Tick.LastPrice, 'f', -1, 64),
-		strconv.FormatFloat(ticker.Tick.Vol, 'f', -1, 64),
-		ticker.TS,
-	)
 }

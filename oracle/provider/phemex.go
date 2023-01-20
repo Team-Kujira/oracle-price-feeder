@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 	"net/url"
 	"price-feeder/oracle/types"
-	"strings"
 	"sync"
+	"time"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/gorilla/websocket"
@@ -17,7 +19,7 @@ import (
 const (
 	phemexWSHost   = "phemex.com"
 	phemexWSPath   = "/ws"
-	phemexRestHost = "api.phemex.com"
+	phemexRestHost = "https://api.phemex.com"
 )
 
 var _ Provider = (*PhemexProvider)(nil)
@@ -28,11 +30,17 @@ type (
 		logger          zerolog.Logger
 		mtx             sync.Mutex
 		endpoints       Endpoint
-		tickers         map[string]PhemexTickerMsg
+		tickers         map[string]PhemexTicker
 		subscribedPairs map[string]types.CurrencyPair
 	}
 
-	PhemexSubscriptionMsg struct {
+	PhemexTicker struct {
+		Price  int64
+		Volume int64
+		Time   int64
+	}
+
+	PhemexWsSubscriptionMsg struct {
 		ID     uint     `json:"id"`
 		Method string   `json:"method"`
 		Params []string `json:"params"`
@@ -48,15 +56,20 @@ type (
 		Message string `json:"message"`
 	}
 
-	PhemexTickerMsg struct {
-		Data      PhemexTicker `json:"spot_market24h"`
-		Timestamp uint64       `json:"timestamp"`
+	PhemexWsTradeMsg struct {
+		Type   string               `json:"type"`
+		Symbol string               `json:"symbol"`
+		Trades [][4]json.RawMessage `json:"trades"`
 	}
 
-	PhemexTicker struct {
-		Symbol string `json:"symbol"`
-		Price  uint64 `json:"lastEp"`
-		Volume uint64 `json:"volumeEv"`
+	PhemexRestTickerResponse struct {
+		Result PhemexRestTicker `json:"result"`
+	}
+
+	PhemexRestTicker struct {
+		Price  int64 `json:"lastEp"`
+		Volume int64 `json:"volumeEv"`
+		Time   int64 `json:"timestamp"`
 	}
 )
 
@@ -85,7 +98,7 @@ func NewPhemexProvider(
 	provider := &PhemexProvider{
 		logger:          phemexLogger,
 		endpoints:       endpoints,
-		tickers:         map[string]PhemexTickerMsg{},
+		tickers:         map[string]PhemexTicker{},
 		subscribedPairs: map[string]types.CurrencyPair{},
 	}
 
@@ -110,12 +123,14 @@ func NewPhemexProvider(
 }
 
 func (p *PhemexProvider) GetSubscriptionMsgs(cps ...types.CurrencyPair) []interface{} {
-	subscriptionMsgs := make([]interface{}, 1)
+	subscriptionMsgs := make([]interface{}, len(cps))
 
-	subscriptionMsgs[0] = PhemexSubscriptionMsg{
-		ID:     1,
-		Method: "spot_market24h.subscribe",
-		Params: []string{},
+	for i, cp := range cps {
+		subscriptionMsgs[i] = PhemexWsSubscriptionMsg{
+			ID:     1,
+			Method: "trade.subscribe",
+			Params: []string{"s" + cp.String()},
+		}
 	}
 
 	return subscriptionMsgs
@@ -144,7 +159,54 @@ func (p *PhemexProvider) SendSubscriptionMsgs(msgs []interface{}) error {
 	return p.wsc.AddSubscriptionMsgs(msgs)
 }
 
+// GetTickerPrices converts and returns all internally stored tickers and
+// updates the volume data of all tickers. The volume data is retrieved via
+// the REST endpoint which is takes some time. Therefore the update is run in
+// parallel and the update takes effect after the current values are returned
 func (p *PhemexProvider) GetTickerPrices(cps ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
+	go func(p *PhemexProvider) {
+		for _, cp := range cps {
+			client := &http.Client{}
+
+			req, err := http.NewRequest(
+				"GET", p.endpoints.Rest+"/md/spot/ticker/24hr", nil,
+			)
+			if err != nil {
+				p.logger.Err(err)
+				continue
+			}
+
+			query := req.URL.Query()
+			query.Add("symbol", "s"+cp.String())
+			req.URL.RawQuery = query.Encode()
+
+			resp, err := client.Do(req)
+			if err != nil {
+				p.logger.Err(err)
+				continue
+			}
+			defer resp.Body.Close()
+
+			body, err := ioutil.ReadAll(resp.Body)
+			if err != nil {
+				p.logger.Err(err)
+				continue
+			}
+
+			var tickerResponse PhemexRestTickerResponse
+
+			err = json.Unmarshal(body, &tickerResponse)
+			if err != nil {
+				p.logger.Err(err)
+				continue
+			}
+
+			p.setTickerVolume("s"+cp.String(), tickerResponse.Result.Volume)
+		}
+
+		p.logger.Info().Msg("Done updating volumes")
+	}(p)
+
 	return getTickerPrices(p, cps)
 }
 
@@ -159,44 +221,24 @@ func (p *PhemexProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPric
 		return types.TickerPrice{}, fmt.Errorf("phemex failed to get ticker price for %s", key)
 	}
 
-	price, err := sdk.NewDecFromStr(fmt.Sprintf("%d", ticker.Data.Price))
-	if err != nil {
-		return types.TickerPrice{}, fmt.Errorf("phemex failed to convert ticker price for %s", key)
-	}
-
-	price = price.QuoInt64(100000000)
-
-	volume, err := sdk.NewDecFromStr(fmt.Sprintf("%d", ticker.Data.Volume))
-	if err != nil {
-		return types.TickerPrice{}, fmt.Errorf("phemex failed to convert ticker price for %s", key)
-	}
-
-	volume = volume.QuoInt64(100000000)
-
-	return types.NewTickerPrice(
-		string(ProviderPhemex),
-		cp.String(),
-		price.String(),
-		volume.String(),
-		int64(ticker.Timestamp/1000),
-	)
+	return types.TickerPrice{
+		Price:  sdk.NewDec(ticker.Price).QuoInt64(1e8),
+		Volume: sdk.NewDec(ticker.Volume).QuoInt64(1e8),
+		Time:   ticker.Time,
+	}, nil
 }
 
 func (p *PhemexProvider) messageReceived(messageType int, bz []byte) {
 	var (
-		tickerMsg  PhemexTickerMsg
+		tradeMsg   PhemexWsTradeMsg
 		genericMsg PhemexGenericMsg
-		tickerErr  error
+		tradeErr   error
 	)
 
-	tickerErr = json.Unmarshal(bz, &tickerMsg)
-	// symbol for spot ticker has a prefix "s", e.x.: "sBTCUSDT"
-	if tickerErr == nil && strings.HasPrefix(tickerMsg.Data.Symbol, "s") {
-		if _, ok := p.subscribedPairs[tickerMsg.Data.Symbol[1:]]; ok {
-			p.setTickerPair(tickerMsg)
-			telemetryWebsocketMessage(ProviderPhemex, MessageTypeTicker)
-
-		}
+	tradeErr = json.Unmarshal(bz, &tradeMsg)
+	if tradeErr == nil && len(tradeMsg.Trades) > 0 && tradeMsg.Type == "incremental" {
+		p.setTickerPrice(tradeMsg)
+		telemetryWebsocketMessage(ProviderPhemex, MessageTypeTrade)
 		return
 	}
 
@@ -207,16 +249,46 @@ func (p *PhemexProvider) messageReceived(messageType int, bz []byte) {
 
 	p.logger.Error().
 		Int("length", len(bz)).
-		AnErr("ticker", tickerErr).
+		AnErr("trade", tradeErr).
 		Str("msg", string(bz)).
 		Msg("Error on receive message")
 }
 
-func (p *PhemexProvider) setTickerPair(ticker PhemexTickerMsg) {
+func (p *PhemexProvider) setTickerVolume(symbol string, volume int64) {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 
-	p.tickers[ticker.Data.Symbol] = ticker
+	if ticker, ok := p.tickers[symbol]; ok {
+		ticker.Volume = volume
+		p.tickers[symbol] = ticker
+	}
+}
+
+// setTickerPrice updates the price and time value of the ticker provided.
+// Sets it with volume = 0, if not present in internal tickers map
+func (p *PhemexProvider) setTickerPrice(tradeMsg PhemexWsTradeMsg) {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+
+	var price int64
+	err := json.Unmarshal(tradeMsg.Trades[len(tradeMsg.Trades)-1][2], &price)
+	if err != nil {
+		return
+	}
+
+	time := time.Now().UnixMilli()
+
+	if ticker, ok := p.tickers[tradeMsg.Symbol]; ok {
+		ticker.Price = price
+		ticker.Time = time
+		p.tickers[tradeMsg.Symbol] = ticker
+	} else {
+		p.tickers[tradeMsg.Symbol] = PhemexTicker{
+			Price:  price,
+			Volume: 0,
+			Time:   time,
+		}
+	}
 }
 
 func (p *PhemexProvider) GetAvailablePairs() (map[string]struct{}, error) {

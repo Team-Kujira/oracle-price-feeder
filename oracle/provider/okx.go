@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"strconv"
-	"strings"
 	"sync"
+	"time"
 
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/gorilla/websocket"
 	"github.com/rs/zerolog"
 
@@ -35,50 +35,44 @@ type (
 		logger          zerolog.Logger
 		mtx             sync.RWMutex
 		endpoints       Endpoint
-		tickers         map[string]OkxTickerPair      // InstId => OkxTickerPair
+		tickers         map[string]OkxTicker          // InstId => OkxTickerPair
 		subscribedPairs map[string]types.CurrencyPair // Symbol => types.CurrencyPair
 	}
 
-	// OkxInstId defines the id Symbol of an pair.
-	OkxInstID struct {
-		InstID string `json:"instId"` // Instrument ID ex.: BTC-USDT
-	}
-
-	// OkxTickerPair defines a ticker pair of Okx.
-	OkxTickerPair struct {
-		OkxInstID
-		Last   string `json:"last"`   // Last traded price ex.: 43508.9
-		Vol24h string `json:"vol24h"` // 24h trading volume ex.: 11159.87127845
-		TS     string `json:"ts"`     // Timestamp
-	}
-
-	// OkxInst defines the structure containing ID information for the OkxResponses.
-	OkxID struct {
-		OkxInstID
-		Channel string `json:"channel"`
-	}
-
-	// OkxTickerResponse defines the response structure of a Okx ticker request.
-	OkxTickerResponse struct {
-		Data []OkxTickerPair `json:"data"`
-		ID   OkxID           `json:"arg"`
+	// OkxSubscriptionMsg Message to subscribe/unsubscribe with N Topics.
+	OkxWsSubscriptionMsg struct {
+		Op   string                   `json:"op"` // Operation ex.: subscribe
+		Args []OkxWsSubscriptionTopic `json:"args"`
 	}
 
 	// OkxSubscriptionTopic Topic with the ticker to be subscribed/unsubscribed.
-	OkxSubscriptionTopic struct {
+	OkxWsSubscriptionTopic struct {
 		Channel string `json:"channel"` // Channel name ex.: tickers
 		InstID  string `json:"instId"`  // Instrument ID ex.: BTC-USDT
 	}
 
-	// OkxSubscriptionMsg Message to subscribe/unsubscribe with N Topics.
-	OkxSubscriptionMsg struct {
-		Op   string                 `json:"op"` // Operation ex.: subscribe
-		Args []OkxSubscriptionTopic `json:"args"`
+	OkxWsGenericMsg struct {
+		Event string `json:"event"`
 	}
 
-	// OkxPairsSummary defines the response structure for an Okx pairs summary.
-	OkxPairsSummary struct {
-		Data []OkxInstID `json:"data"`
+	OkxWsCandleMsg struct {
+		Args OkxWsSubscriptionTopic `json:"arg"`
+		Data [][9]string            `json:"data"`
+	}
+
+	OkxRestTickerResponse struct {
+		Data []OkxRestTicker `json:"data"`
+	}
+
+	OkxRestTicker struct {
+		InstID string `json:"instId"`
+		Volume string `json:"vol24h"`
+	}
+
+	OkxTicker struct {
+		Price  string
+		Volume string
+		Time   int64
 	}
 )
 
@@ -108,7 +102,7 @@ func NewOkxProvider(
 	provider := &OkxProvider{
 		logger:          okxLogger,
 		endpoints:       endpoints,
-		tickers:         map[string]OkxTickerPair{},
+		tickers:         map[string]OkxTicker{},
 		subscribedPairs: map[string]types.CurrencyPair{},
 	}
 
@@ -132,16 +126,16 @@ func NewOkxProvider(
 func (p *OkxProvider) GetSubscriptionMsgs(cps ...types.CurrencyPair) []interface{} {
 	subscriptionMsgs := make([]interface{}, 1)
 
-	okxTopics := make([]OkxSubscriptionTopic, len(cps))
+	okxTopics := make([]OkxWsSubscriptionTopic, len(cps))
 
 	for i, cp := range cps {
-		okxTopics[i] = OkxSubscriptionTopic{
-			Channel: "tickers",
+		okxTopics[i] = OkxWsSubscriptionTopic{
+			Channel: "candle3m",
 			InstID:  cp.Join("-"),
 		}
 	}
 
-	subscriptionMsgs[0] = OkxSubscriptionMsg{
+	subscriptionMsgs[0] = OkxWsSubscriptionMsg{
 		Op:   "subscribe",
 		Args: okxTopics,
 	}
@@ -177,6 +171,49 @@ func (p *OkxProvider) SendSubscriptionMsgs(msgs []interface{}) error {
 
 // GetTickerPrices returns the tickerPrices based on the saved map.
 func (p *OkxProvider) GetTickerPrices(cps ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
+
+	go func(p *OkxProvider) {
+		requiredSymbols := make(map[string]bool, len(cps))
+
+		for _, cp := range cps {
+			requiredSymbols[cp.Join("-")] = true
+		}
+
+		client := &http.Client{}
+
+		req, err := http.NewRequest(
+			"GET", p.endpoints.Rest+"/api/v5/market/tickers", nil,
+		)
+		if err != nil {
+			p.logger.Err(err)
+		}
+
+		query := req.URL.Query()
+		query.Add("instType", "SWAP")
+		req.URL.RawQuery = query.Encode()
+
+		resp, err := client.Do(req)
+		if err != nil {
+			p.logger.Err(err)
+		}
+		defer resp.Body.Close()
+
+		var tickerResp OkxRestTickerResponse
+		err = json.NewDecoder(resp.Body).Decode(&tickerResp)
+		if err != nil {
+			return
+		}
+
+		for _, ticker := range tickerResp.Data {
+			if _, ok := requiredSymbols[ticker.InstID]; ok {
+				p.setTickerVolume(ticker.InstID, ticker.Volume)
+			}
+		}
+
+		p.logger.Info().Msg("Done updating volumes")
+
+	}(p)
+
 	return getTickerPrices(p, cps)
 }
 
@@ -185,87 +222,78 @@ func (p *OkxProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPrice, 
 	defer p.mtx.RUnlock()
 
 	instrumentID := cp.Join("-")
-	tickerPair, ok := p.tickers[instrumentID]
+	ticker, ok := p.tickers[instrumentID]
 	if !ok {
 		return types.TickerPrice{}, fmt.Errorf("okx failed to get ticker price for %s", instrumentID)
 	}
 
-	return tickerPair.toTickerPrice()
+	return types.TickerPrice{
+		Price:  sdk.MustNewDecFromStr(ticker.Price),
+		Volume: sdk.MustNewDecFromStr(ticker.Volume),
+		Time:   ticker.Time,
+	}, nil
 }
 
 func (p *OkxProvider) messageReceived(messageType int, bz []byte) {
 	var (
-		tickerResp OkxTickerResponse
-		tickerErr  error
+		candleMsg  OkxWsCandleMsg
+		genericMsg OkxWsGenericMsg
 	)
 
 	// sometimes the message received is not a ticker or a candle response.
-	tickerErr = json.Unmarshal(bz, &tickerResp)
-	if tickerResp.ID.Channel == "tickers" {
-		for _, tickerPair := range tickerResp.Data {
-			p.setTickerPair(tickerPair)
-			telemetryWebsocketMessage(ProviderOkx, MessageTypeTicker)
-		}
+	err := json.Unmarshal(bz, &candleMsg)
+	if err == nil && len(candleMsg.Data) > 0 {
+		p.setTicker(candleMsg)
+		telemetryWebsocketMessage(ProviderOkx, MessageTypeTicker)
+		return
+	}
+
+	err = json.Unmarshal(bz, &genericMsg)
+	if err == nil && genericMsg.Event == "subscribe" {
+		// subscription response
 		return
 	}
 
 	p.logger.Error().
 		Int("length", len(bz)).
-		AnErr("ticker", tickerErr).
+		AnErr("ticker", err).
 		Str("msg", string(bz)).
 		Msg("Error on receive message")
 }
 
-func (p *OkxProvider) setTickerPair(tickerPair OkxTickerPair) {
+func (p *OkxProvider) setTicker(candleMsg OkxWsCandleMsg) {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
-	p.tickers[tickerPair.InstID] = tickerPair
+
+	symbol := candleMsg.Args.InstID
+	price := candleMsg.Data[0][4]
+	timestamp := time.Now().UnixMilli()
+
+	if ticker, ok := p.tickers[symbol]; ok {
+		ticker.Price = price
+		ticker.Time = timestamp
+		p.tickers[symbol] = ticker
+	} else {
+		p.tickers[symbol] = OkxTicker{
+			Price:  price,
+			Volume: "0",
+			Time:   timestamp,
+		}
+	}
+}
+
+func (p *OkxProvider) setTickerVolume(symbol string, volume string) {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+
+	if ticker, ok := p.tickers[symbol]; ok {
+		ticker.Volume = volume
+		p.tickers[symbol] = ticker
+	}
 }
 
 // GetAvailablePairs return all available pairs symbol to subscribe.
 func (p *OkxProvider) GetAvailablePairs() (map[string]struct{}, error) {
-	resp, err := http.Get(p.endpoints.Rest + okxRestPath)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	var pairsSummary struct {
-		Data []OkxInstID `json:"data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&pairsSummary); err != nil {
-		return nil, err
-	}
-
-	availablePairs := make(map[string]struct{}, len(pairsSummary.Data))
-	for _, pair := range pairsSummary.Data {
-		splitInstID := strings.Split(pair.InstID, "-")
-		if len(splitInstID) != 2 {
-			continue
-		}
-
-		cp := types.CurrencyPair{
-			Base:  strings.ToUpper(splitInstID[0]),
-			Quote: strings.ToUpper(splitInstID[1]),
-		}
-		availablePairs[cp.String()] = struct{}{}
-	}
-
-	return availablePairs, nil
-}
-
-func (ticker OkxTickerPair) toTickerPrice() (types.TickerPrice, error) {
-	timestamp, err := strconv.Atoi(ticker.TS)
-	if err != nil {
-		return types.TickerPrice{}, err
-	}
-
-	return types.NewTickerPrice(
-		string(ProviderOkx),
-		ticker.InstID,
-		ticker.Last,
-		ticker.Vol24h,
-		int64(timestamp),
-	)
+	// not used yet, so skipping this unless needed
+	return make(map[string]struct{}, 0), nil
 }

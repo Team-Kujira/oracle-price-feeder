@@ -40,7 +40,7 @@ func FilterStaleTickers(
 				// filteredPrices[providerName][base] = tp
 			} else {
 				diff := float64(now-tp.Time) / 1000
-				logger.Warn().
+				logger.Debug().
 					Str("provider", providerName.String()).
 					Str("asset", base).
 					Float64("age", diff).
@@ -99,13 +99,13 @@ func FilterTickerDeviations(
 				p[base] = tp
 			} else {
 				telemetry.IncrCounter(1, "failure", "provider", "type", "ticker")
-				logger.Warn().
+				logger.Debug().
 					Str("base", base).
 					Str("provider", providerName.String()).
 					Str("price", tp.Price.String()).
 					Str("mean", means[base].String()).
 					Str("margin", d.Mul(t).String()).
-					Msg("provider deviating from other prices")
+					Msg("deviating price")
 			}
 		}
 	}

@@ -25,8 +25,8 @@ func TestCoinbaseProvider_GetTickerPrices(t *testing.T) {
 		lastPrice := "34.69000000"
 		volume := "2396974.02000000"
 
-		tickerMap := map[string]CoinbaseTicker{}
-		tickerMap["ATOM-USDT"] = CoinbaseTicker{
+		tickerMap := map[string]CoinbaseWsTickerMsg{}
+		tickerMap["ATOM-USDT"] = CoinbaseWsTickerMsg{
 			Price:  lastPrice,
 			Volume: volume,
 		}
@@ -45,13 +45,13 @@ func TestCoinbaseProvider_GetTickerPrices(t *testing.T) {
 		lastPriceUmee := "41.35000000"
 		volume := "2396974.02000000"
 
-		tickerMap := map[string]CoinbaseTicker{}
-		tickerMap["ATOM-USDT"] = CoinbaseTicker{
+		tickerMap := map[string]CoinbaseWsTickerMsg{}
+		tickerMap["ATOM-USDT"] = CoinbaseWsTickerMsg{
 			Price:  lastPriceAtom,
 			Volume: volume,
 		}
 
-		tickerMap["UMEE-USDT"] = CoinbaseTicker{
+		tickerMap["UMEE-USDT"] = CoinbaseWsTickerMsg{
 			Price:  lastPriceUmee,
 			Volume: volume,
 		}
