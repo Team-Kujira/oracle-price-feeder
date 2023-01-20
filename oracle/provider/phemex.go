@@ -224,7 +224,7 @@ func (p *PhemexProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPric
 	return types.TickerPrice{
 		Price:  sdk.NewDec(ticker.Price).QuoInt64(1e8),
 		Volume: sdk.NewDec(ticker.Volume).QuoInt64(1e8),
-		Time:   ticker.Time / 1000,
+		Time:   ticker.Time,
 	}, nil
 }
 
