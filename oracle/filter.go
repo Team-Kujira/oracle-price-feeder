@@ -40,7 +40,7 @@ func FilterStaleTickers(
 				// filteredPrices[providerName][base] = tp
 			} else {
 				diff := float64(now-tp.Time) / 1000
-				logger.Warn().
+				logger.Debug().
 					Str("provider", providerName.String()).
 					Str("asset", base).
 					Float64("age", diff).
