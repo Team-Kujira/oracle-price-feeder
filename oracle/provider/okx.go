@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"strconv"
 	"sync"
+	"time"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/gorilla/websocket"
@@ -72,7 +72,7 @@ type (
 	OkxTicker struct {
 		Price  string
 		Volume string
-		Time   string
+		Time   int64
 	}
 )
 
@@ -227,15 +227,10 @@ func (p *OkxProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPrice, 
 		return types.TickerPrice{}, fmt.Errorf("okx failed to get ticker price for %s", instrumentID)
 	}
 
-	timestamp, err := strconv.ParseInt(ticker.Time, 0, 64)
-	if err != nil {
-		return types.TickerPrice{}, fmt.Errorf("okx failed to convert timestamp for %s", instrumentID)
-	}
-
 	return types.TickerPrice{
 		Price:  sdk.MustNewDecFromStr(ticker.Price),
 		Volume: sdk.MustNewDecFromStr(ticker.Volume),
-		Time:   timestamp,
+		Time:   ticker.Time,
 	}, nil
 }
 
@@ -272,7 +267,7 @@ func (p *OkxProvider) setTicker(candleMsg OkxWsCandleMsg) {
 
 	symbol := candleMsg.Args.InstID
 	price := candleMsg.Data[0][4]
-	timestamp := candleMsg.Data[0][0]
+	timestamp := time.Now().UnixMilli()
 
 	if ticker, ok := p.tickers[symbol]; ok {
 		ticker.Price = price

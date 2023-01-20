@@ -26,7 +26,6 @@ func TestOkxProvider_GetTickerPrices(t *testing.T) {
 		tickers["ATOM-USDT"] = OkxTicker{
 			Price:  testAtomPriceString,
 			Volume: testAtomVolumeString,
-			Time:   "0",
 		}
 
 		p.tickers = tickers
@@ -51,13 +50,11 @@ func TestOkxProvider_GetTickerPrices(t *testing.T) {
 		tickers["ATOM-USDT"] = OkxTicker{
 			Price:  testAtomPriceString,
 			Volume: testAtomVolumeString,
-			Time:   "0",
 		}
 
 		tickers["BTC-USDT"] = OkxTicker{
 			Price:  testBtcPriceString,
 			Volume: testBtcVolumeString,
-			Time:   "0",
 		}
 
 		p.tickers = tickers
