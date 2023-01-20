@@ -51,6 +51,10 @@ type (
 		InstID  string `json:"instId"`  // Instrument ID ex.: BTC-USDT
 	}
 
+	OkxWsGenericMsg struct {
+		Event string `json:"event"`
+	}
+
 	OkxWsCandleMsg struct {
 		Args OkxWsSubscriptionTopic `json:"arg"`
 		Data [][9]string            `json:"data"`
@@ -237,7 +241,8 @@ func (p *OkxProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPrice, 
 
 func (p *OkxProvider) messageReceived(messageType int, bz []byte) {
 	var (
-		candleMsg OkxWsCandleMsg
+		candleMsg  OkxWsCandleMsg
+		genericMsg OkxWsGenericMsg
 	)
 
 	// sometimes the message received is not a ticker or a candle response.
@@ -245,6 +250,12 @@ func (p *OkxProvider) messageReceived(messageType int, bz []byte) {
 	if err == nil && len(candleMsg.Data) > 0 {
 		p.setTicker(candleMsg)
 		telemetryWebsocketMessage(ProviderOkx, MessageTypeTicker)
+		return
+	}
+
+	err = json.Unmarshal(bz, &genericMsg)
+	if err == nil && genericMsg.Event == "subscribe" {
+		// subscription response
 		return
 	}
 

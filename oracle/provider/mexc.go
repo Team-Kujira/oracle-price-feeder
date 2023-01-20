@@ -46,6 +46,11 @@ type (
 		Params []string `json:"params"`
 	}
 
+	MexcWsGenericMsg struct {
+		Code    int64  `json:"code"`
+		Message string `json:"msg"`
+	}
+
 	MexcWsCandleMsg struct {
 		Symbol string           `json:"s"`
 		Data   MexcWsCandleData `json:"d"`
@@ -232,14 +237,20 @@ func (p *MexcProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPrice,
 
 func (p *MexcProvider) messageReceived(messageType int, bz []byte) {
 	var (
-		candleMsg MexcWsCandleMsg
-		candleErr error
+		candleMsg  MexcWsCandleMsg
+		candleErr  error
+		genericMsg MexcWsGenericMsg
 	)
 
 	candleErr = json.Unmarshal(bz, &candleMsg)
 	if candleErr == nil && candleMsg.Symbol != "" {
 		p.setTickerPrice(candleMsg)
 		telemetryWebsocketMessage(ProviderMexc, MessageTypeTicker)
+		return
+	}
+
+	err := json.Unmarshal(bz, &genericMsg)
+	if err == nil && genericMsg.Code == 0 {
 		return
 	}
 
