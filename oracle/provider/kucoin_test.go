@@ -22,8 +22,8 @@ func TestKucoinProvider_GetTickerPrices(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("valid_request_single_ticker", func(t *testing.T) {
-		tickers := map[string]KucoinSnapshotDataData{}
-		tickers["ATOMUSDT"] = KucoinSnapshotDataData{
+		tickers := map[string]KucoinWsSnapshotDataData{}
+		tickers["ATOMUSDT"] = KucoinWsSnapshotDataData{
 			Price:  testAtomPriceFloat64,
 			Volume: testAtomVolumeFloat64,
 		}
@@ -47,12 +47,12 @@ func TestKucoinProvider_GetTickerPrices(t *testing.T) {
 	})
 
 	t.Run("valid_request_multi_ticker", func(t *testing.T) {
-		tickers := map[string]KucoinSnapshotDataData{}
-		tickers["ATOMUSDT"] = KucoinSnapshotDataData{
+		tickers := map[string]KucoinWsSnapshotDataData{}
+		tickers["ATOMUSDT"] = KucoinWsSnapshotDataData{
 			Price:  testAtomPriceFloat64,
 			Volume: testAtomVolumeFloat64,
 		}
-		tickers["BTCUSDT"] = KucoinSnapshotDataData{
+		tickers["BTCUSDT"] = KucoinWsSnapshotDataData{
 			Price:  testBtcPriceFloat64,
 			Volume: testBtcVolumeFloat64,
 		}
