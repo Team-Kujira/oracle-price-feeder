@@ -52,12 +52,24 @@ type (
 		Channels   []string `json:"channels"`    // channels to subscribe to ex.: "ticker"
 	}
 
+	CoinbaseWsGenericMsg struct {
+		Type string `json:"type"`
+	}
+
 	// CoinbaseWsTickerMsg defines the ticker info we'd like to save.
 	CoinbaseWsTickerMsg struct {
+		Type      string `json:"type"`
 		ProductID string `json:"product_id"` // ex.: ATOM-USDT
 		Price     string `json:"price"`      // ex.: 523.0
 		Volume    string `json:"volume_24h"` // 24-hour volume
 		Time      string `json:"time"`       // timestamp
+	}
+
+	CoinbaseWsMatchMsg struct {
+		Type      string `json:"type"`
+		ProductID string `json:"product_id"`
+		Price     string `json:"price"`
+		Time      string `json:"time"`
 	}
 
 	// CoinbaseErrResponse defines the response body for errors.
@@ -131,7 +143,7 @@ func (p *CoinbaseProvider) GetSubscriptionMsgs(cps ...types.CurrencyPair) []inte
 	subscriptionMsgs[0] = CoinbaseWsSubscriptionMsg{
 		Type:       "subscribe",
 		ProductIDs: productIDs,
-		Channels:   []string{"ticker_batch"},
+		Channels:   []string{"ticker_batch", "matches"},
 	}
 
 	return subscriptionMsgs
@@ -179,20 +191,38 @@ func (p *CoinbaseProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPr
 
 func (p *CoinbaseProvider) messageReceived(messageType int, bz []byte) {
 	var (
-		tickerResp CoinbaseWsTickerMsg
+		tickerMsg  CoinbaseWsTickerMsg
 		tickerErr  error
+		matchMsg   CoinbaseWsMatchMsg
+		matchErr   error
+		genericMsg CoinbaseWsGenericMsg
+		genericErr error
 	)
 
-	tickerErr = json.Unmarshal(bz, &tickerResp)
-	if tickerErr == nil {
-		p.setTickerPair(tickerResp)
+	matchErr = json.Unmarshal(bz, &matchMsg)
+	if matchErr == nil && (matchMsg.Type == "match" || matchMsg.Type == "last_match") {
+		p.updateTicker(matchMsg)
+		telemetryWebsocketMessage(ProviderBinance, MessageTypeTrade)
+		return
+	}
+
+	tickerErr = json.Unmarshal(bz, &tickerMsg)
+	if tickerErr == nil && tickerMsg.Type == "ticker" {
+		p.setTickerPair(tickerMsg)
 		telemetryWebsocketMessage(ProviderBinance, MessageTypeTicker)
+		return
+	}
+
+	genericErr = json.Unmarshal(bz, &genericMsg)
+	if genericErr == nil && genericMsg.Type == "subscription" {
 		return
 	}
 
 	p.logger.Error().
 		Int("length", len(bz)).
 		AnErr("ticker", tickerErr).
+		AnErr("match", matchErr).
+		AnErr("generic", genericErr).
 		Str("msg", string(bz)).
 		Msg("Error on receive message")
 }
@@ -202,6 +232,19 @@ func (p *CoinbaseProvider) setTickerPair(ticker CoinbaseWsTickerMsg) {
 	defer p.mtx.Unlock()
 
 	p.tickers[ticker.ProductID] = ticker
+}
+
+func (p *CoinbaseProvider) updateTicker(matchMsg CoinbaseWsMatchMsg) {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+
+	ticker, ok := p.tickers[matchMsg.ProductID]
+	if ok {
+		ticker.Price = matchMsg.Price
+		ticker.Time = matchMsg.Time
+		p.tickers[matchMsg.ProductID] = ticker
+	}
+
 }
 
 // GetAvailablePairs returns all pairs to which the provider can subscribe.
