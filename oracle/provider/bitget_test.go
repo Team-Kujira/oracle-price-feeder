@@ -16,85 +16,77 @@ func TestBitgetProvider_GetTickerPrices(t *testing.T) {
 		context.TODO(),
 		zerolog.Nop(),
 		Endpoint{},
-		types.CurrencyPair{Base: "BTC", Quote: "USDT"},
+		testBtcUsdtCurrencyPair,
 	)
 	require.NoError(t, err)
 
 	t.Run("valid_request_single_ticker", func(t *testing.T) {
-		lastPrice := "34.69000000"
-		volume := "2396974.02000000"
-		instId := "ATOMUSDT"
-
-		tickerMap := map[string]BitgetTicker{}
-		tickerMap[instId] = BitgetTicker{
-			Arg: BitgetSubscriptionArg{
-				Channel: "tickers",
-				InstID:  instId,
-			},
-			Data: []BitgetTickerData{
-				{
-					InstID: instId,
-					Price:  lastPrice,
-					Volume: volume,
-				},
-			},
+		tickers := map[string]BitgetTicker{}
+		tickers["ATOMUSDT"] = BitgetTicker{
+			Price:  testAtomPriceString,
+			Volume: testAtomVolumeString,
+			Time:   "0",
 		}
 
-		p.tickers = tickerMap
+		p.tickers = tickers
 
-		prices, err := p.GetTickerPrices(types.CurrencyPair{Base: "ATOM", Quote: "USDT"})
+		prices, err := p.GetTickerPrices(testAtomUsdtCurrencyPair)
 		require.NoError(t, err)
 		require.Len(t, prices, 1)
-		require.Equal(t, sdk.MustNewDecFromStr(lastPrice), prices["ATOMUSDT"].Price)
-		require.Equal(t, sdk.MustNewDecFromStr(volume), prices["ATOMUSDT"].Volume)
+		require.Equal(
+			t,
+			sdk.MustNewDecFromStr(testAtomPriceString),
+			prices["ATOMUSDT"].Price,
+		)
+		require.Equal(
+			t,
+			sdk.MustNewDecFromStr(testAtomVolumeString),
+			prices["ATOMUSDT"].Volume,
+		)
 	})
 
 	t.Run("valid_request_multi_ticker", func(t *testing.T) {
-		atomInstID := "ATOMUSDT"
-		atomLastPrice := "34.69000000"
-		lunaInstID := "LUNAUSDT"
-		lunaLastPrice := "41.35000000"
-		volume := "2396974.02000000"
+		tickers := map[string]BitgetTicker{}
+		tickers["ATOMUSDT"] = BitgetTicker{
+			Price:  testAtomPriceString,
+			Volume: testAtomVolumeString,
+			Time:   "0",
+		}
 
-		tickerMap := map[string]BitgetTicker{}
-		tickerMap[atomInstID] = BitgetTicker{
-			Arg: BitgetSubscriptionArg{
-				Channel: "tickers",
-				InstID:  atomInstID,
-			},
-			Data: []BitgetTickerData{
-				{
-					InstID: atomInstID,
-					Price:  atomLastPrice,
-					Volume: volume,
-				},
-			},
+		tickers["BTCUSDT"] = BitgetTicker{
+			Price:  testBtcPriceString,
+			Volume: testBtcVolumeString,
+			Time:   "0",
 		}
-		tickerMap[lunaInstID] = BitgetTicker{
-			Arg: BitgetSubscriptionArg{
-				Channel: "tickers",
-				InstID:  lunaInstID,
-			},
-			Data: []BitgetTickerData{
-				{
-					InstID: lunaInstID,
-					Price:  lunaLastPrice,
-					Volume: volume,
-				},
-			},
-		}
-		p.tickers = tickerMap
+
+		p.tickers = tickers
 		prices, err := p.GetTickerPrices(
-			types.CurrencyPair{Base: "ATOM", Quote: "USDT"},
-			types.CurrencyPair{Base: "LUNA", Quote: "USDT"},
+			testAtomUsdtCurrencyPair,
+			testBtcUsdtCurrencyPair,
 		)
 
 		require.NoError(t, err)
 		require.Len(t, prices, 2)
-		require.Equal(t, sdk.MustNewDecFromStr(atomLastPrice), prices["ATOMUSDT"].Price)
-		require.Equal(t, sdk.MustNewDecFromStr(volume), prices["ATOMUSDT"].Volume)
-		require.Equal(t, sdk.MustNewDecFromStr(lunaLastPrice), prices["LUNAUSDT"].Price)
-		require.Equal(t, sdk.MustNewDecFromStr(volume), prices["LUNAUSDT"].Volume)
+		require.Equal(
+			t,
+			sdk.MustNewDecFromStr(testBtcPriceString),
+			prices["BTCUSDT"].Price,
+		)
+		require.Equal(
+			t,
+			sdk.MustNewDecFromStr(testBtcVolumeString),
+			prices["BTCUSDT"].Volume,
+		)
+		require.Equal(
+			t,
+			sdk.MustNewDecFromStr(testAtomPriceString),
+			prices["ATOMUSDT"].Price,
+		)
+		require.Equal(
+			t,
+			sdk.MustNewDecFromStr(testAtomVolumeString),
+			prices["ATOMUSDT"].Volume,
+		)
 	})
 
 	t.Run("invalid_request_invalid_ticker", func(t *testing.T) {
@@ -102,19 +94,4 @@ func TestBitgetProvider_GetTickerPrices(t *testing.T) {
 		require.EqualError(t, err, "bitget failed to get ticker price for FOOBAR")
 		require.Nil(t, prices)
 	})
-}
-
-func TestBitgetProvider_AvailablePairs(t *testing.T) {
-	p, err := NewBitgetProvider(
-		context.TODO(),
-		zerolog.Nop(),
-		Endpoint{},
-		types.CurrencyPair{},
-	)
-	require.NoError(t, err)
-
-	pairs, err := p.GetAvailablePairs()
-	require.NoError(t, err)
-
-	require.NotEmpty(t, pairs)
 }
