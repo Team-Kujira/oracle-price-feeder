@@ -189,7 +189,7 @@ func (p *OkxProvider) GetTickerPrices(cps ...types.CurrencyPair) (map[string]typ
 		}
 
 		query := req.URL.Query()
-		query.Add("instType", "SWAP")
+		query.Add("instType", "SPOT")
 		req.URL.RawQuery = query.Encode()
 
 		resp, err := client.Do(req)
