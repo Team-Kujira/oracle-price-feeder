@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
 	"price-feeder/oracle/types"
 	"sync"
@@ -15,7 +16,7 @@ import (
 const (
 	poloniexWSHost   = "ws.poloniex.com"
 	poloniexWSPath   = "/ws/public"
-	poloniexRestHost = "api.poloniex.com"
+	poloniexRestHost = "https://api.poloniex.com"
 )
 
 var _ Provider = (*PoloniexProvider)(nil)
@@ -30,7 +31,7 @@ type (
 		subscribedPairs map[string]types.CurrencyPair
 	}
 
-	PoloniexSubscriptionMsg struct {
+	PoloniexWsSubscriptionMsg struct {
 		Event   string   `json:"event"`
 		Channel []string `json:"channel"`
 		Symbols []string `json:"symbols"`
@@ -40,16 +41,26 @@ type (
 		Event string `json:"event"`
 	}
 
-	PoloniexTickerMsg struct {
-		Channel string           `json:"channel"`
-		Data    []PoloniexTicker `json:"data"`
+	PoloniexWsCandleMsg struct {
+		Channel string                 `json:"channel"`
+		Data    []PoloniexWsCandleData `json:"data"`
+	}
+
+	PoloniexWsCandleData struct {
+		Symbol string `json:"symbol"`
+		Close  string `json:"close"`
+		Time   int64  `json:"ts"`
+	}
+
+	PoloniexRest24hTicker struct {
+		Symbol string `json:"symbol"`
+		Volume string `json:"quantity"`
 	}
 
 	PoloniexTicker struct {
-		Symbol string `json:"symbol"`
-		Price  string `json:"close"`
-		Volume string `json:"quantity"`
-		Time   int64  `json:"closeTime"`
+		Price  string
+		Volume string
+		Time   int64
 	}
 )
 
@@ -111,9 +122,9 @@ func (p *PoloniexProvider) GetSubscriptionMsgs(cps ...types.CurrencyPair) []inte
 		symbols[i] = cp.Join("_")
 	}
 
-	subscriptionMsgs[0] = PoloniexSubscriptionMsg{
+	subscriptionMsgs[0] = PoloniexWsSubscriptionMsg{
 		Event:   "subscribe",
-		Channel: []string{"ticker"},
+		Channel: []string{"candles_minute_1"},
 		Symbols: symbols,
 	}
 
@@ -144,6 +155,36 @@ func (p *PoloniexProvider) SendSubscriptionMsgs(msgs []interface{}) error {
 }
 
 func (p *PoloniexProvider) GetTickerPrices(cps ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
+	go func(p *PoloniexProvider) {
+		requiredSymbols := make(map[string]bool, len(cps))
+
+		for _, cp := range cps {
+			requiredSymbols[cp.Join("_")] = true
+		}
+
+		resp, err := http.Get(p.endpoints.Rest + "/markets/ticker24h")
+		if err != nil {
+			p.logger.Error().Msg("failed to get tickers")
+			return
+		}
+		defer resp.Body.Close()
+
+		var tickerResp []PoloniexRest24hTicker
+		err = json.NewDecoder(resp.Body).Decode(&tickerResp)
+		if err != nil {
+			p.logger.Error().Msg("failed to parse rest response")
+			return
+		}
+
+		for _, ticker := range tickerResp {
+			if _, ok := requiredSymbols[ticker.Symbol]; ok {
+				p.setTickerVolume(ticker.Symbol, ticker.Volume)
+			}
+		}
+
+		p.logger.Info().Msg("Done updating volumes")
+	}(p)
+
 	return getTickerPrices(p, cps)
 }
 
@@ -169,15 +210,15 @@ func (p *PoloniexProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPr
 
 func (p *PoloniexProvider) messageReceived(messageType int, bz []byte) {
 	var (
-		tickerMsg   PoloniexTickerMsg
+		candleMsg   PoloniexWsCandleMsg
+		candleErr   error
 		genericResp PoloniexWsGenericResponse
-		tickerErr   error
 	)
 
-	tickerErr = json.Unmarshal(bz, &tickerMsg)
-	if tickerErr == nil && len(tickerMsg.Data) == 1 {
-		p.setTickerPair(tickerMsg)
-		telemetryWebsocketMessage(ProviderPoloniex, MessageTypeTicker)
+	candleErr = json.Unmarshal(bz, &candleMsg)
+	if candleErr == nil && len(candleMsg.Data) == 1 {
+		p.setTickerPrice(candleMsg)
+		telemetryWebsocketMessage(ProviderPoloniex, MessageTypeCandle)
 		return
 	}
 
@@ -193,17 +234,41 @@ func (p *PoloniexProvider) messageReceived(messageType int, bz []byte) {
 
 	p.logger.Error().
 		Int("length", len(bz)).
-		AnErr("ticker", tickerErr).
+		AnErr("candle", candleErr).
 		Str("msg", string(bz)).
 		Msg("Error on receive message")
 }
 
-func (p *PoloniexProvider) setTickerPair(ticker PoloniexTickerMsg) {
+func (p *PoloniexProvider) setTickerPrice(candleMsg PoloniexWsCandleMsg) {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 
-	for _, ticker := range ticker.Data {
-		p.tickers[ticker.Symbol] = ticker
+	data := candleMsg.Data[len(candleMsg.Data)-1]
+
+	symbol := data.Symbol
+	price := data.Close
+	timestamp := data.Time
+
+	if ticker, ok := p.tickers[symbol]; ok {
+		ticker.Price = price
+		ticker.Time = timestamp
+		p.tickers[symbol] = ticker
+	} else {
+		p.tickers[symbol] = PoloniexTicker{
+			Price:  price,
+			Volume: "0",
+			Time:   timestamp,
+		}
+	}
+}
+
+func (p *PoloniexProvider) setTickerVolume(symbol string, volume string) {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+
+	if ticker, ok := p.tickers[symbol]; ok {
+		ticker.Volume = volume
+		p.tickers[symbol] = ticker
 	}
 }
 
