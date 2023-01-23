@@ -18,59 +18,75 @@ func TestBinanceProvider_GetTickerPrices(t *testing.T) {
 		zerolog.Nop(),
 		Endpoint{},
 		false,
-		types.CurrencyPair{Base: "ATOM", Quote: "USDT"},
+		testAtomUsdtCurrencyPair,
 	)
 	require.NoError(t, err)
 
 	t.Run("valid_request_single_ticker", func(t *testing.T) {
-		lastPrice := "34.69000000"
-		volume := "2396974.02000000"
-
-		tickerMap := map[string]BinanceTicker{}
-		tickerMap["ATOMUSDT"] = BinanceTicker{
-			Symbol:    "ATOMUSDT",
-			LastPrice: lastPrice,
-			Volume:    volume,
+		tickers := map[string]BinanceTicker{}
+		tickers["ATOMUSDT"] = BinanceTicker{
+			Price:  testAtomPriceString,
+			Volume: testAtomVolumeString,
 		}
 
-		p.tickers = tickerMap
+		p.tickers = tickers
 
-		prices, err := p.GetTickerPrices(types.CurrencyPair{Base: "ATOM", Quote: "USDT"})
+		prices, err := p.GetTickerPrices(testAtomUsdtCurrencyPair)
 		require.NoError(t, err)
 		require.Len(t, prices, 1)
-		require.Equal(t, sdk.MustNewDecFromStr(lastPrice), prices["ATOMUSDT"].Price)
-		require.Equal(t, sdk.MustNewDecFromStr(volume), prices["ATOMUSDT"].Volume)
+		require.Equal(
+			t,
+			sdk.MustNewDecFromStr(testAtomPriceString),
+			prices["ATOMUSDT"].Price,
+		)
+		require.Equal(
+			t,
+			sdk.MustNewDecFromStr(testAtomVolumeString),
+			prices["ATOMUSDT"].Volume,
+		)
 	})
 
 	t.Run("valid_request_multi_ticker", func(t *testing.T) {
-		lastPriceAtom := "34.69000000"
-		lastPriceLuna := "41.35000000"
-		volume := "2396974.02000000"
-
-		tickerMap := map[string]BinanceTicker{}
-		tickerMap["ATOMUSDT"] = BinanceTicker{
-			Symbol:    "ATOMUSDT",
-			LastPrice: lastPriceAtom,
-			Volume:    volume,
+		tickers := map[string]BinanceTicker{}
+		tickers["ATOMUSDT"] = BinanceTicker{
+			Price:  testAtomPriceString,
+			Volume: testAtomVolumeString,
 		}
 
-		tickerMap["LUNAUSDT"] = BinanceTicker{
-			Symbol:    "LUNAUSDT",
-			LastPrice: lastPriceLuna,
-			Volume:    volume,
+		tickers["BTCUSDT"] = BinanceTicker{
+			Price:  testBtcPriceString,
+			Volume: testBtcVolumeString,
 		}
 
-		p.tickers = tickerMap
+		p.tickers = tickers
+
 		prices, err := p.GetTickerPrices(
-			types.CurrencyPair{Base: "ATOM", Quote: "USDT"},
-			types.CurrencyPair{Base: "LUNA", Quote: "USDT"},
+			testAtomUsdtCurrencyPair,
+			testBtcUsdtCurrencyPair,
 		)
+
 		require.NoError(t, err)
 		require.Len(t, prices, 2)
-		require.Equal(t, sdk.MustNewDecFromStr(lastPriceAtom), prices["ATOMUSDT"].Price)
-		require.Equal(t, sdk.MustNewDecFromStr(volume), prices["ATOMUSDT"].Volume)
-		require.Equal(t, sdk.MustNewDecFromStr(lastPriceLuna), prices["LUNAUSDT"].Price)
-		require.Equal(t, sdk.MustNewDecFromStr(volume), prices["LUNAUSDT"].Volume)
+		require.Equal(
+			t,
+			testBtcPriceDec,
+			prices["BTCUSDT"].Price,
+		)
+		require.Equal(
+			t,
+			testBtcVolumeDec,
+			prices["BTCUSDT"].Volume,
+		)
+		require.Equal(
+			t,
+			testAtomPriceDec,
+			prices["ATOMUSDT"].Price,
+		)
+		require.Equal(
+			t,
+			testAtomVolumeDec,
+			prices["ATOMUSDT"].Volume,
+		)
 	})
 
 	t.Run("invalid_request_invalid_ticker", func(t *testing.T) {
@@ -85,11 +101,12 @@ func TestBinanceProvider_GetSubscriptionMsgs(t *testing.T) {
 		subscribedPairs: map[string]types.CurrencyPair{},
 	}
 	cps := []types.CurrencyPair{
-		{Base: "ATOM", Quote: "USDT"},
+		testBtcUsdtCurrencyPair,
+		testAtomUsdtCurrencyPair,
 	}
 
 	subMsgs := provider.GetSubscriptionMsgs(cps...)
 
 	msg, _ := json.Marshal(subMsgs[0])
-	require.Equal(t, "{\"method\":\"SUBSCRIBE\",\"params\":[\"atomusdt@ticker\",\"atomusdt@kline_1m\"],\"id\":1}", string(msg))
+	require.Equal(t, `{"method":"SUBSCRIBE","params":["btcusdt@kline_1m","atomusdt@kline_1m"],"id":1}`, string(msg))
 }

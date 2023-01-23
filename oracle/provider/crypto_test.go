@@ -16,56 +16,75 @@ func TestCryptoProvider_GetTickerPrices(t *testing.T) {
 		context.TODO(),
 		zerolog.Nop(),
 		Endpoint{},
-		types.CurrencyPair{Base: "ATOM", Quote: "USDT"},
+		testAtomUsdtCurrencyPair,
 	)
 	require.NoError(t, err)
 
 	t.Run("valid_request_single_ticker", func(t *testing.T) {
-		lastPrice := sdk.MustNewDecFromStr("34.69000000")
-		volume := sdk.MustNewDecFromStr("2396974.02000000")
-
-		tickerMap := map[string]types.TickerPrice{}
-		tickerMap["ATOM_USDT"] = types.TickerPrice{
-			Price:  lastPrice,
-			Volume: volume,
+		tickers := map[string]CryptoTicker{}
+		tickers["ATOM_USDT"] = CryptoTicker{
+			Price:  testAtomPriceString,
+			Volume: testAtomVolumeString,
 		}
 
-		p.tickers = tickerMap
+		p.tickers = tickers
 
-		prices, err := p.GetTickerPrices(types.CurrencyPair{Base: "ATOM", Quote: "USDT"})
+		prices, err := p.GetTickerPrices(testAtomUsdtCurrencyPair)
 		require.NoError(t, err)
 		require.Len(t, prices, 1)
-		require.Equal(t, lastPrice, prices["ATOMUSDT"].Price)
-		require.Equal(t, volume, prices["ATOMUSDT"].Volume)
+		require.Equal(
+			t,
+			sdk.MustNewDecFromStr(testAtomPriceString),
+			prices["ATOMUSDT"].Price,
+		)
+		require.Equal(
+			t,
+			sdk.MustNewDecFromStr(testAtomVolumeString),
+			prices["ATOMUSDT"].Volume,
+		)
 	})
 
 	t.Run("valid_request_multi_ticker", func(t *testing.T) {
-		lastPriceAtom := sdk.MustNewDecFromStr("34.69000000")
-		lastPriceLuna := sdk.MustNewDecFromStr("41.35000000")
-		volume := sdk.MustNewDecFromStr("2396974.02000000")
-
-		tickerMap := map[string]types.TickerPrice{}
-		tickerMap["ATOM_USDT"] = types.TickerPrice{
-			Price:  lastPriceAtom,
-			Volume: volume,
+		tickers := map[string]CryptoTicker{}
+		tickers["ATOM_USDT"] = CryptoTicker{
+			Price:  testAtomPriceString,
+			Volume: testAtomVolumeString,
 		}
 
-		tickerMap["LUNA_USDT"] = types.TickerPrice{
-			Price:  lastPriceLuna,
-			Volume: volume,
+		tickers["BTC_USDT"] = CryptoTicker{
+			Price:  testBtcPriceString,
+			Volume: testBtcVolumeString,
 		}
 
-		p.tickers = tickerMap
+		p.tickers = tickers
+
 		prices, err := p.GetTickerPrices(
-			types.CurrencyPair{Base: "ATOM", Quote: "USDT"},
-			types.CurrencyPair{Base: "LUNA", Quote: "USDT"},
+			testAtomUsdtCurrencyPair,
+			testBtcUsdtCurrencyPair,
 		)
+
 		require.NoError(t, err)
 		require.Len(t, prices, 2)
-		require.Equal(t, lastPriceAtom, prices["ATOMUSDT"].Price)
-		require.Equal(t, volume, prices["ATOMUSDT"].Volume)
-		require.Equal(t, lastPriceLuna, prices["LUNAUSDT"].Price)
-		require.Equal(t, volume, prices["LUNAUSDT"].Volume)
+		require.Equal(
+			t,
+			testBtcPriceDec,
+			prices["BTCUSDT"].Price,
+		)
+		require.Equal(
+			t,
+			testBtcVolumeDec,
+			prices["BTCUSDT"].Volume,
+		)
+		require.Equal(
+			t,
+			testAtomPriceDec,
+			prices["ATOMUSDT"].Price,
+		)
+		require.Equal(
+			t,
+			testAtomVolumeDec,
+			prices["ATOMUSDT"].Volume,
+		)
 	})
 
 	t.Run("invalid_request_invalid_ticker", func(t *testing.T) {
@@ -74,10 +93,4 @@ func TestCryptoProvider_GetTickerPrices(t *testing.T) {
 		require.Equal(t, "crypto failed to get ticker price for FOO_BAR", err.Error())
 		require.Nil(t, prices)
 	})
-}
-
-func TestCryptoCurrencyPairToCryptoPair(t *testing.T) {
-	cp := types.CurrencyPair{Base: "ATOM", Quote: "USDT"}
-	cryptoSymbol := cp.Join("_")
-	require.Equal(t, cryptoSymbol, "ATOM_USDT")
 }
