@@ -185,7 +185,6 @@ func (p *CoinbaseProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPr
 		return types.TickerPrice{}, fmt.Errorf("coinbase failed to get ticker price for %s", symbol)
 	}
 
-	fmt.Println(ticker)
 	return ticker, nil
 }
 
