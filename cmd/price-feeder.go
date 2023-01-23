@@ -92,12 +92,16 @@ func priceFeederCmdHandler(cmd *cobra.Command, args []string) error {
 		logWriter = os.Stderr
 
 	case logLevelText:
-		logWriter = zerolog.ConsoleWriter{Out: os.Stderr}
+		logWriter = zerolog.ConsoleWriter{
+			Out:        os.Stderr,
+			TimeFormat: time.StampMilli,
+		}
 
 	default:
 		return fmt.Errorf("invalid logging format: %s", logFormatStr)
 	}
 
+	zerolog.TimeFieldFormat = time.StampMilli
 	logger := zerolog.New(logWriter).Level(logLvl).With().Timestamp().Logger()
 
 	cfg, err := config.ParseConfig(args[0])
