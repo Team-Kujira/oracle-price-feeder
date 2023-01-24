@@ -4,24 +4,23 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"net/url"
-	"strings"
+	"strconv"
 	"sync"
-	"time"
 
 	"price-feeder/oracle/types"
 
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/gorilla/websocket"
 	"github.com/rs/zerolog"
 )
 
 const (
-	krakenWSHost                  = "ws.kraken.com"
-	KrakenRestHost                = "https://api.kraken.com"
-	KrakenRestPath                = "/0/public/AssetPairs"
-	krakenEventSystemStatus       = "systemStatus"
-	krakenEventSubscriptionStatus = "subscriptionStatus"
+	krakenWSHost   = "ws.kraken.com"
+	KrakenRestHost = "https://api.kraken.com"
+	KrakenRestPath = "/0/public/AssetPairs"
 )
 
 var _ Provider = (*KrakenProvider)(nil)
@@ -36,50 +35,38 @@ type (
 		logger          zerolog.Logger
 		mtx             sync.RWMutex
 		endpoints       Endpoint
-		tickers         map[string]types.TickerPrice  // Symbol => TickerPrice
+		tickers         map[string]KrakenTicker       // Symbol => TickerPrice
 		subscribedPairs map[string]types.CurrencyPair // Symbol => types.CurrencyPair
+		symbolMapping   map[string]string
 	}
 
-	// KrakenTicker ticker price response from Kraken ticker channel.
-	// REF: https://docs.kraken.com/websockets/#message-ticker
-	KrakenTicker struct {
-		C    []string `json:"c"` // Close with Price in the first position
-		V    []string `json:"v"` // Volume with the value over last 24 hours in the second position
-		Time uint64   // Not received from ws, need to be set manually
+	KrakenWsSubscriptionMsg struct {
+		Event        string                      `json:"event"`        // subscribe/unsubscribe
+		Pair         []string                    `json:"pair"`         // Array of currency pairs ex.: "BTC/USDT",
+		Subscription KrakenWsSubscriptionChannel `json:"subscription"` // subscription object
 	}
 
-	// KrakenSubscriptionMsg Msg to subscribe to all the pairs at once.
-	KrakenSubscriptionMsg struct {
-		Event        string                    `json:"event"`        // subscribe/unsubscribe
-		Pair         []string                  `json:"pair"`         // Array of currency pairs ex.: "BTC/USDT",
-		Subscription KrakenSubscriptionChannel `json:"subscription"` // subscription object
-	}
-
-	// KrakenSubscriptionChannel Msg with the channel name to be subscribed.
-	KrakenSubscriptionChannel struct {
+	KrakenWsSubscriptionChannel struct {
 		Name string `json:"name"` // channel to be subscribed ex.: ticker
 	}
 
-	// KrakenEvent wraps the possible events from the provider.
-	KrakenEvent struct {
-		Event string `json:"event"` // events from kraken ex.: systemStatus | subscriptionStatus
+	KrakenWsStatusMsg struct {
+		Event  string `json:"event"` // events from kraken ex.: systemStatus | subscriptionStatus
+		Status string `json:"status"`
 	}
 
-	// KrakenEventSubscriptionStatus parse the subscriptionStatus event message.
-	KrakenEventSubscriptionStatus struct {
-		Status       string `json:"status"`       // subscribed|unsubscribed|error
-		Pair         string `json:"pair"`         // Pair symbol base/quote ex.: "XBT/USD"
-		ErrorMessage string `json:"errorMessage"` // error description
+	KrakenRestTickerResponse struct {
+		Result map[string]KrakenRestTicker `json:"result"`
 	}
 
-	// KrakenPairsSummary defines the response structure for an Kraken pairs summary.
-	KrakenPairsSummary struct {
-		Result map[string]KrakenPairData `json:"result"`
+	KrakenRestTicker struct {
+		Volumes []string `json:"v"`
 	}
 
-	// KrakenPairData defines the data response structure for an Kraken pair.
-	KrakenPairData struct {
-		WsName string `json:"wsname"`
+	KrakenTicker struct {
+		Price  string
+		Volume string
+		Time   string
 	}
 )
 
@@ -108,8 +95,13 @@ func NewKrakenProvider(
 	provider := &KrakenProvider{
 		logger:          krakenLogger,
 		endpoints:       endpoints,
-		tickers:         map[string]types.TickerPrice{},
+		tickers:         map[string]KrakenTicker{},
 		subscribedPairs: map[string]types.CurrencyPair{},
+	}
+
+	provider.symbolMapping = map[string]string{
+		"BTC":  "XBT",
+		"LUNA": "LUNA2",
 	}
 
 	setSubscribedPairs(provider, pairs...)
@@ -124,6 +116,7 @@ func NewKrakenProvider(
 		websocket.PingMessage,
 		krakenLogger,
 	)
+
 	go provider.wsc.Start()
 
 	return provider, nil
@@ -135,19 +128,14 @@ func (p *KrakenProvider) GetSubscriptionMsgs(cps ...types.CurrencyPair) []interf
 	pairs := make([]string, len(cps))
 
 	for i, cp := range cps {
-		if cp.Base == "LUNA" {
-			pairs[i] = "LUNA2/" + cp.Quote
-		} else {
-			pairs[i] = cp.Join("/")
-		}
-
+		pairs[i] = p.currencyPairToKrakenSymbol(cp)
 	}
 
-	subscriptionMsgs[0] = KrakenSubscriptionMsg{
+	subscriptionMsgs[0] = KrakenWsSubscriptionMsg{
 		Event: "subscribe",
 		Pair:  pairs,
-		Subscription: KrakenSubscriptionChannel{
-			Name: "ticker",
+		Subscription: KrakenWsSubscriptionChannel{
+			Name: "ohlc",
 		},
 	}
 
@@ -179,6 +167,37 @@ func (p *KrakenProvider) SendSubscriptionMsgs(msgs []interface{}) error {
 
 // GetTickerPrices returns the tickerPrices based on the saved map.
 func (p *KrakenProvider) GetTickerPrices(cps ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
+	go func(p *KrakenProvider) {
+		requiredSymbols := make(map[string]string, len(cps))
+
+		for _, cp := range cps {
+			restSymbol := p.currencyPairToKrakenRestSymbol(cp)
+			krakenSymbol := p.currencyPairToKrakenSymbol(cp)
+			requiredSymbols[restSymbol] = krakenSymbol
+		}
+
+		resp, err := http.Get(p.endpoints.Rest + "/0/public/Ticker")
+		if err != nil {
+			return
+		}
+		defer resp.Body.Close()
+
+		var tickerResp KrakenRestTickerResponse
+		err = json.NewDecoder(resp.Body).Decode(&tickerResp)
+		if err != nil {
+			return
+		}
+
+		for krakenSymbol, ticker := range tickerResp.Result {
+			if symbol, ok := requiredSymbols[krakenSymbol]; ok {
+				p.setTickerVolume(symbol, ticker.Volumes[1])
+			}
+		}
+
+		p.logger.Info().Msg("Done updating volumes")
+
+	}(p)
+
 	return getTickerPrices(p, cps)
 }
 
@@ -186,23 +205,23 @@ func (p *KrakenProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPric
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 
-	key := cp.String()
-	if cp.Base == "LUNA" {
-		key = "LUNA2" + cp.Quote
-	}
+	key := p.currencyPairToKrakenSymbol(cp)
 
 	ticker, ok := p.tickers[key]
 	if !ok {
 		return types.TickerPrice{}, fmt.Errorf("kraken failed to get ticker price for %s", key)
 	}
 
-	return types.NewTickerPrice(
-		string(ProviderKucoin),
-		key,
-		fmt.Sprintf("%f", ticker.Price),
-		fmt.Sprintf("%f", ticker.Volume),
-		ticker.Time,
-	)
+	timestamp, err := strconv.ParseFloat(ticker.Time, 64)
+	if err != nil {
+		return types.TickerPrice{}, fmt.Errorf("kraken failed parse timestamp for %s", key)
+	}
+
+	return types.TickerPrice{
+		Price:  sdk.MustNewDecFromStr(ticker.Price),
+		Volume: sdk.MustNewDecFromStr(ticker.Volume),
+		Time:   int64(math.Floor(timestamp * 1000)),
+	}, nil
 }
 
 // messageReceived handles any message sent by the provider.
@@ -212,180 +231,137 @@ func (p *KrakenProvider) messageReceived(messageType int, bz []byte) {
 	}
 
 	var (
-		krakenEvent KrakenEvent
-		krakenErr   error
-		tickerErr   error
+		statusMsg  KrakenWsStatusMsg
+		statusErr  error
+		candleMsg  [4]json.RawMessage
+		channel    string
+		channelErr error
 	)
 
-	krakenErr = json.Unmarshal(bz, &krakenEvent)
-	if krakenErr == nil {
-		switch krakenEvent.Event {
-		case krakenEventSystemStatus:
-			return
-		case krakenEventSubscriptionStatus:
-			p.messageReceivedSubscriptionStatus(bz)
+	err := json.Unmarshal(bz, &candleMsg)
+	if err == nil {
+		channelErr = json.Unmarshal(candleMsg[2], &channel)
+		if channelErr == nil && channel == "ohlc-1" {
+			p.setTickerPrice(candleMsg)
 			return
 		}
-		return
 	}
 
-	tickerErr = p.messageReceivedTickerPrice(bz)
-	if tickerErr == nil {
-		return
+	statusErr = json.Unmarshal(bz, &statusMsg)
+	if statusErr == nil {
+		switch statusMsg.Event {
+		case "systemStatus":
+			if statusMsg.Status == "online" {
+				return
+			}
+		case "subscriptionStatus":
+			if statusMsg.Status != "error" {
+				return
+			}
+		case "heartbeat":
+			return
+		}
 	}
 
 	p.logger.Error().
 		Int("length", len(bz)).
-		AnErr("ticker", tickerErr).
-		AnErr("event", krakenErr).
+		AnErr("status", statusErr).
 		Str("msg", string(bz)).
 		Msg("Error on receive message")
 }
 
-// messageReceivedTickerPrice handles the ticker price msg.
-func (p *KrakenProvider) messageReceivedTickerPrice(bz []byte) error {
-	// the provider response is an array with different types at each index
-	// kraken documentation https://docs.kraken.com/websockets/#message-ticker
-	var tickerMessage []interface{}
-	if err := json.Unmarshal(bz, &tickerMessage); err != nil {
-		return err
-	}
-
-	if len(tickerMessage) != 4 {
-		return fmt.Errorf("received an unexpected structure")
-	}
-
-	channelName, ok := tickerMessage[2].(string)
-	if !ok || channelName != "ticker" {
-		return fmt.Errorf("received an unexpected channel name")
-	}
-
-	tickerBz, err := json.Marshal(tickerMessage[1])
-	if err != nil {
-		p.logger.Err(err).Msg("could not marshal ticker message")
-		return err
-	}
-
-	var krakenTicker KrakenTicker
-	if err := json.Unmarshal(tickerBz, &krakenTicker); err != nil {
-		p.logger.Err(err).Msg("could not unmarshal ticker message")
-		return err
-	}
-
-	krakenPair, ok := tickerMessage[3].(string)
-	if !ok {
-		p.logger.Debug().Msg("received an unexpected pair")
-		return err
-	}
-
-	krakenPair = normalizeKrakenBTCPair(krakenPair)
-	currencyPairSymbol := krakenPairToCurrencyPairSymbol(krakenPair)
-
-	tickerPrice, err := krakenTicker.toTickerPrice(currencyPairSymbol)
-	if err != nil {
-		p.logger.Err(err).Msg("could not parse kraken ticker to ticker price")
-		return err
-	}
-
-	p.setTickerPair(currencyPairSymbol, tickerPrice)
-	telemetryWebsocketMessage(ProviderKraken, MessageTypeTicker)
-	return nil
-}
-
-// messageReceivedSubscriptionStatus handle the subscription status message
-// sent by the provider.
-func (p *KrakenProvider) messageReceivedSubscriptionStatus(bz []byte) {
-	var subscriptionStatus KrakenEventSubscriptionStatus
-	if err := json.Unmarshal(bz, &subscriptionStatus); err != nil {
-		p.logger.Err(err).Msg("provider could not unmarshal KrakenEventSubscriptionStatus")
-		return
-	}
-
-	switch subscriptionStatus.Status {
-	case "error":
-		p.logger.Error().Msg(subscriptionStatus.ErrorMessage)
-		p.removeSubscribedTickers(krakenPairToCurrencyPairSymbol(subscriptionStatus.Pair))
-		return
-	case "unsubscribed":
-		p.logger.Debug().Msgf("ticker %s was unsubscribed", subscriptionStatus.Pair)
-		p.removeSubscribedTickers(krakenPairToCurrencyPairSymbol(subscriptionStatus.Pair))
-		return
-	}
-}
-
-// setTickerPair sets an ticker to the map thread safe by the mutex.
-func (p *KrakenProvider) setTickerPair(symbol string, ticker types.TickerPrice) {
-	p.mtx.Lock()
-	defer p.mtx.Unlock()
-
-	ticker.Time = time.Now().UnixMilli()
-	p.tickers[symbol] = ticker
-}
-
-// removeSubscribedTickers delete N pairs from the subscribed map.
-func (p *KrakenProvider) removeSubscribedTickers(tickerSymbols ...string) {
-	p.mtx.Lock()
-	defer p.mtx.Unlock()
-
-	for _, tickerSymbol := range tickerSymbols {
-		delete(p.subscribedPairs, tickerSymbol)
-	}
-}
-
-// GetAvailablePairs returns all pairs to which the provider can subscribe.
-func (p *KrakenProvider) GetAvailablePairs() (map[string]struct{}, error) {
-	resp, err := http.Get(p.endpoints.Rest + KrakenRestPath)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	var pairsSummary KrakenPairsSummary
-	if err := json.NewDecoder(resp.Body).Decode(&pairsSummary); err != nil {
-		return nil, err
-	}
-
-	availablePairs := make(map[string]struct{}, len(pairsSummary.Result))
-	for _, pair := range pairsSummary.Result {
-		splitPair := strings.Split(pair.WsName, "/")
-		if len(splitPair) != 2 {
-			continue
-		}
-
-		cp := types.CurrencyPair{
-			Base:  strings.ToUpper(splitPair[0]),
-			Quote: strings.ToUpper(splitPair[1]),
-		}
-		availablePairs[cp.String()] = struct{}{}
-	}
-
-	return availablePairs, nil
-}
-
-// toTickerPrice return a TickerPrice based on the KrakenTicker.
-func (ticker KrakenTicker) toTickerPrice(symbol string) (types.TickerPrice, error) {
-	if len(ticker.C) != 2 || len(ticker.V) != 2 {
-		return types.TickerPrice{}, fmt.Errorf("error converting KrakenTicker to TickerPrice")
-	}
-	// ticker.C has the Price in the first position.
-	// ticker.V has the 24h volume in the second position.
-	return types.NewTickerPrice(
-		string(ProviderKraken),
-		symbol,
-		ticker.C[0],
-		ticker.V[1],
-		int64(ticker.Time),
+func (p *KrakenProvider) setTickerPrice(candleMsg [4]json.RawMessage) {
+	var (
+		candleData [9]json.RawMessage
+		price      string
+		symbol     string
+		timestamp  string
 	)
+
+	err := json.Unmarshal(candleMsg[3], &symbol)
+	if err != nil {
+		p.logger.Error().
+			Str("object", string(candleMsg[3])).
+			Msg("failed to unmarshal symbol")
+		return
+	}
+
+	err = json.Unmarshal(candleMsg[1], &candleData)
+	if err != nil {
+		p.logger.Error().
+			Str("object", string(candleMsg[1])).
+			Msg("failed to unmarshal candle")
+		return
+	}
+
+	err = json.Unmarshal(candleData[0], &timestamp)
+	if err != nil {
+		p.logger.Error().
+			Str("object", string(candleData[0])).
+			Msg("failed to unmarshal timestamp")
+		return
+	}
+
+	err = json.Unmarshal(candleData[5], &price)
+	if err != nil {
+		p.logger.Error().
+			Str("object", string(candleData[5])).
+			Msg("failed to unmarshal price")
+		return
+	}
+
+	p.logger.Error().
+		Str("symbol", symbol).
+		Str("price", price)
+
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+
+	if ticker, ok := p.tickers[symbol]; ok {
+		ticker.Price = price
+		ticker.Time = timestamp
+		p.tickers[symbol] = ticker
+	} else {
+		p.tickers[symbol] = KrakenTicker{
+			Price:  price,
+			Volume: "0",
+			Time:   timestamp,
+		}
+	}
 }
 
-// krakenPairToCurrencyPairSymbol receives a kraken pair formated
-// ex.: ATOM/USDT and return currencyPair Symbol ATOMUSDT.
-func krakenPairToCurrencyPairSymbol(krakenPair string) string {
-	return strings.ReplaceAll(krakenPair, "/", "")
+func (p *KrakenProvider) setTickerVolume(symbol string, volume string) {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+
+	if ticker, ok := p.tickers[symbol]; ok {
+		ticker.Volume = volume
+		p.tickers[symbol] = ticker
+	}
 }
 
-// normalizeKrakenBTCPair changes XBT pairs to BTC,
-// since other providers list bitcoin as BTC.
-func normalizeKrakenBTCPair(ticker string) string {
-	return strings.Replace(ticker, "XBT", "BTC", 1)
+func (p *KrakenProvider) GetAvailablePairs() (map[string]struct{}, error) {
+	// not used yet, so skipping this unless needed
+	return make(map[string]struct{}, 0), nil
+}
+
+func (p *KrakenProvider) currencyPairToKrakenSymbol(cp types.CurrencyPair) string {
+	base, ok := p.symbolMapping[cp.Base]
+	if !ok {
+		base = cp.Base
+	}
+	return base + "/" + cp.Quote
+}
+
+func (p *KrakenProvider) currencyPairToKrakenRestSymbol(cp types.CurrencyPair) string {
+	base, ok := p.symbolMapping[cp.Base]
+	if !ok {
+		base = cp.Base
+	}
+
+	if base == "XBT" && cp.Quote == "USD" {
+		return "XXBTZUSD"
+	}
+
+	return base + cp.Quote
 }
