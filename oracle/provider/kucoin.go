@@ -29,27 +29,27 @@ type (
 		logger          zerolog.Logger
 		mtx             sync.Mutex
 		endpoints       Endpoint
-		tickers         map[string]KucoinSnapshotDataData
+		tickers         map[string]KucoinWsSnapshotDataData
 		subscribedPairs map[string]types.CurrencyPair
 	}
 
-	KucoinSubscriptionMsg struct {
+	KucoinWsSubscriptionMsg struct {
 		ID    uint64 `json:"id"`
 		Type  string `json:"type"`
 		Topic string `json:"topic"`
 	}
 
-	KucoinSnapshotMsg struct {
-		Topic   string             `json:"topic"`
-		Subject string             `json:"subject"`
-		Data    KucoinSnapshotData `json:"data"`
+	KucoinWsSnapshotMsg struct {
+		Topic   string               `json:"topic"`
+		Subject string               `json:"subject"`
+		Data    KucoinWsSnapshotData `json:"data"`
 	}
 
-	KucoinSnapshotData struct {
-		Data KucoinSnapshotDataData `json:"data"`
+	KucoinWsSnapshotData struct {
+		Data KucoinWsSnapshotDataData `json:"data"`
 	}
 
-	KucoinSnapshotDataData struct {
+	KucoinWsSnapshotDataData struct {
 		Base   string  `json:"baseCurrency"`
 		Quote  string  `json:"quoteCurrency"`
 		Symbol string  `json:"symbol"`
@@ -58,16 +58,23 @@ type (
 		Time   int64   `json:"datetime"`
 	}
 
-	KucoinTokenApiResponse struct {
-		Data KucoinTokenApiData `json:"data"`
+	KucoinWsGenericMsg struct {
+		ID   string `json:"id"`
+		Type string `json:"type"`
+		Code int    `json:"code"`
+		Data string `json:"data"`
 	}
 
-	KucoinTokenApiData struct {
-		Token   string                         `json:"token"`
-		Servers []KucoinTokenApiInstanceServer `json:"instanceServers"`
+	KucoinRestTokenResponse struct {
+		Data KucoinRestTokenData `json:"data"`
 	}
 
-	KucoinTokenApiInstanceServer struct {
+	KucoinRestTokenData struct {
+		Token   string                          `json:"token"`
+		Servers []KucoinRestTokenInstanceServer `json:"instanceServers"`
+	}
+
+	KucoinRestTokenInstanceServer struct {
 		Endpoint     string `json:"endpoint"`
 		Protocol     string `json:"protocol"`
 		PingInterval uint64 `json:"pingInterval"`
@@ -89,22 +96,22 @@ func NewKucoinProvider(
 		}
 	}
 
-	// get public token
-	resp, err := http.Post(
-		"https://"+endpoints.Rest+"/api/v1/bullet-public",
-		"application/json",
-		bytes.NewBufferString(""),
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
+	// // get public token
+	// resp, err := http.Post(
+	// 	"https://"+endpoints.Rest+"/api/v1/bullet-public",
+	// 	"application/json",
+	// 	bytes.NewBufferString(""),
+	// )
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// defer resp.Body.Close()
 
-	var tokenResponse KucoinTokenApiResponse
-	err = json.NewDecoder(resp.Body).Decode(&tokenResponse)
-	if err != nil {
-		return nil, err
-	}
+	// var tokenResponse KucoinRestTokenResponse
+	// err = json.NewDecoder(resp.Body).Decode(&tokenResponse)
+	// if err != nil {
+	// 	return nil, err
+	// }
 
 	wsURL := url.URL{
 		Scheme: "wss",
@@ -112,17 +119,17 @@ func NewKucoinProvider(
 		Path:   kucoinWSPath,
 	}
 
-	query := wsURL.Query()
-	query.Set("token", tokenResponse.Data.Token)
+	// query := wsURL.Query()
+	// query.Set("token", tokenResponse.Data.Token)
 
-	wsURL.RawQuery = query.Encode()
+	// wsURL.RawQuery = query.Encode()
 
 	kucoinLogger := logger.With().Str("provider", string(ProviderKucoin)).Logger()
 
 	provider := &KucoinProvider{
 		logger:          kucoinLogger,
 		endpoints:       endpoints,
-		tickers:         map[string]KucoinSnapshotDataData{},
+		tickers:         map[string]KucoinWsSnapshotDataData{},
 		subscribedPairs: map[string]types.CurrencyPair{},
 	}
 
@@ -141,6 +148,8 @@ func NewKucoinProvider(
 
 	provider.wsc.pingMessage = `{"id":"1","type":"ping"}`
 
+	provider.renewToken()
+
 	go provider.wsc.Start()
 
 	return provider, nil
@@ -155,7 +164,7 @@ func (p *KucoinProvider) GetSubscriptionMsgs(cps ...types.CurrencyPair) []interf
 		symbols[i] = cp.Join("-")
 	}
 
-	subscriptionMsgs[0] = KucoinSubscriptionMsg{
+	subscriptionMsgs[0] = KucoinWsSubscriptionMsg{
 		ID:    1,
 		Type:  "subscribe",
 		Topic: "/market/snapshot:" + strings.Join(symbols, ","),
@@ -216,8 +225,10 @@ func (p *KucoinProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPric
 
 func (p *KucoinProvider) messageReceived(messageType int, bz []byte) {
 	var (
-		snapshotMsg KucoinSnapshotMsg
+		snapshotMsg KucoinWsSnapshotMsg
 		snapshotErr error
+		genericMsg  KucoinWsGenericMsg
+		genericErr  error
 	)
 
 	snapshotErr = json.Unmarshal(bz, &snapshotMsg)
@@ -227,6 +238,14 @@ func (p *KucoinProvider) messageReceived(messageType int, bz []byte) {
 		return
 	}
 
+	genericErr = json.Unmarshal(bz, &genericMsg)
+	if genericErr == nil && genericMsg.Data == "token is invalid" {
+		err := p.renewToken()
+		if err == nil {
+			return
+		}
+	}
+
 	p.logger.Error().
 		Int("length", len(bz)).
 		AnErr("snapshot", snapshotErr).
@@ -234,7 +253,7 @@ func (p *KucoinProvider) messageReceived(messageType int, bz []byte) {
 		Msg("Error on receive message")
 }
 
-func (p *KucoinProvider) setTickerPair(data KucoinSnapshotDataData) {
+func (p *KucoinProvider) setTickerPair(data KucoinWsSnapshotDataData) {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 
@@ -244,4 +263,38 @@ func (p *KucoinProvider) setTickerPair(data KucoinSnapshotDataData) {
 func (p *KucoinProvider) GetAvailablePairs() (map[string]struct{}, error) {
 	// not used yet, so skipping this unless needed
 	return make(map[string]struct{}, 0), nil
+}
+
+func (p *KucoinProvider) renewToken() error {
+	// get public token
+	resp, err := http.Post(
+		"https://"+p.endpoints.Rest+"/api/v1/bullet-public",
+		"application/json",
+		bytes.NewBufferString(""),
+	)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	var tokenResponse KucoinRestTokenResponse
+	err = json.NewDecoder(resp.Body).Decode(&tokenResponse)
+	if err != nil {
+		return err
+	}
+
+	wsURL := url.URL{
+		Scheme: "wss",
+		Host:   p.endpoints.Websocket,
+		Path:   kucoinWSPath,
+	}
+
+	query := wsURL.Query()
+	query.Set("token", tokenResponse.Data.Token)
+
+	wsURL.RawQuery = query.Encode()
+
+	p.wsc.websocketURL = wsURL
+
+	return nil
 }
