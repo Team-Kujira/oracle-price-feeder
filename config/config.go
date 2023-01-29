@@ -199,7 +199,7 @@ func telemetryValidation(sl validator.StructLevel) {
 
 // endpointValidation is custom validation for the ProviderEndpoint struct.
 func endpointValidation(sl validator.StructLevel) {
-	endpoint := sl.Current().Interface().(provider.Endpoint)
+	endpoint := sl.Current().Interface().(ProviderEndpoints)
 
 	if len(endpoint.Name) < 1 || len(endpoint.Rest) < 1 || len(endpoint.Websocket) < 1 {
 		sl.ReportError(endpoint, "endpoint", "Endpoint", "unsupportedEndpointType", "")
@@ -212,7 +212,7 @@ func endpointValidation(sl validator.StructLevel) {
 // Validate returns an error if the Config object is invalid.
 func (c Config) Validate() error {
 	validate.RegisterStructValidation(telemetryValidation, Telemetry{})
-	validate.RegisterStructValidation(endpointValidation, provider.Endpoint{})
+	validate.RegisterStructValidation(endpointValidation, ProviderEndpoints{})
 	return validate.Struct(c)
 }
 

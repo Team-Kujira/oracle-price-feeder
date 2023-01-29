@@ -465,6 +465,10 @@ func NewProvider(
 	case provider.ProviderBinance:
 	case provider.ProviderBinanceUS:
 		return provider.NewBinanceProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderBybit:
+		return provider.NewBybitProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderMock:
+		return provider.NewMockProvider(ctx, providerLogger, endpoint, providerPairs...)
 	}
 	return nil, fmt.Errorf("provider %s not found", providerName)
 }

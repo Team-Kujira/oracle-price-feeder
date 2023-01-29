@@ -61,6 +61,7 @@ func NewWebsocketController(
 	subscribeHandler SubscribeHandler,
 	pingDuration time.Duration,
 	pingMessageType uint,
+	pingMessage string,
 	logger zerolog.Logger,
 ) *WebsocketController {
 	return &WebsocketController{
@@ -71,7 +72,7 @@ func NewWebsocketController(
 		subscribeHandler: subscribeHandler,
 		messageHandler: messageHandler,
 		pingDuration: pingDuration,
-		pingMessage: "ping",
+		pingMessage: pingMessage,
 		pingMessageType: pingMessageType,
 		logger: logger,
 	}

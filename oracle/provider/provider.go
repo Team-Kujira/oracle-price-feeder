@@ -98,6 +98,7 @@ type (
 		PollInterval time.Duration
 		PingDuration time.Duration
 		PingType uint
+		PingMessage string
 	}
 )
 
@@ -134,6 +135,7 @@ func (p *provider) Init(
 			websocketSubscribeHandler,
 			p.endpoints.PingDuration,
 			p.endpoints.PingType,
+			p.endpoints.PingMessage,
 			p.logger,
 		)
 		go p.websocket.Start()
@@ -204,13 +206,17 @@ func (e *Endpoint) SetDefaults() {
 		defaults = binanceDefaultEndpoints
 	case ProviderBinanceUS:
 		defaults = binanceUSDefaultEndpoints
+	case ProviderBybit:
+		defaults = bybitDefaultEndpoints
+	case ProviderMock:
+		defaults = mockDefaultEndpoints
 	default:
 		return
 	}
 	if e.Rest == "" {
 		e.Rest = defaults.Rest
 	}
-	if e.Websocket == "" {
+	if e.Websocket == "" && defaults.Websocket != "" { // don't enable websockets for providers that don't support them
 		e.Websocket = defaults.Websocket
 	}
 	if e.WebsocketPath == "" {
@@ -224,6 +230,13 @@ func (e *Endpoint) SetDefaults() {
 	}
 	if e.PingType == 0 {
 		e.PingType = defaults.PingType
+	}
+	if e.PingMessage == "" {
+		if defaults.PingMessage != "" {
+			e.PingMessage = defaults.PingMessage
+		} else {
+			e.PingMessage = "ping"
+		}
 	}
 }
 

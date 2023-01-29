@@ -72,14 +72,14 @@ func TestValidate(t *testing.T) {
 	}
 
 	invalidEndpoints := validConfig()
-	invalidEndpoints.ProviderEndpoints = []provider.Endpoint{
+	invalidEndpoints.ProviderEndpoints = []config.ProviderEndpoints{
 		{
 			Name: provider.ProviderBinance,
 		},
 	}
 
 	invalidEndpointsProvider := validConfig()
-	invalidEndpointsProvider.ProviderEndpoints = []provider.Endpoint{
+	invalidEndpointsProvider.ProviderEndpoints = []config.ProviderEndpoints{
 		{
 			Name:      "foo",
 			Rest:      "bar",
