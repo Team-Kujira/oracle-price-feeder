@@ -88,7 +88,7 @@ type (
 		GasAdjustment       float64             `toml:"gas_adjustment" validate:"required"`
 		GasPrices           string              `toml:"gas_prices" validate:"required"`
 		ProviderTimeout     string              `toml:"provider_timeout"`
-		ProviderEndpoints   []provider.Endpoint `toml:"provider_endpoints" validate:"dive"`
+		ProviderEndpoints   []ProviderEndpoints `toml:"provider_endpoints" validate:"dive"`
 		ProviderMinOverride bool                `toml:"provider_min_override"`
 		EnableServer        bool                `toml:"enable_server"`
 		EnableVoter         bool                `toml:"enable_voter"`
@@ -178,6 +178,14 @@ type (
 		URL     string `toml:"url" validate:"required"`
 		Timeout string `toml:"timeout" validate:"required"`
 	}
+
+	ProviderEndpoints struct {
+		Name provider.Name `toml:"name" validate:"required"`
+		Rest string `toml:"rest"`
+		Websocket string `toml:"websocket"`
+		WebsocketPath string `toml:"websocket_path"`
+		PollInterval string `toml:"poll_interval"`
+	}
 )
 
 // telemetryValidation is custom validation for the Telemetry struct.
@@ -206,6 +214,25 @@ func (c Config) Validate() error {
 	validate.RegisterStructValidation(telemetryValidation, Telemetry{})
 	validate.RegisterStructValidation(endpointValidation, provider.Endpoint{})
 	return validate.Struct(c)
+}
+
+func (p ProviderEndpoints) ToEndpoint() (provider.Endpoint, error) {
+	var pollInterval time.Duration
+	if p.PollInterval != "" {
+		interval, err := time.ParseDuration(p.PollInterval)
+		if err != nil {
+			return provider.Endpoint{}, fmt.Errorf("failed to parse poll interval: %v", err)
+		}
+		pollInterval = interval
+	}
+	e := provider.Endpoint {
+		Name: p.Name,
+		Rest: p.Rest,
+		Websocket: p.Websocket,
+		WebsocketPath: p.WebsocketPath,
+		PollInterval: pollInterval,
+	}
+	return e, nil
 }
 
 // ParseConfig attempts to read and parse configuration from the given file path.
