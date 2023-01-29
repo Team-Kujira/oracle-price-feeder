@@ -1,19 +1,24 @@
 package provider
 
 import (
+	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"price-feeder/oracle/types"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/rs/zerolog"
 )
 
 const (
 	defaultTimeout       = 10 * time.Second
+	staleTickersCutoff   = 1 * time.Minute
 	providerCandlePeriod = 10 * time.Minute
 
 	ProviderFin       Name = "fin"
@@ -41,70 +46,33 @@ const (
 	ProviderStride    Name = "stride"
 )
 
-var (
-	ping = []byte("ping")
-
-	// vars to be used in the provider specific tests
-	testAtomUsdtCurrencyPair = types.CurrencyPair{
-		Base:  "ATOM",
-		Quote: "USDT",
-	}
-
-	testAtomPriceFloat64  = float64(12.3456)
-	testAtomPriceString   = "12.3456"
-	testAtomPriceInt64    = int64(1234560000)
-	testAtomPriceDec      = sdk.NewDec(1234560000).QuoInt64(100000000)
-	testAtomVolumeFloat64 = float64(7654321.98765)
-	testAtomVolumeString  = "7654321.98765"
-	testAtomVolumeInt64   = int64(765432198765000)
-	testAtomVolumeDec     = sdk.NewDec(765432198765000).QuoInt64(100000000)
-
-	testBtcUsdtCurrencyPair = types.CurrencyPair{
-		Base:  "BTC",
-		Quote: "USDT",
-	}
-
-	testBtcPriceFloat64  = float64(12345.6789)
-	testBtcPriceString   = "12345.6789"
-	testBtcPriceInt64    = int64(1234567890000)
-	testBtcPriceDec      = sdk.NewDec(1234567890000).QuoInt64(100000000)
-	testBtcVolumeFloat64 = float64(7654.32198765)
-	testBtcVolumeString  = "7654.32198765"
-	testBtcVolumeInt64   = int64(765432198765)
-	testBtcVolumeDec     = sdk.NewDec(765432198765).QuoInt64(100000000)
-)
-
 type (
 	// Provider defines an interface an exchange price provider must implement.
 	Provider interface {
 		// GetTickerPrices returns the tickerPrices based on the provided pairs.
 		GetTickerPrices(...types.CurrencyPair) (map[string]types.TickerPrice, error)
-
-		// GetTickerPrice returns the last ticker price for given currency pair
-		GetTickerPrice(types.CurrencyPair) (types.TickerPrice, error)
-
 		// GetAvailablePairs return all available pairs symbol to subscribe.
 		GetAvailablePairs() (map[string]struct{}, error)
-
-		// GetSubscribedPair returns the currency pair and true for given
-		// symbol if found in 'subscribedPairs' otherwise returns an
-		// empty currency pair and false
-		GetSubscribedPair(s string) (types.CurrencyPair, bool)
-
-		// SetSubscribedPair adds the currency pair to subscribedPairs map
-		SetSubscribedPair(types.CurrencyPair)
-
 		// SubscribeCurrencyPairs sends subscription messages for the new currency
 		// pairs and adds them to the providers subscribed pairs
 		SubscribeCurrencyPairs(...types.CurrencyPair) error
+		CurrencyPairToProviderPair(types.CurrencyPair) string
+		ProviderPairToCurrencyPair(string) types.CurrencyPair
+	}
 
-		// GetSubscriptionMsgs returns all subscription messages needed to
-		// subscribe to the configured wss channels
-		GetSubscriptionMsgs(...types.CurrencyPair) []interface{}
+	provider struct {
+		ctx context.Context
+		endpoints Endpoint
+		http *http.Client
+		logger zerolog.Logger
+		mtx sync.RWMutex
+		pairs map[string]types.CurrencyPair
+		tickers map[string]types.TickerPrice
+		websocket *WebsocketController
+	}
 
-		// SendSubscriptionMsgs sends provided subscription messages
-		// to the websocket endpoint
-		SendSubscriptionMsgs(msgs []interface{}) error
+	PollingProvider interface {
+		Poll() error
 	}
 
 	// Name name of an oracle provider. Usually it is an exchange
@@ -123,53 +91,155 @@ type (
 	// Endpoint defines an override setting in our config for the
 	// hardcoded rest and websocket api endpoints.
 	Endpoint struct {
-		// Name of the provider, ex. "binance"
-		Name Name `toml:"name"`
-
-		// Rest endpoint for the provider, ex. "https://api1.binance.com"
-		Rest string `toml:"rest"`
-
-		// Websocket endpoint for the provider, ex. "stream.binance.com:9443"
-		Websocket string `toml:"websocket"`
+		Name Name // ex. "binance"
+		Rest string // ex. "https://api1.binance.com"
+		Websocket string // ex. "stream.binance.com:9443"
+		WebsocketPath string
+		PollInterval time.Duration
+		PingDuration time.Duration
+		PingType uint
 	}
 )
 
-func getTickerPrices(p Provider, cps []types.CurrencyPair) (map[string]types.TickerPrice, error) {
-	tickerPrices := make(map[string]types.TickerPrice, len(cps))
+func (p *provider) Init(
+	ctx context.Context,
+	endpoints Endpoint,
+	logger zerolog.Logger,
+	pairs []types.CurrencyPair,
+	websocketMessageHandler MessageHandler,
+	websocketSubscribeHandler SubscribeHandler,
+) {
+	p.ctx = ctx
+	p.endpoints = endpoints
+	p.endpoints.SetDefaults()
+	p.logger = logger.With().Str("provider", p.endpoints.Name.String()).Logger()
+	p.pairs = make(map[string]types.CurrencyPair, len(pairs))
+	for _, pair := range pairs {
+		p.pairs[pair.String()] = pair
+	}
+	p.tickers = make(map[string]types.TickerPrice, len(pairs))
+	p.http = newDefaultHTTPClient()
+	if p.endpoints.Websocket != "" {
+		websocketUrl := url.URL{
+			Scheme: "wss",
+			Host:   p.endpoints.Websocket,
+			Path:   p.endpoints.WebsocketPath,
+		}	
+		p.websocket = NewWebsocketController(
+			ctx,
+			p.endpoints.Name,
+			websocketUrl,
+			pairs,
+			websocketMessageHandler,
+			websocketSubscribeHandler,
+			p.endpoints.PingDuration,
+			p.endpoints.PingType,
+			p.logger,
+		)
+		go p.websocket.Start()
+	}
+}
 
-	for _, cp := range cps {
-
-		price, err := p.GetTickerPrice(cp)
-		if err != nil {
-			return nil, err
+func (p *provider) GetTickerPrices(pairs ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
+	p.mtx.RLock()
+	defer p.mtx.RUnlock()
+	tickers := make(map[string]types.TickerPrice, len(pairs))
+	for _, pair := range pairs {
+		symbol := pair.String()
+		price, ok := p.tickers[symbol]
+		if !ok {
+			p.logger.Warn().Str("pair", symbol).Msg("missing ticker price for pair")
+		} else {
+			if time.Since(price.Time) > staleTickersCutoff {
+				p.logger.Warn().Str("pair", symbol).Time("time", price.Time).Msg("tickers data is stale")
+			} else {
+				tickers[symbol] = price
+			}
 		}
-		tickerPrices[cp.String()] = price
 	}
-
-	return tickerPrices, nil
+	return tickers, nil
 }
 
-// setSubscribedPairs sets N currency pairs to the map of subscribed pairs.
-func setSubscribedPairs(p Provider, cps ...types.CurrencyPair) {
-	for _, cp := range cps {
-		p.SetSubscribedPair(cp)
+func (p *provider) SubscribeCurrencyPairs(pairs ...types.CurrencyPair) error {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+	newPairs := p.addPairs(pairs...)
+	if p.endpoints.Websocket == "" {
+		return nil
 	}
+	return p.websocket.AddPairs(newPairs)
 }
 
-func subscribeCurrencyPairs(p Provider, cps []types.CurrencyPair) error {
+func (p *provider) addPairs(pairs ...types.CurrencyPair) []types.CurrencyPair {
 	newPairs := []types.CurrencyPair{}
-	for _, cp := range cps {
-		if _, ok := p.GetSubscribedPair(cp.String()); !ok {
-			newPairs = append(newPairs, cp)
+	for _, pair := range pairs {
+		_, ok := p.pairs[pair.String()]
+		if !ok {
+			newPairs = append(newPairs, pair)
 		}
 	}
+	return newPairs
+}
 
-	newSubscriptionMsgs := p.GetSubscriptionMsgs(newPairs...)
-	if err := p.SendSubscriptionMsgs(newSubscriptionMsgs); err != nil {
-		return err
+func (p *provider) CurrencyPairToProviderPair(pair types.CurrencyPair) string {
+	return pair.Base + "_" + pair.Quote
+}
+
+func (p *provider) ProviderPairToCurrencyPair(pair string) types.CurrencyPair {
+	tokens := strings.Split(pair, "_")
+	if len(tokens) != 2 {
+		p.logger.Warn().Str("pair", pair).Msg("failed to convert to currency pair")
+		return types.CurrencyPair{}
 	}
-	setSubscribedPairs(p, newPairs...)
-	return nil
+	return types.CurrencyPair{
+		Base: tokens[0],
+		Quote: tokens[1],
+	}
+}
+
+func (e *Endpoint) SetDefaults() {
+	var defaults Endpoint
+	switch e.Name {
+	case ProviderBinance:
+		defaults = binanceDefaultEndpoints
+	case ProviderBinanceUS:
+		defaults = binanceUSDefaultEndpoints
+	default:
+		return
+	}
+	if e.Rest == "" {
+		e.Rest = defaults.Rest
+	}
+	if e.Websocket == "" {
+		e.Websocket = defaults.Websocket
+	}
+	if e.WebsocketPath == "" {
+		e.WebsocketPath = defaults.WebsocketPath
+	}
+	if e.PollInterval == time.Duration(0) {
+		e.PollInterval = defaults.PollInterval
+	}
+	if e.PingDuration == time.Duration(0) {
+		e.PingDuration = defaults.PingDuration
+	}
+	if e.PingType == 0 {
+		e.PingType = defaults.PingType
+	}
+}
+
+func startPolling(p PollingProvider, interval time.Duration, logger zerolog.Logger) {
+	for {
+		err := p.Poll()
+		if err != nil {
+			logger.Error().Err(err).Msg("failed to poll")
+		}
+		time.Sleep(interval)
+	}
+}
+
+func (p *provider) GetAvailablePairs() (map[string]struct{}, error) {
+	p.logger.Warn().Msg("available pairs query not implemented")
+	return map[string]struct{}{}, nil
 }
 
 // String cast provider name to string.

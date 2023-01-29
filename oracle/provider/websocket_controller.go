@@ -26,6 +26,8 @@ const (
 type (
 	MessageHandler func(int, []byte)
 
+	SubscribeHandler func(...types.CurrencyPair) []interface{}
+
 	// WebsocketController defines a provider agnostic websocket handler
 	// that manages reconnecting, subscribing, and receiving messages
 	WebsocketController struct {
@@ -34,8 +36,9 @@ type (
 		websocketCancelFunc context.CancelFunc
 		providerName        Name
 		websocketURL        url.URL
-		subscriptionMsgs    []interface{}
+		pairs 				[]types.CurrencyPair
 		messageHandler      MessageHandler
+		subscribeHandler	SubscribeHandler
 		pingDuration        time.Duration
 		pingMessage         string
 		pingMessageType     uint
@@ -53,22 +56,24 @@ func NewWebsocketController(
 	ctx context.Context,
 	providerName Name,
 	websocketURL url.URL,
-	subscriptionMsgs []interface{},
+	pairs []types.CurrencyPair,
 	messageHandler MessageHandler,
+	subscribeHandler SubscribeHandler,
 	pingDuration time.Duration,
 	pingMessageType uint,
 	logger zerolog.Logger,
 ) *WebsocketController {
 	return &WebsocketController{
-		parentCtx:        ctx,
-		providerName:     providerName,
-		websocketURL:     websocketURL,
-		subscriptionMsgs: subscriptionMsgs,
-		messageHandler:   messageHandler,
-		pingDuration:     pingDuration,
-		pingMessage:      "ping",
-		pingMessageType:  pingMessageType,
-		logger:           logger,
+		parentCtx: ctx,
+		providerName: providerName,
+		websocketURL: websocketURL,
+		pairs: pairs,
+		subscribeHandler: subscribeHandler,
+		messageHandler: messageHandler,
+		pingDuration: pingDuration,
+		pingMessage: "ping",
+		pingMessageType: pingMessageType,
+		logger: logger,
 	}
 }
 
@@ -95,7 +100,7 @@ func (wsc *WebsocketController) Start() {
 		go wsc.readWebSocket()
 		go wsc.pingLoop()
 
-		if err := wsc.subscribe(wsc.subscriptionMsgs); err != nil {
+		if err := wsc.subscribe(wsc.subscribeHandler(wsc.pairs...)); err != nil {
 			wsc.logger.Err(err).Send()
 			wsc.close()
 			continue
@@ -132,7 +137,7 @@ func (wsc *WebsocketController) iterateRetryCounter() time.Duration {
 
 // subscribe sends the WebsocketControllers subscription messages to the websocket
 func (wsc *WebsocketController) subscribe(msgs []interface{}) error {
-	telemetryWebsocketSubscribeCurrencyPairs(wsc.providerName, len(wsc.subscriptionMsgs))
+	telemetryWebsocketSubscribeCurrencyPairs(wsc.providerName, len(wsc.pairs))
 	for _, jsonMessage := range msgs {
 		if err := wsc.SendJSON(jsonMessage); err != nil {
 			return fmt.Errorf(types.ErrWebsocketSend.Error(), wsc.providerName, err)
@@ -144,12 +149,11 @@ func (wsc *WebsocketController) subscribe(msgs []interface{}) error {
 // AddSubscriptionMsgs immediately sends the new subscription messages and
 // adds them to the subscriptionMsgs array if successful
 func (wsc *WebsocketController) AddSubscriptionMsgs(msgs []interface{}) error {
-	err := wsc.subscribe(msgs)
-	if err != nil {
-		return err
-	}
-	wsc.subscriptionMsgs = append(wsc.subscriptionMsgs, msgs...)
-	return nil
+	return wsc.subscribe(msgs)
+}
+
+func (w *WebsocketController) AddPairs(pairs []types.CurrencyPair) error {
+	return w.subscribe(w.subscribeHandler(pairs...))
 }
 
 // SendJSON sends a json message to the websocket connection using the Websocket

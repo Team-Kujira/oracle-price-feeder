@@ -252,16 +252,6 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 		o.logger.Debug().Err(err).Msg("failed to get ticker prices from provider")
 	}
 
-	providerPrices, err := FilterStaleTickers(
-		o.logger,
-		providerPrices,
-		30,
-	)
-
-	if err != nil {
-		return err
-	}
-
 	computedPrices, err := GetComputedPrices(
 		o.logger,
 		providerPrices,
@@ -472,75 +462,9 @@ func NewProvider(
 	switch providerName {
 	case provider.ProviderBinance:
 		return provider.NewBinanceProvider(ctx, logger, endpoint, false, providerPairs...)
-
 	case provider.ProviderBinanceUS:
 		return provider.NewBinanceProvider(ctx, logger, endpoint, true, providerPairs...)
-
-	case provider.ProviderKraken:
-		return provider.NewKrakenProvider(ctx, logger, endpoint, providerPairs...)
-
-	case provider.ProviderOsmosis:
-		return provider.NewOsmosisProvider(endpoint), nil
-
-	// case provider.ProviderOsmosisV2:
-	// 	return provider.NewOsmosisV2Provider(ctx, logger, endpoint, providerPairs...)
-
-	case provider.ProviderHuobi:
-		return provider.NewHuobiProvider(ctx, logger, endpoint, providerPairs...)
-
-	case provider.ProviderBybit:
-		return provider.NewBybitProvider(ctx, logger, endpoint, providerPairs...)
-
-	case provider.ProviderCoinbase:
-		return provider.NewCoinbaseProvider(ctx, logger, endpoint, providerPairs...)
-
-	case provider.ProviderOkx:
-		return provider.NewOkxProvider(ctx, logger, endpoint, providerPairs...)
-
-	case provider.ProviderGate:
-		return provider.NewGateProvider(ctx, logger, endpoint, providerPairs...)
-
-	case provider.ProviderBitget:
-		return provider.NewBitgetProvider(ctx, logger, endpoint, providerPairs...)
-
-	case provider.ProviderMexc:
-		return provider.NewMexcProvider(ctx, logger, endpoint, providerPairs...)
-
-	case provider.ProviderCrypto:
-		return provider.NewCryptoProvider(ctx, logger, endpoint, providerPairs...)
-
-	case provider.ProviderBitfinex:
-		return provider.NewBitfinexProvider(ctx, logger, endpoint, providerPairs...)
-
-	case provider.ProviderHitbtc:
-		return provider.NewHitbtcProvider(ctx, logger, endpoint, providerPairs...)
-
-	case provider.ProviderKucoin:
-		return provider.NewKucoinProvider(ctx, logger, endpoint, providerPairs...)
-
-	case provider.ProviderBitforex:
-		return provider.NewBitforexProvider(ctx, logger, endpoint, providerPairs...)
-
-	case provider.ProviderPoloniex:
-		return provider.NewPoloniexProvider(ctx, logger, endpoint, providerPairs...)
-
-	case provider.ProviderPhemex:
-		return provider.NewPhemexProvider(ctx, logger, endpoint, providerPairs...)
-
-	case provider.ProviderLbank:
-		return provider.NewLbankProvider(ctx, logger, endpoint, providerPairs...)
-
-	case provider.ProviderMock:
-		return provider.NewMockProvider(), nil
-
-	case provider.ProviderFin:
-		return provider.NewFinProvider(endpoint), nil
-
-	case provider.ProviderStride:
-		return provider.NewStrideProvider(endpoint), nil
-
 	}
-
 	return nil, fmt.Errorf("provider %s not found", providerName)
 }
 
