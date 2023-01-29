@@ -14,7 +14,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
-const binanceTickersPath   = "/api/v3/ticker/price"
+const binanceTickersPath   = "/api/v3/ticker"
 
 var (
 	_ Provider = (*BinanceProvider)(nil)
@@ -51,7 +51,6 @@ func NewBinanceProvider(
 	ctx context.Context,
 	logger zerolog.Logger,
 	endpoints Endpoint,
-	binanceUS bool,
 	pairs ...types.CurrencyPair,
 ) (*BinanceProvider, error) {
 	provider := &BinanceProvider{}
@@ -63,7 +62,7 @@ func NewBinanceProvider(
 		nil,
 		nil,
 	)
-	go startPolling(provider, endpoints.PollInterval, logger)
+	go startPolling(provider, provider.endpoints.PollInterval, logger)
 	return provider, nil
 }
 
@@ -116,5 +115,6 @@ func (p *BinanceProvider) Poll() error {
 			Time: now,
 		}
 	}
+	p.logger.Debug().Msg("updated tickers")
 	return nil
 }

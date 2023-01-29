@@ -459,11 +459,12 @@ func NewProvider(
 	endpoint provider.Endpoint,
 	providerPairs ...types.CurrencyPair,
 ) (provider.Provider, error) {
+	endpoint.Name = providerName
+	providerLogger := logger.With().Str("provider", providerName.String()).Logger()
 	switch providerName {
 	case provider.ProviderBinance:
-		return provider.NewBinanceProvider(ctx, logger, endpoint, false, providerPairs...)
 	case provider.ProviderBinanceUS:
-		return provider.NewBinanceProvider(ctx, logger, endpoint, true, providerPairs...)
+		return provider.NewBinanceProvider(ctx, providerLogger, endpoint, providerPairs...)
 	}
 	return nil, fmt.Errorf("provider %s not found", providerName)
 }

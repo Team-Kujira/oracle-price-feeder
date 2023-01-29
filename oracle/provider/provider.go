@@ -228,6 +228,7 @@ func (e *Endpoint) SetDefaults() {
 }
 
 func startPolling(p PollingProvider, interval time.Duration, logger zerolog.Logger) {
+	logger.Debug().Dur("interval", interval).Msg("starting poll loop")
 	for {
 		err := p.Poll()
 		if err != nil {
