@@ -25,6 +25,7 @@ import (
 	"price-feeder/oracle"
 	"price-feeder/oracle/client"
 	"price-feeder/oracle/provider"
+	"price-feeder/oracle/history"
 	v1 "price-feeder/router/v1"
 
 	"github.com/cosmos/cosmos-sdk/telemetry"
@@ -177,6 +178,11 @@ func priceFeederCmdHandler(cmd *cobra.Command, args []string) error {
 		endpoints[endpoint.Name] = endpoint
 	}
 
+	history, err := history.NewPriceHistory(cfg.HistoryDb, logger)
+	if err != nil {
+		return fmt.Errorf("failed to init price history db: %v", err)
+	}
+
 	oracle := oracle.New(
 		logger,
 		oracleClient,
@@ -185,6 +191,7 @@ func priceFeederCmdHandler(cmd *cobra.Command, args []string) error {
 		deviations,
 		endpoints,
 		cfg.Healthchecks,
+		history,
 	)
 
 	telemetryCfg := telemetry.Config{}

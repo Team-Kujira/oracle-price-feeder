@@ -13,6 +13,7 @@ import (
 
 	"price-feeder/config"
 	"price-feeder/oracle/client"
+	"price-feeder/oracle/history"
 	"price-feeder/oracle/provider"
 	"price-feeder/oracle/types"
 )
@@ -57,6 +58,8 @@ type OracleTestSuite struct {
 
 // SetupSuite executes once before the suite's tests are executed.
 func (ots *OracleTestSuite) SetupSuite() {
+	history, err := history.NewPriceHistory(":memory:", zerolog.Nop())
+	ots.NoError(err)
 	ots.oracle = New(
 		zerolog.Nop(),
 		client.OracleClient{},
@@ -93,6 +96,7 @@ func (ots *OracleTestSuite) SetupSuite() {
 		[]config.Healthchecks{
 			{URL: "https://hc-ping.com/HEALTHCHECK-UUID", Timeout: "200ms"},
 		},
+		history,
 	)
 }
 
@@ -369,62 +373,6 @@ func TestGenerateExchangeRatesString(t *testing.T) {
 			require.Equal(t, tc.expected, out)
 		})
 	}
-}
-
-func TestSuccessSetProviderTickerPricesAndCandles(t *testing.T) {
-	providerPrices := make(provider.AggregatedProviderPrices, 1)
-	providerCandles := make(provider.AggregatedProviderCandles, 1)
-	pair := types.CurrencyPair{
-		Base:  "ATOM",
-		Quote: "USDT",
-	}
-
-	atomPrice := sdk.MustNewDecFromStr("29.93")
-	atomVolume := sdk.MustNewDecFromStr("894123.00")
-
-	prices := make(map[string]types.TickerPrice, 1)
-	prices[pair.String()] = types.TickerPrice{
-		Price:  atomPrice,
-		Volume: atomVolume,
-	}
-
-	candles := make(map[string][]types.CandlePrice, 1)
-	candles[pair.String()] = []types.CandlePrice{
-		{
-			Price:     atomPrice,
-			Volume:    atomVolume,
-			TimeStamp: provider.PastUnixTime(1 * time.Minute),
-		},
-	}
-
-	success := SetProviderTickerPricesAndCandles(
-		provider.ProviderGate,
-		providerPrices,
-		providerCandles,
-		prices,
-		candles,
-		pair,
-	)
-
-	require.True(t, success, "It should successfully set the prices")
-	require.Equal(t, atomPrice, providerPrices[provider.ProviderGate][pair.Base].Price)
-	require.Equal(t, atomPrice, providerCandles[provider.ProviderGate][pair.Base][0].Price)
-}
-
-func TestFailedSetProviderTickerPricesAndCandles(t *testing.T) {
-	success := SetProviderTickerPricesAndCandles(
-		provider.ProviderCoinbase,
-		make(provider.AggregatedProviderPrices, 1),
-		make(provider.AggregatedProviderCandles, 1),
-		make(map[string]types.TickerPrice, 1),
-		make(map[string][]types.CandlePrice, 1),
-		types.CurrencyPair{
-			Base:  "ATOM",
-			Quote: "USDT",
-		},
-	)
-
-	require.False(t, success, "It should failed to set the prices, prices and candle are empty")
 }
 
 func TestSuccessGetComputedPricesTickers(t *testing.T) {

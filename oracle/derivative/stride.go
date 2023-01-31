@@ -1,0 +1,5 @@
+package derivative
+
+type (
+	StrideDerivative
+)

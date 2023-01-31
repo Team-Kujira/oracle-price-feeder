@@ -140,7 +140,7 @@ func (p *BybitProvider) setTickerPair(ticker BybitTicker) {
 	t := types.TickerPrice{
 		Price: strToDec(ticker.Data.Price),
 		Volume: strToDec(ticker.Data.Volume),
-		Time: time.Unix(ticker.Data.Time, 0),
+		Time: time.Unix(ticker.Data.Time / 1000, ticker.Data.Time % 1000),
 	}
 	p.tickers[ticker.Data.Symbol] = t
 }

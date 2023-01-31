@@ -20,6 +20,7 @@ import (
 	"price-feeder/oracle/client"
 	"price-feeder/oracle/provider"
 	"price-feeder/oracle/types"
+	"price-feeder/oracle/history"
 	pfsync "price-feeder/pkg/sync"
 
 	oracletypes "github.com/Team-Kujira/core/x/oracle/types"
@@ -66,6 +67,7 @@ type Oracle struct {
 	oracleClient       client.OracleClient
 	deviations         map[string]sdk.Dec
 	endpoints          map[provider.Name]provider.Endpoint
+	history history.PriceHistory
 
 	mtx             sync.RWMutex
 	lastPriceSyncTS time.Time
@@ -82,6 +84,7 @@ func New(
 	deviations map[string]sdk.Dec,
 	endpoints map[provider.Name]provider.Endpoint,
 	healthchecksConfig []config.Healthchecks,
+	history history.PriceHistory,
 ) *Oracle {
 	providerPairs := make(map[provider.Name][]types.CurrencyPair)
 
@@ -120,6 +123,7 @@ func New(
 		paramCache:      ParamCache{},
 		endpoints:       endpoints,
 		healthchecks:    healthchecks,
+		history: history,
 	}
 }
 
@@ -235,15 +239,16 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 			//
 			// e.g.: {ProviderKraken: {"ATOM": <price, volume>, ...}}
 			mtx.Lock()
+			defer mtx.Unlock()
 			for _, pair := range currencyPairs {
-				success := SetProviderTickerPrices(providerName, providerPrices, prices, pair)
-				if !success {
-					mtx.Unlock()
+				ok, err := SetProviderTickerPrices(providerName, providerPrices, prices, pair, o.history)
+				if err != nil {
+					o.logger.Error().Err(err).Str("pair", pair.String()).Str("provider", providerName.String()).Msg("failed to add ticker price to history")
+				}
+				if !ok {
 					return fmt.Errorf("failed to find any exchange rates in provider responses for '%s'", pair)
 				}
 			}
-
-			mtx.Unlock()
 			return nil
 		})
 	}
@@ -330,37 +335,6 @@ func GetComputedPrices(
 	return vwapPrices, nil
 }
 
-// SetProviderTickerPricesAndCandles flattens and collects prices for
-// candles and tickers based on the base currency per provider.
-// Returns true if at least one of price or candle exists.
-func SetProviderTickerPricesAndCandles(
-	providerName provider.Name,
-	providerPrices provider.AggregatedProviderPrices,
-	providerCandles provider.AggregatedProviderCandles,
-	prices map[string]types.TickerPrice,
-	candles map[string][]types.CandlePrice,
-	pair types.CurrencyPair,
-) (success bool) {
-	if _, ok := providerPrices[providerName]; !ok {
-		providerPrices[providerName] = make(map[string]types.TickerPrice)
-	}
-	if _, ok := providerCandles[providerName]; !ok {
-		providerCandles[providerName] = make(map[string][]types.CandlePrice)
-	}
-
-	tp, pricesOk := prices[pair.String()]
-	cp, candlesOk := candles[pair.String()]
-
-	if pricesOk {
-		providerPrices[providerName][pair.Base] = tp
-	}
-	if candlesOk {
-		providerCandles[providerName][pair.Base] = cp
-	}
-
-	return pricesOk || candlesOk
-}
-
 // SetProviderTickerPrices flattens and collects prices for
 // tickers based on the base currency per provider.
 // Returns true if at least one of price or candle exists.
@@ -369,18 +343,20 @@ func SetProviderTickerPrices(
 	providerPrices provider.AggregatedProviderPrices,
 	prices map[string]types.TickerPrice,
 	pair types.CurrencyPair,
-) (success bool) {
+	history history.PriceHistory,
+) (bool, error) {
 	if _, ok := providerPrices[providerName]; !ok {
 		providerPrices[providerName] = make(map[string]types.TickerPrice)
 	}
-
 	tp, pricesOk := prices[pair.String()]
-
+	if (tp == types.TickerPrice{}) {
+		return false, nil
+	}
 	if pricesOk {
 		providerPrices[providerName][pair.Base] = tp
 	}
-
-	return pricesOk
+	err := history.AddTickerPrice(pair, providerName, tp)
+	return pricesOk, err
 }
 
 // GetParamCache returns the last updated parameters of the x/oracle module
