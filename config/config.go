@@ -289,7 +289,7 @@ func ParseConfig(configPath string) (Config, error) {
 	}
 
 	derivativeDenoms := map[string]struct{}{}
-	for _, derivative := range cfg.CurrencyDerivatives {
+	for i, derivative := range cfg.CurrencyDerivatives {
 		_, ok := SupportedDerivatives[derivative.Provider]
 		if !ok {
 			return cfg, fmt.Errorf("unsupported derivative: %s", derivative.Provider)
@@ -300,7 +300,7 @@ func ParseConfig(configPath string) (Config, error) {
 		}
 		derivativeDenoms[derivative.Denom] = struct{}{}
 		if derivative.Period == "" {
-			derivative.Period = defaultDerivativePeriod.String()
+			cfg.CurrencyDerivatives[i].Period = defaultDerivativePeriod.String()
 		} else {
 			_, err := time.ParseDuration(derivative.Period)
 			if err != nil {
