@@ -295,7 +295,7 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 	}
 
 	for name, pairsMap := range o.derivativePairs {
-		pairs := make([]types.CurrencyPair, len(pairsMap))
+		pairs := []types.CurrencyPair{}
 		for _, pair := range pairsMap {
 			pairs = append(pairs, pair)
 		}

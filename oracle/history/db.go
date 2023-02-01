@@ -95,7 +95,7 @@ func (p *PriceHistory) GetTickerPrices(
         return nil, err
     }
     defer rows.Close()
-    var tickers map[string][]types.TickerPrice
+    tickers := map[string][]types.TickerPrice{}
     for rows.Next() {
         var epochTime int64
         var providerName, price, volume string
