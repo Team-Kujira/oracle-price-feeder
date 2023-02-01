@@ -195,15 +195,11 @@ func priceFeederCmdHandler(cmd *cobra.Command, args []string) error {
 		}
 		_, ok := derivativePairs[d.Provider]
 		if !ok {
-			derivativePairs[d.Provider] = map[string]types.CurrencyPair{pair.String(): pair}
-			derivativePeriods[d.Provider] = map[string]time.Duration{pair.String(): period}
-		} else {
-			_, ok := derivativePairs[d.Provider][pair.String()]
-			if !ok {
-				derivativePairs[d.Provider][pair.String()] = pair
-				derivativePeriods[d.Provider][pair.String()] = period
-			}
+			derivativePairs[d.Provider] = map[string]types.CurrencyPair{}
+			derivativePeriods[d.Provider] = map[string]time.Duration{}
 		}
+		derivativePairs[d.Provider][pair.String()] = pair
+		derivativePeriods[d.Provider][pair.String()] = period
 	}
 	derivatives := make(map[string]derivative.Derivative, len(derivativePairs))
 	for name, pairs := range derivativePairs {
