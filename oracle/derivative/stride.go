@@ -1,5 +1,7 @@
 package derivative
 
 type (
-	StrideDerivative
+	StrideDerivative struct {
+		TvwapDerivative
+	}
 )

@@ -7,15 +7,19 @@ import (
 	"github.com/rs/zerolog"
 )
 
+const (
+	DerivativeTvwap = "tvwap"
+	DerivativeStride = "stride"
+)
+
 type (
 	Derivative interface {
 		GetTickerPrices(...types.CurrencyPair) (map[string]types.TickerPrice, error)
 	}
 
 	derivative struct {
-		denom string
-		history *history.PriceHistory
 		pairs map[string]types.CurrencyPair
+		history *history.PriceHistory
 		logger zerolog.Logger
 	}
 )

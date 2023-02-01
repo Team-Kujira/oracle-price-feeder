@@ -54,7 +54,7 @@ func (p *PriceHistory) Init() error {
         p.logger.Error().Err(err).Msg("failed to prepare sql insert statement")
         return err
     }
-    query, err := p.db.Prepare(`SELECT time, price, volume FROM crypto_ticker_prices
+    query, err := p.db.Prepare(`SELECT provider, time, price, volume FROM crypto_ticker_prices
         WHERE symbol = ? AND time BETWEEN ? AND ?
         ORDER BY time DESC
     `)
@@ -84,18 +84,22 @@ func (p *PriceHistory) AddTickerPrice(pair types.CurrencyPair, provider provider
     return err
 }
 
-func (p *PriceHistory) GetTickerPrices(pair types.CurrencyPair, start time.Time, end time.Time) ([]types.TickerPrice, error) {
+func (p *PriceHistory) GetTickerPrices(
+    pair types.CurrencyPair,
+    start time.Time,
+    end time.Time,
+) (map[string][]types.TickerPrice, error) {
     rows, err := p.query.Query(pair.String(), start.Unix(), end.Unix())
     if err != nil {
         p.logger.Error().Err(err).Str("pair", pair.String()).Msg("failed to query stored ticker prices")
         return nil, err
     }
     defer rows.Close()
-    var tickers []types.TickerPrice
+    var tickers map[string][]types.TickerPrice
     for rows.Next() {
         var epochTime int64
-        var price, volume string
-        err := rows.Scan(&epochTime, &price, &volume)
+        var providerName, price, volume string
+        err := rows.Scan(&providerName, &epochTime, &price, &volume)
         if err != nil {
             p.logger.Error().Err(err).Str("pair", pair.String()).Msg("failed to parse ticker query results")
             return nil, err
@@ -104,7 +108,12 @@ func (p *PriceHistory) GetTickerPrices(pair types.CurrencyPair, start time.Time,
         if err != nil {
             p.logger.Error().Err(err).Str("pair", pair.String()).Msg("failed to create ticker")
         }
-        tickers = append(tickers, ticker)
+        providerTickers, ok := tickers[providerName]
+        if !ok {
+            tickers[providerName] = []types.TickerPrice{ticker}
+        } else {
+            tickers[providerName] = append(providerTickers, ticker)
+        }
     }
     err = rows.Err()
     if err != nil {
