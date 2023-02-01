@@ -475,6 +475,7 @@ func NewProvider(
 	providerLogger := logger.With().Str("provider", providerName.String()).Logger()
 	switch providerName {
 	case provider.ProviderBinance:
+		return provider.NewBinanceProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderBinanceUS:
 		return provider.NewBinanceProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderBybit:

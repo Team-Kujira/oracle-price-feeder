@@ -39,6 +39,7 @@ func NewDerivative(
 	derivativeLogger := logger.With().Str("derivative", name).Logger()
 	switch name {
 	case DerivativeStride:
+		return NewTvwapDerivative(history, derivativeLogger, pairs, periods)
 	case DerivativeTvwap:
 		return NewTvwapDerivative(history, derivativeLogger, pairs, periods)
 	}
