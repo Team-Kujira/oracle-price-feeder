@@ -51,13 +51,28 @@ var (
 	testTvwapStart3 = time.Unix(0, 0)
 	testTvwapEnd3 = time.Unix(12, 0)
 	testTvwapPrice3 = sdk.MustNewDecFromStr("10.891089108910891089")
+
+	testHistoricalTickers4 = map[string][]types.TickerPrice{
+		"osmosis": {
+			types.TickerPrice{Price: sdk.NewDec(5), Volume: sdk.NewDec(2), Time: time.Unix(0, 0)},
+			types.TickerPrice{Price: sdk.NewDec(5), Volume: sdk.NewDec(2), Time: time.Unix(100, 0)},
+			types.TickerPrice{Price: sdk.NewDec(5), Volume: sdk.NewDec(2), Time: time.Unix(200, 0)},
+		},
+	}
+	testTvwapStart4 = time.Unix(0, 0)
+	testTvwapEnd4 = time.Unix(200, 0)
 )
 
 func TestTvwapDerivative_tvwap(t *testing.T) {
-	result1 := tvwap(testHistoricalTickers1, testTvwapStart1, testTvwapEnd1)
+	result1, err := tvwap(testHistoricalTickers1, testTvwapStart1, testTvwapEnd1)
+	require.NoError(t, err)
 	require.Equal(t, testTvwapPrice1, result1)
-	result2 := tvwap(testHistoricalTickers2, testTvwapStart2, testTvwapEnd2)
+	result2, err := tvwap(testHistoricalTickers2, testTvwapStart2, testTvwapEnd2)
+	require.NoError(t, err)
 	require.Equal(t, testTvwapPrice2, result2)
-	result3 := tvwap(testHistoricalTickers3, testTvwapStart3, testTvwapEnd3)
+	result3, err := tvwap(testHistoricalTickers3, testTvwapStart3, testTvwapEnd3)
+	require.NoError(t, err)
 	require.Equal(t, testTvwapPrice3, result3)
+	_, err = tvwap(testHistoricalTickers4, testTvwapStart4, testTvwapEnd4)
+	require.Error(t, err)
 }

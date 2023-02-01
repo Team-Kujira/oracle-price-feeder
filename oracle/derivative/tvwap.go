@@ -11,6 +11,8 @@ import (
 	"github.com/rs/zerolog"
 )
 
+const tvwapMaxTimeDeltaSeconds = int64(60)
+
 type (
 	TvwapDerivative struct {
 		derivative
@@ -49,7 +51,12 @@ func (d *TvwapDerivative) GetPrices(pairs ...types.CurrencyPair) (map[string]sdk
 			d.logger.Error().Err(err).Str("pair", pair.String()).Msg("failed to get historical tickers")
 			return nil, err
 		}
-		prices[pair.String()] = tvwap(tickers, start, now)
+		pairPrices, err := tvwap(tickers, start, now)
+		if err != nil {
+			d.logger.Warn().Err(err).Str("pair", pair.String()).Msg("failed to compute derivative price")
+		} else {
+			prices[pair.String()] = pairPrices
+		}
 	}
 	return prices, nil
 }
@@ -58,7 +65,7 @@ func tvwap(
 	tickers map[string][]types.TickerPrice,
 	start time.Time,
 	end time.Time,
-) sdk.Dec {
+) (sdk.Dec, error) {
 	priceTotal := sdk.ZeroDec()
 	volumeTotal := sdk.ZeroDec()
 	for _, providerTickers := range tickers {
@@ -79,6 +86,9 @@ func tvwap(
 			} else {
 				timeDelta = providerTickers[nextIndex].Time.Unix() - ticker.Time.Unix()
 			}
+			if timeDelta > tvwapMaxTimeDeltaSeconds {
+				return sdk.Dec{}, fmt.Errorf("missing history for pair")
+			}
 			providerPriceTotal = providerPriceTotal.Add(ticker.Price.MulInt64(timeDelta))
 			providerVolumeTotal = providerVolumeTotal.Add(ticker.Volume.MulInt64(timeDelta))
 			providerTimeTotal = providerTimeTotal + timeDelta
@@ -88,5 +98,5 @@ func tvwap(
 		priceTotal = priceTotal.Add(providerWeightedPrice)
 		volumeTotal = volumeTotal.Add(providerWeightedVolume)
 	}
-	return priceTotal.Quo(volumeTotal)
+	return priceTotal.Quo(volumeTotal), nil
 }

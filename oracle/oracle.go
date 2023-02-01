@@ -198,6 +198,7 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 	mtx := new(sync.Mutex)
 	providerPrices := make(provider.AggregatedProviderPrices)
 	requiredRates := make(map[string]struct{})
+	computedPairs := map[provider.Name][]types.CurrencyPair{}
 
 	for providerName, currencyPairs := range o.providerPairs {
 		providerName := providerName
@@ -209,8 +210,16 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 		}
 
 		for _, pair := range currencyPairs {
-			if _, ok := requiredRates[pair.Base]; !ok {
+			_, isRequired := requiredRates[pair.Base]
+			_, isDerivative := o.derivativePairs[providerName.String()][pair.String()]
+			if !isRequired && !isDerivative {
 				requiredRates[pair.Base] = struct{}{}
+				pairs, ok := computedPairs[providerName]
+				if !ok {
+					computedPairs[providerName] = []types.CurrencyPair{pair}
+				} else {
+					computedPairs[providerName] = append(pairs, pair)
+				}
 			}
 		}
 
@@ -264,7 +273,7 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 	computedPrices, err := GetComputedPrices(
 		o.logger,
 		providerPrices,
-		o.providerPairs,
+		computedPairs,
 		o.deviations,
 	)
 	if err != nil {
@@ -283,6 +292,20 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 			"unable to get prices for: %s",
 			strings.Join(missingPrices, ", "),
 		)
+	}
+
+	for name, pairsMap := range o.derivativePairs {
+		pairs := make([]types.CurrencyPair, len(pairsMap))
+		for _, pair := range pairsMap {
+			pairs = append(pairs, pair)
+		}
+		prices, err := o.derivatives[name].GetPrices(pairs...)
+		if err != nil {
+			return err
+		}
+		for symbol, price := range prices {
+			computedPrices[symbol] = price
+		}
 	}
 
 	o.prices = computedPrices

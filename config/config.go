@@ -295,9 +295,10 @@ func ParseConfig(configPath string) (Config, error) {
 			return cfg, fmt.Errorf("unsupported derivative: %s", derivative.Provider)
 		}
 		_, ok = derivativeDenoms[derivative.Denom]
-		if !ok {
-			derivativeDenoms[derivative.Denom] = struct{}{}
+		if ok {
+			return cfg, fmt.Errorf("duplicate derivative: %s", derivative.Denom)
 		}
+		derivativeDenoms[derivative.Denom] = struct{}{}
 		if derivative.Period == "" {
 			derivative.Period = defaultDerivativePeriod.String()
 		} else {
