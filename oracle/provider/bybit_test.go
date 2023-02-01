@@ -15,13 +15,13 @@ func TestBybitProvider_GetTickerPrices(t *testing.T) {
 		context.TODO(),
 		zerolog.Nop(),
 		Endpoint{},
-		types.CurrencyPair{Base: "ATOM", Quote: "USDT"},
+		testAtomUsdtCurrencyPair,
 	)
 	require.NoError(t, err)
 
 	t.Run("valid_request_single_ticker", func(t *testing.T) {
 		p.tickers = testTickersAtom
-		prices, err := p.GetTickerPrices(types.CurrencyPair{Base: "ATOM", Quote: "USDT"})
+		prices, err := p.GetTickerPrices(testAtomUsdtCurrencyPair)
 		require.NoError(t, err)
 		require.Len(t, prices, 1)
 		require.Equal(t, testAtomPriceDec, prices["ATOMUSDT"].Price)
@@ -31,8 +31,8 @@ func TestBybitProvider_GetTickerPrices(t *testing.T) {
 	t.Run("valid_request_multi_ticker", func(t *testing.T) {
 		p.tickers = testTickersAtomBtc
 		prices, err := p.GetTickerPrices(
-			types.CurrencyPair{Base: "ATOM", Quote: "USDT"},
-			types.CurrencyPair{Base: "BTC", Quote: "USDT"},
+			testAtomUsdtCurrencyPair,
+			testBtcUsdtCurrencyPair,
 		)
 		require.NoError(t, err)
 		require.Len(t, prices, 2)
@@ -43,21 +43,22 @@ func TestBybitProvider_GetTickerPrices(t *testing.T) {
 	})
 
 	t.Run("invalid_request_invalid_ticker", func(t *testing.T) {
-		prices, _ := p.GetTickerPrices(types.CurrencyPair{Base: "FOO", Quote: "BAR"})
+		prices, _ := p.GetTickerPrices(testFooBarCurrencyPair)
 		require.Equal(t, map[string]types.TickerPrice{}, prices)
 	})
 }
 
 func TestBybitProvider_GetSubscriptionMsgs(t *testing.T) {
 	provider := &BybitProvider{
-		provider: provider{ 
+		provider: provider{
 			pairs: map[string]types.CurrencyPair{},
 		},
 	}
 	cps := []types.CurrencyPair{
-		{Base: "ATOM", Quote: "USDT"},
+		testAtomUsdtCurrencyPair,
+		testBtcUsdtCurrencyPair,
 	}
 	subMsgs := provider.getSubscriptionMsgs(cps...)
 	msg, _ := json.Marshal(subMsgs[0])
-	require.Equal(t, "{\"op\":\"subscribe\",\"args\":[\"tickers.ATOMUSDT\"]}", string(msg))
+	require.Equal(t, `{"op":"subscribe","args":["tickers.ATOMUSDT","tickers.BTCUSDT"]}`, string(msg))
 }
