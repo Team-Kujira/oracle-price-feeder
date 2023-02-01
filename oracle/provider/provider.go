@@ -51,8 +51,6 @@ type (
 	Provider interface {
 		// GetTickerPrices returns the tickerPrices based on the provided pairs.
 		GetTickerPrices(...types.CurrencyPair) (map[string]types.TickerPrice, error)
-		// GetAvailablePairs return all available pairs symbol to subscribe.
-		GetAvailablePairs() (map[string]struct{}, error)
 		// SubscribeCurrencyPairs sends subscription messages for the new currency
 		// pairs and adds them to the providers subscribed pairs
 		SubscribeCurrencyPairs(...types.CurrencyPair) error
@@ -61,13 +59,13 @@ type (
 	}
 
 	provider struct {
-		ctx context.Context
+		ctx       context.Context
 		endpoints Endpoint
-		http *http.Client
-		logger zerolog.Logger
-		mtx sync.RWMutex
-		pairs map[string]types.CurrencyPair
-		tickers map[string]types.TickerPrice
+		http      *http.Client
+		logger    zerolog.Logger
+		mtx       sync.RWMutex
+		pairs     map[string]types.CurrencyPair
+		tickers   map[string]types.TickerPrice
 		websocket *WebsocketController
 	}
 
@@ -87,14 +85,14 @@ type (
 	// Endpoint defines an override setting in our config for the
 	// hardcoded rest and websocket api endpoints.
 	Endpoint struct {
-		Name Name // ex. "binance"
-		Rest string // ex. "https://api1.binance.com"
-		Websocket string // ex. "stream.binance.com:9443"
+		Name          Name   // ex. "binance"
+		Rest          string // ex. "https://api1.binance.com"
+		Websocket     string // ex. "stream.binance.com:9443"
 		WebsocketPath string
-		PollInterval time.Duration
-		PingDuration time.Duration
-		PingType uint
-		PingMessage string
+		PollInterval  time.Duration
+		PingDuration  time.Duration
+		PingType      uint
+		PingMessage   string
 	}
 )
 
@@ -121,7 +119,7 @@ func (p *provider) Init(
 			Scheme: "wss",
 			Host:   p.endpoints.Websocket,
 			Path:   p.endpoints.WebsocketPath,
-		}	
+		}
 		p.websocket = NewWebsocketController(
 			ctx,
 			p.endpoints.Name,
@@ -190,7 +188,7 @@ func (p *provider) ProviderPairToCurrencyPair(pair string) types.CurrencyPair {
 		return types.CurrencyPair{}
 	}
 	return types.CurrencyPair{
-		Base: tokens[0],
+		Base:  tokens[0],
 		Quote: tokens[1],
 	}
 }
@@ -204,8 +202,22 @@ func (e *Endpoint) SetDefaults() {
 		defaults = binanceUSDefaultEndpoints
 	case ProviderBybit:
 		defaults = bybitDefaultEndpoints
+	case ProviderCrypto:
+		defaults = cryptoDefaultEndpoints
+	case ProviderGate:
+		defaults = gateDefaultEndpoints
+	case ProviderHuobi:
+		defaults = huobiDefaultEndpoints
+	case ProviderKucoin:
+		defaults = kucoinDefaultEndpoints
+	case ProviderMexc:
+		defaults = mexcDefaultEndpoints
 	case ProviderMock:
 		defaults = mockDefaultEndpoints
+	case ProviderOkx:
+		defaults = okxDefaultEndpoints
+	case ProviderOsmosis:
+		defaults = osmosisDefaultEndpoints
 	default:
 		return
 	}

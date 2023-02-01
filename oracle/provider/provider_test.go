@@ -1,8 +1,9 @@
 package provider
 
 import (
-	"time"
 	"price-feeder/oracle/types"
+	"time"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
@@ -22,10 +23,10 @@ var (
 	testAtomVolumeString  = "7654321.98765"
 	testAtomVolumeInt64   = int64(765432198765000)
 	testAtomVolumeDec     = sdk.NewDec(765432198765000).QuoInt64(100000000)
-	testAtomTicker = types.TickerPrice{
-		Price: testAtomPriceDec,
+	testAtomTicker        = types.TickerPrice{
+		Price:  testAtomPriceDec,
 		Volume: testAtomVolumeDec,
-		Time: time.Now(),
+		Time:   time.Now(),
 	}
 
 	testBtcUsdtCurrencyPair = types.CurrencyPair{
@@ -40,15 +41,20 @@ var (
 	testBtcVolumeString  = "7654.32198765"
 	testBtcVolumeInt64   = int64(765432198765)
 	testBtcVolumeDec     = sdk.NewDec(765432198765).QuoInt64(100000000)
-	testBtcTicker = types.TickerPrice{
-		Price: testBtcPriceDec,
+	testBtcTicker        = types.TickerPrice{
+		Price:  testBtcPriceDec,
 		Volume: testBtcVolumeDec,
-		Time: time.Now(),
+		Time:   time.Now(),
 	}
 
-	testTickersAtom = map[string]types.TickerPrice{"ATOMUSDT": testAtomTicker}
+	testFooBarCurrencyPair = types.CurrencyPair{
+		Base:  "FOO",
+		Quote: "BAR",
+	}
+
+	testTickersAtom    = map[string]types.TickerPrice{"ATOMUSDT": testAtomTicker}
 	testTickersAtomBtc = map[string]types.TickerPrice{
 		"ATOMUSDT": testAtomTicker,
-		"BTCUSDT": testBtcTicker,
+		"BTCUSDT":  testBtcTicker,
 	}
 )

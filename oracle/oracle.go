@@ -459,15 +459,30 @@ func NewProvider(
 ) (provider.Provider, error) {
 	endpoint.Name = providerName
 	providerLogger := logger.With().Str("provider", providerName.String()).Logger()
+	fmt.Println(providerName)
 	switch providerName {
-	case provider.ProviderBinance:
-		return provider.NewBinanceProvider(ctx, providerLogger, endpoint, providerPairs...)
-	case provider.ProviderBinanceUS:
+
+	case provider.ProviderBinance, provider.ProviderBinanceUS:
 		return provider.NewBinanceProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderBybit:
 		return provider.NewBybitProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderCrypto:
+		return provider.NewCryptoProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderGate:
+		return provider.NewGateProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderHuobi:
+		return provider.NewHuobiProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderKucoin:
+		return provider.NewKucoinProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderMexc:
+		return provider.NewMexcProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderMock:
 		return provider.NewMockProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderOkx:
+		return provider.NewOkxProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderOsmosis:
+		return provider.NewOsmosisProvider(ctx, providerLogger, endpoint, providerPairs...)
+
 	}
 	return nil, fmt.Errorf("provider %s not found", providerName)
 }

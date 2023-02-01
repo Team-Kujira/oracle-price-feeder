@@ -79,6 +79,7 @@ var (
 		"BTC":     {},
 		"ETH":     {},
 		"ATOM":    {},
+		"OSMO":    {},
 	}
 )
 
@@ -196,11 +197,11 @@ type (
 	}
 
 	ProviderEndpoints struct {
-		Name provider.Name `toml:"name" validate:"required"`
-		Rest string `toml:"rest"`
-		Websocket string `toml:"websocket"`
-		WebsocketPath string `toml:"websocket_path"`
-		PollInterval string `toml:"poll_interval"`
+		Name          provider.Name `toml:"name" validate:"required"`
+		Rest          string        `toml:"rest"`
+		Websocket     string        `toml:"websocket"`
+		WebsocketPath string        `toml:"websocket_path"`
+		PollInterval  string        `toml:"poll_interval"`
 	}
 )
 
@@ -241,12 +242,12 @@ func (p ProviderEndpoints) ToEndpoint() (provider.Endpoint, error) {
 		}
 		pollInterval = interval
 	}
-	e := provider.Endpoint {
-		Name: p.Name,
-		Rest: p.Rest,
-		Websocket: p.Websocket,
+	e := provider.Endpoint{
+		Name:          p.Name,
+		Rest:          p.Rest,
+		Websocket:     p.Websocket,
 		WebsocketPath: p.WebsocketPath,
-		PollInterval: pollInterval,
+		PollInterval:  pollInterval,
 	}
 	return e, nil
 }
