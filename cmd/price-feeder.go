@@ -187,13 +187,18 @@ func priceFeederCmdHandler(cmd *cobra.Command, args []string) error {
 
 	derivativePairs := map[string]map[string]types.CurrencyPair{}
 	derivativePeriods := map[string]map[string]time.Duration{}
+	derivativeDenoms := map[string]struct{}{}
 	for _, d := range cfg.CurrencyDerivatives {
 		pair := types.CurrencyPair{Base: d.Denom, Quote: d.Base}
 		period, err := time.ParseDuration(d.Period)
 		if err != nil {
 			return err
 		}
-		_, ok := derivativePairs[d.Provider]
+		_, ok := derivativeDenoms[d.Denom]
+		if !ok {
+			derivativeDenoms[d.Denom] = struct{}{}
+		}
+		_, ok = derivativePairs[d.Provider]
 		if !ok {
 			derivativePairs[d.Provider] = map[string]types.CurrencyPair{}
 			derivativePeriods[d.Provider] = map[string]time.Duration{}
@@ -211,10 +216,18 @@ func priceFeederCmdHandler(cmd *cobra.Command, args []string) error {
 		derivatives[name] = derivative
 	}
 
+	providerPairs := []config.CurrencyPair{}
+	for _, pair := range cfg.CurrencyPairs {
+		_, ok := derivativeDenoms[pair.Base]
+		if !ok {
+			providerPairs = append(providerPairs, pair)
+		}
+	}
+
 	oracle := oracle.New(
 		logger,
 		oracleClient,
-		cfg.CurrencyPairs,
+		providerPairs,
 		providerTimeout,
 		deviations,
 		endpoints,

@@ -106,7 +106,7 @@ func tvwap(
 		priceTotal = priceTotal.Add(providerWeightedPrice)
 		volumeTotal = volumeTotal.Add(providerWeightedVolume)
 	}
-	if volumeTotal == sdk.ZeroDec() {
+	if volumeTotal.IsZero() {
 		return sdk.Dec{}, fmt.Errorf("no volume for pair or not enough history")
 	}
 	return priceTotal.Quo(volumeTotal), nil
