@@ -196,9 +196,9 @@ func (o *Oracle) GetPrices() sdk.DecCoins {
 func (o *Oracle) SetPrices(ctx context.Context) error {
 	g := new(errgroup.Group)
 	mtx := new(sync.Mutex)
-	providerPrices := make(provider.AggregatedProviderPrices)
 	requiredRates := make(map[string]struct{})
 	computedPairs := map[provider.Name][]types.CurrencyPair{}
+	providerPrices := provider.AggregatedProviderPrices{}
 
 	for providerName, currencyPairs := range o.providerPairs {
 		providerName := providerName
@@ -254,12 +254,22 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 			mtx.Lock()
 			defer mtx.Unlock()
 			for _, pair := range currencyPairs {
-				ok, err := SetProviderTickerPrices(providerName, providerPrices, prices, pair, o.history)
-				if err != nil {
-					o.logger.Error().Err(err).Str("pair", pair.String()).Str("provider", providerName.String()).Msg("failed to add ticker price to history")
+				ticker, ok := prices[pair.String()]
+				if (!ok || ticker == types.TickerPrice{}) {
+					return fmt.Errorf("no ticker price found for %s", pair)
 				}
-				if !ok {
-					return fmt.Errorf("failed to find any exchange rates in provider responses for '%s'", pair)
+				_, isDerivative := o.derivativePairs[providerName.String()][pair.String()]
+				if isDerivative {
+					err := o.history.AddTickerPrice(pair, providerName, ticker)
+					if err != nil {
+						o.logger.Error().Err(err).Str("pair", pair.String()).Str("provider", providerName.String()).Msg("failed to add ticker price to history")
+					}
+				} else {
+					_, ok := providerPrices[providerName]
+					if !ok {
+						providerPrices[providerName] = map[string]types.TickerPrice{}
+					}
+					providerPrices[providerName][pair.Base] = ticker
 				}
 			}
 			return nil
@@ -369,30 +379,6 @@ func GetComputedPrices(
 	}
 
 	return vwapPrices, nil
-}
-
-// SetProviderTickerPrices flattens and collects prices for
-// tickers based on the base currency per provider.
-// Returns true if at least one of price or candle exists.
-func SetProviderTickerPrices(
-	providerName provider.Name,
-	providerPrices provider.AggregatedProviderPrices,
-	prices map[string]types.TickerPrice,
-	pair types.CurrencyPair,
-	history history.PriceHistory,
-) (bool, error) {
-	if _, ok := providerPrices[providerName]; !ok {
-		providerPrices[providerName] = make(map[string]types.TickerPrice)
-	}
-	tp, pricesOk := prices[pair.String()]
-	if (tp == types.TickerPrice{}) {
-		return false, nil
-	}
-	if pricesOk {
-		providerPrices[providerName][pair.Base] = tp
-	}
-	err := history.AddTickerPrice(pair, providerName, tp)
-	return pricesOk, err
 }
 
 // GetParamCache returns the last updated parameters of the x/oracle module
