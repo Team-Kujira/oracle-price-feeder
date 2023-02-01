@@ -110,6 +110,12 @@ func convertTickersToUSD(
 		for base := range tickerPrices {
 			for _, currencyPair := range requiredConversions[providerName] {
 				if currencyPair.Base == base {
+					if conversionRates[currencyPair.Quote].IsNil() {
+						logger.Error().
+							Str("denom", currencyPair.Quote).
+							Msg("missing conversion rate")
+						continue
+					}
 					tickerPrices[base] = types.TickerPrice{
 						Price: tickerPrices[base].Price.Mul(
 							conversionRates[currencyPair.Quote],
