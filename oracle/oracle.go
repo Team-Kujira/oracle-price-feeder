@@ -304,7 +304,16 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 			return err
 		}
 		for symbol, price := range prices {
-			computedPrices[symbol] = price
+			pair := pairsMap[symbol]
+			if pair.Quote != config.DenomUSD {
+				basePrice, ok := computedPrices[pair.Quote]
+				if !ok {
+					o.logger.Error().Str("pair", pair.String()).Msg("missing base price for derivative pair")
+					continue
+				}
+				price = price.Mul(basePrice)
+			}
+			computedPrices[pair.Base] = price
 		}
 	}
 
