@@ -11,7 +11,10 @@ import (
 	"github.com/rs/zerolog"
 )
 
-const tvwapMaxTimeDeltaSeconds = int64(60)
+const (
+	tvwapMaxTimeDeltaSeconds = int64(60)
+	tvwapMinHistoryPeriodFraction = 0.8
+)
 
 type (
 	TvwapDerivative struct {
@@ -68,6 +71,8 @@ func tvwap(
 ) (sdk.Dec, error) {
 	priceTotal := sdk.ZeroDec()
 	volumeTotal := sdk.ZeroDec()
+	period := end.Sub(start).Seconds()
+	minPeriod := int64(tvwapMinHistoryPeriodFraction * period)
 	for _, providerTickers := range tickers {
 		providerPriceTotal := sdk.ZeroDec()
 		providerVolumeTotal := sdk.ZeroDec()
@@ -93,10 +98,16 @@ func tvwap(
 			providerVolumeTotal = providerVolumeTotal.Add(ticker.Volume.MulInt64(timeDelta))
 			providerTimeTotal = providerTimeTotal + timeDelta
 		}
+		if providerTimeTotal == 0 || providerTimeTotal < minPeriod {
+			continue
+		}
 		providerWeightedVolume := providerVolumeTotal.QuoInt64(providerTimeTotal)
 		providerWeightedPrice := providerPriceTotal.QuoInt64(providerTimeTotal).Mul(providerWeightedVolume)
 		priceTotal = priceTotal.Add(providerWeightedPrice)
 		volumeTotal = volumeTotal.Add(providerWeightedVolume)
+	}
+	if volumeTotal == sdk.ZeroDec() {
+		return sdk.Dec{}, fmt.Errorf("no volume for pair or not enough history")
 	}
 	return priceTotal.Quo(volumeTotal), nil
 }
