@@ -16,6 +16,7 @@ import (
 	"price-feeder/oracle/history"
 	"price-feeder/oracle/provider"
 	"price-feeder/oracle/types"
+	"price-feeder/oracle/derivative"
 )
 
 type mockProvider struct {
@@ -93,6 +94,8 @@ func (ots *OracleTestSuite) SetupSuite() {
 		time.Millisecond*100,
 		make(map[string]sdk.Dec),
 		make(map[provider.Name]provider.Endpoint),
+		map[string]derivative.Derivative{},
+		map[string]map[string]types.CurrencyPair{},
 		[]config.Healthchecks{
 			{URL: "https://hc-ping.com/HEALTHCHECK-UUID", Timeout: "200ms"},
 		},

@@ -19,6 +19,7 @@ import (
 	"price-feeder/config"
 	"price-feeder/oracle/client"
 	"price-feeder/oracle/provider"
+	"price-feeder/oracle/derivative"
 	"price-feeder/oracle/types"
 	"price-feeder/oracle/history"
 	pfsync "price-feeder/pkg/sync"
@@ -68,6 +69,8 @@ type Oracle struct {
 	deviations         map[string]sdk.Dec
 	endpoints          map[provider.Name]provider.Endpoint
 	history history.PriceHistory
+	derivatives map[string]derivative.Derivative
+	derivativePairs map[string]map[string]types.CurrencyPair
 
 	mtx             sync.RWMutex
 	lastPriceSyncTS time.Time
@@ -83,11 +86,12 @@ func New(
 	providerTimeout time.Duration,
 	deviations map[string]sdk.Dec,
 	endpoints map[provider.Name]provider.Endpoint,
+	derivatives map[string]derivative.Derivative,
+	derivativePairs map[string]map[string]types.CurrencyPair,
 	healthchecksConfig []config.Healthchecks,
 	history history.PriceHistory,
 ) *Oracle {
 	providerPairs := make(map[provider.Name][]types.CurrencyPair)
-
 	for _, pair := range currencyPairs {
 		for _, provider := range pair.Providers {
 			providerPairs[provider] = append(providerPairs[provider], types.CurrencyPair{
@@ -96,8 +100,7 @@ func New(
 			})
 		}
 	}
-
-	healthchecks := make(map[string]http.Client)
+	healthchecks := make(map[string]http.Client, len(healthchecksConfig))
 	for _, healthcheck := range healthchecksConfig {
 		timeout, err := time.ParseDuration(healthcheck.Timeout)
 		if err != nil {
@@ -110,7 +113,6 @@ func New(
 			}
 		}
 	}
-
 	return &Oracle{
 		logger:          logger.With().Str("module", "oracle").Logger(),
 		closer:          pfsync.NewCloser(),
@@ -123,6 +125,8 @@ func New(
 		paramCache:      ParamCache{},
 		endpoints:       endpoints,
 		healthchecks:    healthchecks,
+		derivatives: derivatives,
+		derivativePairs: derivativePairs,
 		history: history,
 	}
 }

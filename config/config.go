@@ -24,6 +24,7 @@ const (
 	defaultProviderTimeout    = 100 * time.Millisecond
 	defaultHeightPollInterval = 1 * time.Second
 	defaultHistoryDb = "prices.db"
+	defaultDerivativePeriod = 30 * time.Minute
 )
 
 var (
@@ -86,7 +87,7 @@ type (
 	Config struct {
 		Server              Server              `toml:"server"`
 		CurrencyPairs       []CurrencyPair      `toml:"currency_pairs" validate:"required,gt=0,dive,required"`
-		CurrencyDerivatives []CurrencyDerivative `toml:"currency_derivative" validate:"dive"`
+		CurrencyDerivatives []CurrencyDerivative `toml:"currency_derivatives" validate:"dive"`
 		Deviations          []Deviation         `toml:"deviation_thresholds"`
 		Account             Account             `toml:"account" validate:"required,gt=0,dive,required"`
 		Keyring             Keyring             `toml:"keyring" validate:"required,gt=0,dive,required"`
@@ -125,6 +126,7 @@ type (
 		Base string `toml:"base" validate:"required"`
 		Denom string `toml:"denom" validate:"required"`
 		Provider string `toml:"provider" validate:"required"`
+		Period string `toml:"period"`
 	}
 
 	// Deviation defines a maximum amount of standard deviations that a given asset can
@@ -295,6 +297,14 @@ func ParseConfig(configPath string) (Config, error) {
 		_, ok = derivativeDenoms[derivative.Denom]
 		if !ok {
 			derivativeDenoms[derivative.Denom] = struct{}{}
+		}
+		if derivative.Period == "" {
+			derivative.Period = defaultDerivativePeriod.String()
+		} else {
+			_, err := time.ParseDuration(derivative.Period)
+			if err != nil {
+				return cfg, err
+			}
 		}
 	}
 

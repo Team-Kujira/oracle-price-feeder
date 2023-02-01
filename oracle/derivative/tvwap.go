@@ -1,6 +1,7 @@
 package derivative
 
 import (
+	"fmt"
 	"time"
 
 	"price-feeder/oracle/history"
@@ -13,23 +14,44 @@ import (
 type (
 	TvwapDerivative struct {
 		derivative
-		
 	}
 )
 
 func NewTvwapDerivative(
-	pairs map[string]types.CurrencyPair,
 	history *history.PriceHistory,
 	logger zerolog.Logger,
+	pairs map[string]types.CurrencyPair,
+	periods map[string]time.Duration,
 ) (*TvwapDerivative, error) {
 	d := &TvwapDerivative{
 		derivative: derivative{
 			pairs: pairs,
 			history: history,
 			logger: logger,
+			periods: periods,
 		},
 	}
 	return d, nil
+}
+
+func (d *TvwapDerivative) GetPrices(pairs ...types.CurrencyPair) (map[string]sdk.Dec, error) {
+	prices := make(map[string]sdk.Dec, len(pairs))
+	now := time.Now()
+	for _, pair := range pairs {
+		period, ok := d.periods[pair.String()]
+		if !ok {
+			d.logger.Error().Str("pair", pair.String()).Msg("pair not configured")
+			return nil, fmt.Errorf("pair not configured")
+		}
+		start := now.Add(-period)
+		tickers, err := d.history.GetTickerPrices(pair, start, now)
+		if err != nil {
+			d.logger.Error().Err(err).Str("pair", pair.String()).Msg("failed to get historical tickers")
+			return nil, err
+		}
+		prices[pair.String()] = tvwap(tickers, start, now)
+	}
+	return prices, nil
 }
 
 func tvwap(
