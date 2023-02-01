@@ -82,10 +82,6 @@ type (
 	// of provider -> asset -> TickerPrice
 	AggregatedProviderPrices map[Name]map[string]types.TickerPrice
 
-	// AggregatedProviderCandles defines a type alias for a map
-	// of provider -> asset -> []types.CandlePrice
-	AggregatedProviderCandles map[Name]map[string][]types.CandlePrice
-
 	// Endpoint defines an override setting in our config for the
 	// hardcoded rest and websocket api endpoints.
 	Endpoint struct {

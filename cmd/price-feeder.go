@@ -25,6 +25,9 @@ import (
 	"price-feeder/oracle"
 	"price-feeder/oracle/client"
 	"price-feeder/oracle/provider"
+	"price-feeder/oracle/history"
+	"price-feeder/oracle/types"
+	"price-feeder/oracle/derivative"
 	v1 "price-feeder/router/v1"
 
 	"github.com/cosmos/cosmos-sdk/telemetry"
@@ -177,6 +180,37 @@ func priceFeederCmdHandler(cmd *cobra.Command, args []string) error {
 		endpoints[endpoint.Name] = endpoint
 	}
 
+	history, err := history.NewPriceHistory(cfg.HistoryDb, logger)
+	if err != nil {
+		return fmt.Errorf("failed to init price history db: %v", err)
+	}
+
+	derivativePairs := map[string]map[string]types.CurrencyPair{}
+	derivativePeriods := map[string]map[string]time.Duration{}
+	for _, d := range cfg.CurrencyDerivatives {
+		pair := types.CurrencyPair{Base: d.Denom, Quote: d.Base}
+		period, err := time.ParseDuration(d.Period)
+		if err != nil {
+			return err
+		}
+		_, ok := derivativePairs[d.Provider]
+		if !ok {
+			derivativePairs[d.Provider] = map[string]types.CurrencyPair{}
+			derivativePeriods[d.Provider] = map[string]time.Duration{}
+		}
+		derivativePairs[d.Provider][pair.String()] = pair
+		derivativePeriods[d.Provider][pair.String()] = period
+	}
+	derivatives := make(map[string]derivative.Derivative, len(derivativePairs))
+	for name, pairs := range derivativePairs {
+		periods := derivativePeriods[name]
+		derivative, err := derivative.NewDerivative(name, logger, &history, pairs, periods)
+		if err != nil {
+			return err
+		}
+		derivatives[name] = derivative
+	}
+
 	oracle := oracle.New(
 		logger,
 		oracleClient,
@@ -184,7 +218,10 @@ func priceFeederCmdHandler(cmd *cobra.Command, args []string) error {
 		providerTimeout,
 		deviations,
 		endpoints,
+		derivatives,
+		derivativePairs,
 		cfg.Healthchecks,
+		history,
 	)
 
 	telemetryCfg := telemetry.Config{}

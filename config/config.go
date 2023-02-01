@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"price-feeder/oracle/derivative"
 	"price-feeder/oracle/provider"
 
 	"github.com/BurntSushi/toml"
@@ -22,6 +23,8 @@ const (
 	defaultSrvReadTimeout     = 15 * time.Second
 	defaultProviderTimeout    = 100 * time.Millisecond
 	defaultHeightPollInterval = 1 * time.Second
+	defaultHistoryDb = "prices.db"
+	defaultDerivativePeriod = 30 * time.Minute
 )
 
 var (
@@ -57,6 +60,10 @@ var (
 		provider.ProviderStride:    {},
 	}
 
+	SupportedDerivatives = map[string]struct{}{
+		derivative.DerivativeStride: {},
+	}
+
 	// maxDeviationThreshold is the maxmimum allowed amount of standard
 	// deviations which validators are able to set for a given asset.
 	maxDeviationThreshold = sdk.MustNewDecFromStr("3.0")
@@ -81,6 +88,7 @@ type (
 	Config struct {
 		Server              Server              `toml:"server"`
 		CurrencyPairs       []CurrencyPair      `toml:"currency_pairs" validate:"required,gt=0,dive,required"`
+		CurrencyDerivatives []CurrencyDerivative `toml:"currency_derivatives" validate:"dive"`
 		Deviations          []Deviation         `toml:"deviation_thresholds"`
 		Account             Account             `toml:"account" validate:"required,gt=0,dive,required"`
 		Keyring             Keyring             `toml:"keyring" validate:"required,gt=0,dive,required"`
@@ -95,6 +103,7 @@ type (
 		EnableVoter         bool                `toml:"enable_voter"`
 		Healthchecks        []Healthchecks      `toml:"healthchecks" validate:"dive"`
 		HeightPollInterval  string              `toml:"height_poll_interval"`
+		HistoryDb string `toml:"history_db"`
 	}
 
 	// Server defines the API server configuration.
@@ -112,6 +121,13 @@ type (
 		Base      string          `toml:"base" validate:"required"`
 		Quote     string          `toml:"quote" validate:"required"`
 		Providers []provider.Name `toml:"providers" validate:"required,gt=0,dive,required"`
+	}
+
+	CurrencyDerivative struct {
+		Base string `toml:"base" validate:"required"`
+		Denom string `toml:"denom" validate:"required"`
+		Provider string `toml:"provider" validate:"required"`
+		Period string `toml:"period"`
 	}
 
 	// Deviation defines a maximum amount of standard deviations that a given asset can
@@ -269,6 +285,30 @@ func ParseConfig(configPath string) (Config, error) {
 	if cfg.HeightPollInterval == "" {
 		cfg.HeightPollInterval = defaultHeightPollInterval.String()
 	}
+	if cfg.HistoryDb == "" {
+		cfg.HistoryDb = defaultHistoryDb
+	}
+
+	derivativeDenoms := map[string]struct{}{}
+	for i, derivative := range cfg.CurrencyDerivatives {
+		_, ok := SupportedDerivatives[derivative.Provider]
+		if !ok {
+			return cfg, fmt.Errorf("unsupported derivative: %s", derivative.Provider)
+		}
+		_, ok = derivativeDenoms[derivative.Denom]
+		if ok {
+			return cfg, fmt.Errorf("duplicate derivative: %s", derivative.Denom)
+		}
+		derivativeDenoms[derivative.Denom] = struct{}{}
+		if derivative.Period == "" {
+			cfg.CurrencyDerivatives[i].Period = defaultDerivativePeriod.String()
+		} else {
+			_, err := time.ParseDuration(derivative.Period)
+			if err != nil {
+				return cfg, err
+			}
+		}
+	}
 
 	pairs := make(map[string]map[provider.Name]struct{})
 	coinQuotes := make(map[string]struct{})
@@ -279,10 +319,11 @@ func ParseConfig(configPath string) (Config, error) {
 		if strings.ToUpper(cp.Quote) != DenomUSD {
 			coinQuotes[cp.Quote] = struct{}{}
 		}
-		if _, ok := SupportedQuotes[strings.ToUpper(cp.Quote)]; !ok {
+		_, isDerivative := derivativeDenoms[cp.Base]
+		_, isSupported := SupportedQuotes[cp.Quote]
+		if !isSupported && !isDerivative {
 			return cfg, fmt.Errorf("unsupported quote: %s", cp.Quote)
 		}
-
 		for _, provider := range cp.Providers {
 			if _, ok := SupportedProviders[provider]; !ok {
 				return cfg, fmt.Errorf("unsupported provider: %s", provider)
@@ -305,7 +346,9 @@ func ParseConfig(configPath string) (Config, error) {
 
 	if !cfg.ProviderMinOverride {
 		for base, providers := range pairs {
-			if _, ok := pairs[base]["mock"]; !ok && len(providers) < 3 {
+			_, isMock := pairs[base]["mock"]
+			_, isDerivative := derivativeDenoms[base]
+			if !isDerivative && !isMock && len(providers) < 3 {
 				return cfg, fmt.Errorf("must have at least three providers for %s", base)
 			}
 		}
