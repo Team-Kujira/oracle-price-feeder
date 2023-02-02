@@ -22,7 +22,7 @@ type (
 	}
 
 	derivative struct {
-		pairs map[string]types.CurrencyPair
+		pairs []types.CurrencyPair
 		history *history.PriceHistory
 		logger zerolog.Logger
 		periods map[string]time.Duration
@@ -33,7 +33,7 @@ func NewDerivative(
 	name string,
 	logger zerolog.Logger,
 	history *history.PriceHistory,
-	pairs map[string]types.CurrencyPair,
+	pairs []types.CurrencyPair,
 	periods map[string]time.Duration,
 ) (Derivative, error) {
 	derivativeLogger := logger.With().Str("derivative", name).Logger()

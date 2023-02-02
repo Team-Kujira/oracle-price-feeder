@@ -185,43 +185,36 @@ func priceFeederCmdHandler(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to init price history db: %v", err)
 	}
 
-	derivativePairs := map[string]map[string]types.CurrencyPair{}
+	derivativePairs := map[string][]types.CurrencyPair{}
 	derivativePeriods := map[string]map[string]time.Duration{}
 	derivativeDenoms := map[string]struct{}{}
-	for _, d := range cfg.CurrencyDerivatives {
-		pair := types.CurrencyPair{Base: d.Denom, Quote: d.Base}
-		period, err := time.ParseDuration(d.Period)
-		if err != nil {
-			return err
-		}
-		_, ok := derivativeDenoms[d.Denom]
-		if !ok {
-			derivativeDenoms[d.Denom] = struct{}{}
-		}
-		_, ok = derivativePairs[d.Provider]
-		if !ok {
-			derivativePairs[d.Provider] = map[string]types.CurrencyPair{}
-			derivativePeriods[d.Provider] = map[string]time.Duration{}
-		}
-		derivativePairs[d.Provider][pair.String()] = pair
-		derivativePeriods[d.Provider][pair.String()] = period
-	}
-	derivatives := make(map[string]derivative.Derivative, len(derivativePairs))
-	for name, pairs := range derivativePairs {
-		periods := derivativePeriods[name]
-		derivative, err := derivative.NewDerivative(name, logger, &history, pairs, periods)
-		if err != nil {
-			return err
-		}
-		derivatives[name] = derivative
-	}
-
 	providerPairs := []config.CurrencyPair{}
 	for _, pair := range cfg.CurrencyPairs {
-		_, ok := derivativeDenoms[pair.Base]
-		if !ok {
-			providerPairs = append(providerPairs, pair)
+		if pair.Derivative != "" {
+			period, err := time.ParseDuration(pair.DerivativePeriod)
+			if err != nil {
+				return err
+			}
+			pairs, ok := derivativePairs[pair.Derivative]
+			if !ok {
+				pairs = []types.CurrencyPair{}
+				derivativePeriods[pair.Derivative] = map[string]time.Duration{}
+			}
+			currencyPair := types.CurrencyPair{Base: pair.Base, Quote: pair.Quote}
+			derivativePairs[pair.Derivative] = append(pairs, currencyPair)
+			derivativePeriods[pair.Derivative][currencyPair.String()] = period
+			derivativeDenoms[pair.Base] = struct{}{}
 		}
+		providerPairs = append(providerPairs, pair)
+	}
+
+	derivatives := map[string]derivative.Derivative{}
+	for name, pairs := range derivativePairs {
+		d, err := derivative.NewDerivative(name, logger, &history, pairs, derivativePeriods[name])
+		if err != nil {
+			return err
+		}
+		derivatives[name] = d
 	}
 
 	oracle := oracle.New(
@@ -233,6 +226,7 @@ func priceFeederCmdHandler(cmd *cobra.Command, args []string) error {
 		endpoints,
 		derivatives,
 		derivativePairs,
+		derivativeDenoms,
 		cfg.Healthchecks,
 		history,
 	)

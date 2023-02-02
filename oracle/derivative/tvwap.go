@@ -25,7 +25,7 @@ type (
 func NewTvwapDerivative(
 	history *history.PriceHistory,
 	logger zerolog.Logger,
-	pairs map[string]types.CurrencyPair,
+	pairs []types.CurrencyPair,
 	periods map[string]time.Duration,
 ) (*TvwapDerivative, error) {
 	d := &TvwapDerivative{

@@ -95,7 +95,8 @@ func (ots *OracleTestSuite) SetupSuite() {
 		make(map[string]sdk.Dec),
 		make(map[provider.Name]provider.Endpoint),
 		map[string]derivative.Derivative{},
-		map[string]map[string]types.CurrencyPair{},
+		map[string][]types.CurrencyPair{},
+		map[string]struct{}{},
 		[]config.Healthchecks{
 			{URL: "https://hc-ping.com/HEALTHCHECK-UUID", Timeout: "200ms"},
 		},

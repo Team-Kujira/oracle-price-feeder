@@ -61,7 +61,7 @@ var (
 	}
 
 	SupportedDerivatives = map[string]struct{}{
-		derivative.DerivativeStride: {},
+		derivative.DerivativeTvwap: {},
 	}
 
 	// maxDeviationThreshold is the maxmimum allowed amount of standard
@@ -88,7 +88,6 @@ type (
 	Config struct {
 		Server              Server              `toml:"server"`
 		CurrencyPairs       []CurrencyPair      `toml:"currency_pairs" validate:"required,gt=0,dive,required"`
-		CurrencyDerivatives []CurrencyDerivative `toml:"currency_derivatives" validate:"dive"`
 		Deviations          []Deviation         `toml:"deviation_thresholds"`
 		Account             Account             `toml:"account" validate:"required,gt=0,dive,required"`
 		Keyring             Keyring             `toml:"keyring" validate:"required,gt=0,dive,required"`
@@ -121,13 +120,8 @@ type (
 		Base      string          `toml:"base" validate:"required"`
 		Quote     string          `toml:"quote" validate:"required"`
 		Providers []provider.Name `toml:"providers" validate:"required,gt=0,dive,required"`
-	}
-
-	CurrencyDerivative struct {
-		Base string `toml:"base" validate:"required"`
-		Denom string `toml:"denom" validate:"required"`
-		Provider string `toml:"provider" validate:"required"`
-		Period string `toml:"period"`
+		Derivative string `toml:"derivative"`
+		DerivativePeriod string `toml:"derivative_period"`
 	}
 
 	// Deviation defines a maximum amount of standard deviations that a given asset can
@@ -290,26 +284,6 @@ func ParseConfig(configPath string) (Config, error) {
 	}
 
 	derivativeDenoms := map[string]struct{}{}
-	for i, derivative := range cfg.CurrencyDerivatives {
-		_, ok := SupportedDerivatives[derivative.Provider]
-		if !ok {
-			return cfg, fmt.Errorf("unsupported derivative: %s", derivative.Provider)
-		}
-		_, ok = derivativeDenoms[derivative.Denom]
-		if ok {
-			return cfg, fmt.Errorf("duplicate derivative: %s", derivative.Denom)
-		}
-		derivativeDenoms[derivative.Denom] = struct{}{}
-		if derivative.Period == "" {
-			cfg.CurrencyDerivatives[i].Period = defaultDerivativePeriod.String()
-		} else {
-			_, err := time.ParseDuration(derivative.Period)
-			if err != nil {
-				return cfg, err
-			}
-		}
-	}
-
 	pairs := make(map[string]map[provider.Name]struct{})
 	coinQuotes := make(map[string]struct{})
 	for _, cp := range cfg.CurrencyPairs {
@@ -319,10 +293,29 @@ func ParseConfig(configPath string) (Config, error) {
 		if strings.ToUpper(cp.Quote) != DenomUSD {
 			coinQuotes[cp.Quote] = struct{}{}
 		}
-		_, isDerivative := derivativeDenoms[cp.Base]
-		_, isSupported := SupportedQuotes[cp.Quote]
-		if !isSupported && !isDerivative {
-			return cfg, fmt.Errorf("unsupported quote: %s", cp.Quote)
+		if cp.Derivative != "" {
+			derivativeDenoms[cp.Base] = struct{}{}
+			_, ok := SupportedDerivatives[cp.Derivative]
+			if !ok {
+				return cfg, fmt.Errorf("unsupported derivative: %s", cp.Derivative)
+			}
+			if cp.DerivativePeriod != "" {
+				_, err := time.ParseDuration(cp.DerivativePeriod)
+				if err != nil {
+					return cfg, err
+				}
+			} else {
+				cp.DerivativePeriod = defaultDerivativePeriod.String()
+			}
+		} else {
+			_, ok := derivativeDenoms[cp.Base]
+			if ok {
+				return cfg, fmt.Errorf("cannot combine derivative and nonderivative pairs for %s", cp.Base)
+			}
+			_, ok = SupportedQuotes[cp.Quote]
+			if !ok {
+				return cfg, fmt.Errorf("unsupported quote: %s", cp.Quote)
+			}
 		}
 		for _, provider := range cp.Providers {
 			if _, ok := SupportedProviders[provider]; !ok {

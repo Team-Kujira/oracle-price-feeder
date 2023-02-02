@@ -70,7 +70,8 @@ type Oracle struct {
 	endpoints          map[provider.Name]provider.Endpoint
 	history history.PriceHistory
 	derivatives map[string]derivative.Derivative
-	derivativePairs map[string]map[string]types.CurrencyPair
+	derivativePairs map[string][]types.CurrencyPair
+	derivativeDenoms map[string]struct{}
 
 	mtx             sync.RWMutex
 	lastPriceSyncTS time.Time
@@ -87,7 +88,8 @@ func New(
 	deviations map[string]sdk.Dec,
 	endpoints map[provider.Name]provider.Endpoint,
 	derivatives map[string]derivative.Derivative,
-	derivativePairs map[string]map[string]types.CurrencyPair,
+	derivativePairs map[string][]types.CurrencyPair,
+	derivativeDenoms map[string]struct{},
 	healthchecksConfig []config.Healthchecks,
 	history history.PriceHistory,
 ) *Oracle {
@@ -127,6 +129,7 @@ func New(
 		healthchecks:    healthchecks,
 		derivatives: derivatives,
 		derivativePairs: derivativePairs,
+		derivativeDenoms: derivativeDenoms,
 		history: history,
 	}
 }
@@ -197,7 +200,6 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 	g := new(errgroup.Group)
 	mtx := new(sync.Mutex)
 	requiredRates := make(map[string]struct{})
-	computedPairs := map[provider.Name][]types.CurrencyPair{}
 	providerPrices := provider.AggregatedProviderPrices{}
 
 	for providerName, currencyPairs := range o.providerPairs {
@@ -210,16 +212,10 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 		}
 
 		for _, pair := range currencyPairs {
-			_, isRequired := requiredRates[pair.Base]
-			_, isDerivative := o.derivativePairs[providerName.String()][pair.String()]
-			if !isRequired && !isDerivative {
+			_, isDerivative := o.derivativeDenoms[pair.Base]
+			_, ok := requiredRates[pair.Base]
+			if !ok && !isDerivative {
 				requiredRates[pair.Base] = struct{}{}
-				pairs, ok := computedPairs[providerName]
-				if !ok {
-					computedPairs[providerName] = []types.CurrencyPair{pair}
-				} else {
-					computedPairs[providerName] = append(pairs, pair)
-				}
 			}
 		}
 
@@ -258,7 +254,7 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 				if (!ok || ticker == types.TickerPrice{}) {
 					return fmt.Errorf("no ticker price found for %s", pair)
 				}
-				_, isDerivative := o.derivativePairs[providerName.String()][pair.String()]
+				_, isDerivative := o.derivativeDenoms[pair.Base]
 				if isDerivative {
 					err := o.history.AddTickerPrice(pair, providerName, ticker)
 					if err != nil {
@@ -283,7 +279,7 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 	computedPrices, err := GetComputedPrices(
 		o.logger,
 		providerPrices,
-		computedPairs,
+		o.providerPairs,
 		o.deviations,
 	)
 	if err != nil {
@@ -304,10 +300,10 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 		)
 	}
 
-	for name, pairsMap := range o.derivativePairs {
-		pairs := []types.CurrencyPair{}
-		for _, pair := range pairsMap {
-			pairs = append(pairs, pair)
+	for name, pairs := range o.derivativePairs {
+		pairsMap := map[string]types.CurrencyPair{}
+		for _, pair := range pairs {
+			pairsMap[pair.String()] = pair
 		}
 		prices, err := o.derivatives[name].GetPrices(pairs...)
 		if err != nil {
