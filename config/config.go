@@ -286,7 +286,7 @@ func ParseConfig(configPath string) (Config, error) {
 	derivativeDenoms := map[string]struct{}{}
 	pairs := make(map[string]map[provider.Name]struct{})
 	coinQuotes := make(map[string]struct{})
-	for _, cp := range cfg.CurrencyPairs {
+	for i, cp := range cfg.CurrencyPairs {
 		if _, ok := pairs[cp.Base]; !ok {
 			pairs[cp.Base] = make(map[provider.Name]struct{})
 		}
@@ -305,7 +305,7 @@ func ParseConfig(configPath string) (Config, error) {
 					return cfg, err
 				}
 			} else {
-				cp.DerivativePeriod = defaultDerivativePeriod.String()
+				cfg.CurrencyPairs[i].DerivativePeriod = defaultDerivativePeriod.String()
 			}
 		} else {
 			_, ok := derivativeDenoms[cp.Base]
