@@ -56,7 +56,7 @@ func (d *TvwapDerivative) GetPrices(pairs ...types.CurrencyPair) (map[string]sdk
 		}
 		pairPrices, err := tvwap(tickers, start, now)
 		if err != nil {
-			d.logger.Warn().Err(err).Str("pair", pair.String()).Msg("failed to compute derivative price")
+			d.logger.Warn().Err(err).Str("pair", pair.String()).Dur("period", period).Msg("failed to compute derivative price")
 		} else {
 			prices[pair.String()] = pairPrices
 		}
