@@ -5,7 +5,6 @@ import (
     "time"
 
     "price-feeder/oracle/types"
-    "price-feeder/oracle/provider"
 
     _ "github.com/mattn/go-sqlite3"
     "github.com/rs/zerolog"
@@ -56,7 +55,7 @@ func (p *PriceHistory) Init() error {
     }
     query, err := p.db.Prepare(`SELECT provider, time, price, volume FROM crypto_ticker_prices
         WHERE symbol = ? AND time BETWEEN ? AND ?
-        ORDER BY time DESC
+        ORDER BY time ASC
     `)
     if err != nil {
         p.logger.Error().Err(err).Msg("failed to prepare sql query statement")
@@ -67,19 +66,19 @@ func (p *PriceHistory) Init() error {
     return nil
 }
 
-func (p *PriceHistory) AddTickerPrice(pair types.CurrencyPair, provider provider.Name, ticker types.TickerPrice) error {
+func (p *PriceHistory) AddTickerPrice(pair types.CurrencyPair, provider string, ticker types.TickerPrice) error {
     _, err := p.insert.Exec(
         pair.String(),
-        provider.String(),
+        provider,
         ticker.Time.Unix(),
         ticker.Price.String(),
         ticker.Volume.String(),
         pair.String(),
-        provider.String(),
+        provider,
         ticker.Time.Unix(),
     )
     if err != nil {
-        p.logger.Error().Err(err).Str("pair", pair.String()).Str("provider", provider.String()).Msg("failed to store ticker")
+        p.logger.Error().Err(err).Str("pair", pair.String()).Str("provider", provider).Msg("failed to store ticker")
     }
     return err
 }

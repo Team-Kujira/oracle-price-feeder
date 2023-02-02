@@ -256,7 +256,7 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 				}
 				_, isDerivative := o.derivativeDenoms[pair.Base]
 				if isDerivative {
-					err := o.history.AddTickerPrice(pair, providerName, ticker)
+					err := o.history.AddTickerPrice(pair, providerName.String(), ticker)
 					if err != nil {
 						o.logger.Error().Err(err).Str("pair", pair.String()).Str("provider", providerName.String()).Msg("failed to add ticker price to history")
 					}
