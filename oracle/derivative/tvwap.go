@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	tvwapMaxTimeDeltaSeconds = int64(60)
+	tvwapMaxTimeDeltaSeconds = int64(120)
 	tvwapMinHistoryPeriodFraction = 0.8
 )
 
