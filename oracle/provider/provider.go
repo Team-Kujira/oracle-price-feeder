@@ -204,6 +204,8 @@ func (e *Endpoint) SetDefaults() {
 		defaults = bybitDefaultEndpoints
 	case ProviderCrypto:
 		defaults = cryptoDefaultEndpoints
+	case ProviderFin:
+		defaults = finDefaultEndpoints
 	case ProviderGate:
 		defaults = gateDefaultEndpoints
 	case ProviderHuobi:
