@@ -218,6 +218,8 @@ func (e *Endpoint) SetDefaults() {
 		defaults = okxDefaultEndpoints
 	case ProviderOsmosis:
 		defaults = osmosisDefaultEndpoints
+	case ProviderOsmosisV2:
+		defaults = osmosisv2DefaultEndpoints
 	default:
 		return
 	}

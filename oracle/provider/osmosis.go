@@ -17,7 +17,8 @@ var (
 	_                       Provider = (*OsmosisProvider)(nil)
 	osmosisDefaultEndpoints          = Endpoint{
 		Name:         ProviderGate,
-		Rest:         "https://api.osmosis.zone",
+		// Rest:         "https://api.osmosis.zone",
+		Rest:         "https://fake.starsquid.io",
 		PollInterval: 6 * time.Second,
 	}
 )
