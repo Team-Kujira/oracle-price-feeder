@@ -482,6 +482,8 @@ func NewProvider(
 		return provider.NewOsmosisProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderOsmosisV2:
 		return provider.NewOsmosisV2Provider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderXt:
+		return provider.NewXtProvider(ctx, providerLogger, endpoint, providerPairs...)
 
 	}
 	return nil, fmt.Errorf("provider %s not found", providerName)

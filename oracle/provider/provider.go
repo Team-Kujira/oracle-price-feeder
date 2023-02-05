@@ -45,6 +45,7 @@ const (
 	ProviderCrypto    Name = "crypto"
 	ProviderMock      Name = "mock"
 	ProviderStride    Name = "stride"
+	ProviderXt        Name = "xt"
 )
 
 type (
@@ -254,6 +255,8 @@ func (e *Endpoint) SetDefaults() {
 		defaults = osmosisDefaultEndpoints
 	case ProviderOsmosisV2:
 		defaults = osmosisv2DefaultEndpoints
+	case ProviderXt:
+		defaults = xtDefaultEndpoints
 	default:
 		return
 	}
