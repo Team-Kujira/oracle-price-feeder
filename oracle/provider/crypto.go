@@ -3,7 +3,6 @@ package provider
 import (
 	"context"
 	"encoding/json"
-	"io/ioutil"
 	"time"
 
 	"price-feeder/oracle/types"
@@ -73,27 +72,13 @@ func (p *CryptoProvider) Poll() error {
 
 	url := p.endpoints.Rest + "/v2/public/get-ticker"
 
-	tickersResponse, err := p.http.Get(url)
-	if err != nil {
-		p.logger.Warn().
-			Err(err).
-			Msg("crypto failed requesting tickers")
-		return err
-	}
-
-	if tickersResponse.StatusCode != 200 {
-		p.logger.Warn().
-			Int("code", tickersResponse.StatusCode).
-			Msg("crypto tickers request returned invalid status")
-	}
-
-	tickersContent, err := ioutil.ReadAll(tickersResponse.Body)
+	content, err := p.makeHttpRequest(url)
 	if err != nil {
 		return err
 	}
 
 	var tickers CryptoTickersResponse
-	err = json.Unmarshal(tickersContent, &tickers)
+	err = json.Unmarshal(content, &tickers)
 	if err != nil {
 		return err
 	}

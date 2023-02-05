@@ -3,7 +3,6 @@ package provider
 import (
 	"context"
 	"encoding/json"
-	"io/ioutil"
 	"strings"
 	"time"
 
@@ -69,21 +68,7 @@ func (p *FinProvider) Poll() error {
 
 	url := p.endpoints.Rest + "/api/coingecko/tickers"
 
-	response, err := p.http.Get(url)
-	if err != nil {
-		p.logger.Warn().
-			Err(err).
-			Msg("fin failed requesting tickers")
-		return err
-	}
-
-	if response.StatusCode != 200 {
-		p.logger.Warn().
-			Int("code", response.StatusCode).
-			Msg("fin tickers request returned invalid status")
-	}
-
-	content, err := ioutil.ReadAll(response.Body)
+	content, err := p.makeHttpRequest(url)
 	if err != nil {
 		return err
 	}

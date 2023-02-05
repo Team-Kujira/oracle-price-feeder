@@ -3,7 +3,6 @@ package provider
 import (
 	"context"
 	"encoding/json"
-	"io/ioutil"
 	"strconv"
 	"time"
 
@@ -71,27 +70,13 @@ func (p *OkxProvider) Poll() error {
 
 	url := p.endpoints.Rest + "/api/v5/market/tickers?instType=SPOT"
 
-	tickersResponse, err := p.http.Get(url)
-	if err != nil {
-		p.logger.Warn().
-			Err(err).
-			Msg("okx failed requesting tickers")
-		return err
-	}
-
-	if tickersResponse.StatusCode != 200 {
-		p.logger.Warn().
-			Int("code", tickersResponse.StatusCode).
-			Msg("okx tickers request returned invalid status")
-	}
-
-	tickersContent, err := ioutil.ReadAll(tickersResponse.Body)
+	content, err := p.makeHttpRequest(url)
 	if err != nil {
 		return err
 	}
 
 	var tickers OkxTickersResponse
-	err = json.Unmarshal(tickersContent, &tickers)
+	err = json.Unmarshal(content, &tickers)
 	if err != nil {
 		return err
 	}

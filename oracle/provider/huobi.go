@@ -3,7 +3,6 @@ package provider
 import (
 	"context"
 	"encoding/json"
-	"io/ioutil"
 	"strings"
 	"time"
 
@@ -68,27 +67,13 @@ func (p *HuobiProvider) Poll() error {
 
 	url := p.endpoints.Rest + "/market/tickers"
 
-	tickersResponse, err := p.http.Get(url)
-	if err != nil {
-		p.logger.Warn().
-			Err(err).
-			Msg("huobi failed requesting tickers")
-		return err
-	}
-
-	if tickersResponse.StatusCode != 200 {
-		p.logger.Warn().
-			Int("code", tickersResponse.StatusCode).
-			Msg("huobi tickers request returned invalid status")
-	}
-
-	tickersContent, err := ioutil.ReadAll(tickersResponse.Body)
+	content, err := p.makeHttpRequest(url)
 	if err != nil {
 		return err
 	}
 
 	var tickers HuobiTickersResponse
-	err = json.Unmarshal(tickersContent, &tickers)
+	err = json.Unmarshal(content, &tickers)
 	if err != nil {
 		return err
 	}
