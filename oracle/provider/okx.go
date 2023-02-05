@@ -14,7 +14,7 @@ import (
 var (
 	_                   Provider = (*OkxProvider)(nil)
 	okxDefaultEndpoints          = Endpoint{
-		Name:         ProviderCrypto,
+		Name:         ProviderOkx,
 		Rest:         "https://www.okx.com", // or https://aws.okx.com
 		PollInterval: 2 * time.Second,
 	}
