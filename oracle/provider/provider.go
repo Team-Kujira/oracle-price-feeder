@@ -233,8 +233,12 @@ func (e *Endpoint) SetDefaults() {
 		defaults = binanceDefaultEndpoints
 	case ProviderBinanceUS:
 		defaults = binanceUSDefaultEndpoints
+	case ProviderBitget:
+		defaults = bitgetDefaultEndpoints
 	case ProviderBybit:
 		defaults = bybitDefaultEndpoints
+	case ProviderCoinbase:
+		defaults = coinbaseDefaultEndpoints
 	case ProviderCrypto:
 		defaults = cryptoDefaultEndpoints
 	case ProviderFin:
