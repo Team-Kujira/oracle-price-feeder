@@ -55,11 +55,6 @@ func NewMexcProvider(
 }
 
 func (p *MexcProvider) Poll() error {
-	symbols := make(map[string]bool, len(p.pairs))
-	for _, pair := range p.pairs {
-		symbols[pair.String()] = true
-	}
-
 	url := p.endpoints.Rest + "/api/v3/ticker/24hr"
 
 	content, err := p.makeHttpRequest(url)
@@ -77,7 +72,7 @@ func (p *MexcProvider) Poll() error {
 	defer p.mtx.Unlock()
 	now := time.Now()
 	for _, ticker := range tickers {
-		_, ok := symbols[ticker.Symbol]
+		_, ok := p.pairs[ticker.Symbol]
 		if !ok {
 			continue
 		}

@@ -64,11 +64,6 @@ func NewOsmosisV2Provider(
 }
 
 func (p *OsmosisV2Provider) Poll() error {
-	symbols := make(map[string]bool, len(p.pairs))
-	for _, pair := range p.pairs {
-		symbols[pair.String()] = true
-	}
-
 	url := p.endpoints.Rest + "/stream/pool/v1/all?min_liquidity=10000&limit=160"
 
 	content, err := p.makeHttpRequest(url)
@@ -93,7 +88,7 @@ func (p *OsmosisV2Provider) Poll() error {
 		quote := pool.Tokens[1]
 		symbol := base.Symbol + quote.Symbol
 
-		_, ok := symbols[symbol]
+		_, ok := p.pairs[symbol]
 		if !ok {
 			continue
 		}

@@ -61,11 +61,6 @@ func NewFinProvider(
 }
 
 func (p *FinProvider) Poll() error {
-	symbols := make(map[string]bool, len(p.pairs))
-	for _, pair := range p.pairs {
-		symbols[pair.String()] = true
-	}
-
 	url := p.endpoints.Rest + "/api/coingecko/tickers"
 
 	content, err := p.makeHttpRequest(url)
@@ -89,7 +84,7 @@ func (p *FinProvider) Poll() error {
 		quote := strings.Replace(ticker.Quote, "axl", "", 1)
 		symbol := base + quote
 
-		_, ok := symbols[symbol]
+		_, ok := p.pairs[symbol]
 		if !ok {
 			continue
 		}

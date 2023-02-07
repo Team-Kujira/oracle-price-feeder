@@ -63,11 +63,6 @@ func NewBitgetProvider(
 }
 
 func (p *BitgetProvider) Poll() error {
-	symbols := make(map[string]bool, len(p.pairs))
-	for _, pair := range p.pairs {
-		symbols[pair.String()] = true
-	}
-
 	url := p.endpoints.Rest + "/api/spot/v1/market/tickers"
 
 	content, err := p.makeHttpRequest(url)
@@ -84,7 +79,7 @@ func (p *BitgetProvider) Poll() error {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 	for _, ticker := range tickers.Data {
-		_, ok := symbols[ticker.Symbol]
+		_, ok := p.pairs[ticker.Symbol]
 		if !ok {
 			continue
 		}
