@@ -15,7 +15,7 @@ var (
 	_                   Provider = (*FinProvider)(nil)
 	finDefaultEndpoints          = Endpoint{
 		Name:         ProviderOsmosisV2,
-		Rest:         "https://api.kujira.app/",
+		Rest:         "https://api.kujira.app",
 		PollInterval: 3 * time.Second,
 	}
 )
