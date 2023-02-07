@@ -231,6 +231,8 @@ func (e *Endpoint) SetDefaults() {
 	switch e.Name {
 	case ProviderBinance:
 		defaults = binanceDefaultEndpoints
+	case ProviderBitfinex:
+		defaults = bitfinexDefaultEndpoints
 	case ProviderBinanceUS:
 		defaults = binanceUSDefaultEndpoints
 	case ProviderBitget:
