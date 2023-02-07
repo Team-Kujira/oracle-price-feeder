@@ -14,7 +14,7 @@ import (
 var (
 	_                   Provider = (*FinProvider)(nil)
 	finDefaultEndpoints          = Endpoint{
-		Name:         ProviderOsmosisV2,
+		Name:         ProviderFin,
 		Rest:         "https://api.kujira.app",
 		PollInterval: 3 * time.Second,
 	}
@@ -24,7 +24,7 @@ type (
 	// FinProvider defines an oracle provider implemented by the FIN
 	// public API.
 	//
-	// REF: ???
+	// REF: https://docs.kujira.app/dapps-and-infrastructure/fin/coingecko-api
 	FinProvider struct {
 		provider
 	}
