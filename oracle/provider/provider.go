@@ -253,6 +253,8 @@ func (e *Endpoint) SetDefaults() {
 		defaults = huobiDefaultEndpoints
 	case ProviderKucoin:
 		defaults = kucoinDefaultEndpoints
+	case ProviderKraken:
+		defaults = krakenDefaultEndpoints
 	case ProviderMexc:
 		defaults = mexcDefaultEndpoints
 	case ProviderMock:

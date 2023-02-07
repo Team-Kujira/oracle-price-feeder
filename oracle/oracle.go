@@ -480,6 +480,8 @@ func NewProvider(
 		return provider.NewHuobiProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderKucoin:
 		return provider.NewKucoinProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderKraken:
+		return provider.NewKrakenProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderMexc:
 		return provider.NewMexcProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderMock:
