@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -34,7 +35,7 @@ const (
 	ProviderBitget    Name = "bitget"
 	ProviderBitfinex  Name = "bitfinex"
 	ProviderBitforex  Name = "bitforex"
-	ProviderHitbtc    Name = "hitbtc"
+	ProviderHitBtc    Name = "hitbtc"
 	ProviderPoloniex  Name = "poloniex"
 	ProviderPhemex    Name = "phemex"
 	ProviderLbank     Name = "lbank"
@@ -44,6 +45,7 @@ const (
 	ProviderCrypto    Name = "crypto"
 	ProviderMock      Name = "mock"
 	ProviderStride    Name = "stride"
+	ProviderXt        Name = "xt"
 )
 
 type (
@@ -193,19 +195,60 @@ func (p *provider) ProviderPairToCurrencyPair(pair string) types.CurrencyPair {
 	}
 }
 
+func (p *provider) makeHttpRequest(url string) ([]byte, error) {
+	resp, err := p.http.Get(url)
+	if err != nil {
+		p.logger.Warn().
+			Err(err).
+			Msg("failed requesting tickers")
+		return nil, err
+	}
+	if resp.StatusCode != 200 {
+		p.logger.Warn().
+			Int("code", resp.StatusCode).
+			Msg("request returned invalid status")
+		if resp.StatusCode == 429 || resp.StatusCode == 418 {
+			backoffSeconds, err := strconv.Atoi(resp.Header.Get("Retry-After"))
+			if err != nil {
+				return nil, err
+			}
+			p.logger.Warn().
+				Int("seconds", backoffSeconds).
+				Msg("ratelimit backoff")
+			time.Sleep(time.Duration(backoffSeconds) * time.Second)
+			return nil, nil
+		}
+	}
+	content, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	return content, nil
+}
+
 func (e *Endpoint) SetDefaults() {
 	var defaults Endpoint
 	switch e.Name {
 	case ProviderBinance:
 		defaults = binanceDefaultEndpoints
+	case ProviderBitfinex:
+		defaults = bitfinexDefaultEndpoints
 	case ProviderBinanceUS:
 		defaults = binanceUSDefaultEndpoints
+	case ProviderBitget:
+		defaults = bitgetDefaultEndpoints
 	case ProviderBybit:
 		defaults = bybitDefaultEndpoints
+	case ProviderCoinbase:
+		defaults = coinbaseDefaultEndpoints
 	case ProviderCrypto:
 		defaults = cryptoDefaultEndpoints
+	case ProviderFin:
+		defaults = finDefaultEndpoints
 	case ProviderGate:
 		defaults = gateDefaultEndpoints
+	case ProviderHitBtc:
+		defaults = hitbtcDefaultEndpoints
 	case ProviderHuobi:
 		defaults = huobiDefaultEndpoints
 	case ProviderKucoin:
@@ -218,6 +261,10 @@ func (e *Endpoint) SetDefaults() {
 		defaults = okxDefaultEndpoints
 	case ProviderOsmosis:
 		defaults = osmosisDefaultEndpoints
+	case ProviderOsmosisV2:
+		defaults = osmosisv2DefaultEndpoints
+	case ProviderXt:
+		defaults = xtDefaultEndpoints
 	default:
 		return
 	}

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"time"
 
 	"price-feeder/oracle/types"
@@ -16,8 +15,9 @@ import (
 var (
 	_                       Provider = (*OsmosisProvider)(nil)
 	osmosisDefaultEndpoints          = Endpoint{
-		Name:         ProviderGate,
-		Rest:         "https://api.osmosis.zone",
+		Name: ProviderGate,
+		// Rest:         "https://api.osmosis.zone",
+		Rest:         "https://fake.starsquid.io",
 		PollInterval: 6 * time.Second,
 	}
 )
@@ -71,21 +71,7 @@ func (p *OsmosisProvider) Poll() error {
 
 	url := p.endpoints.Rest + "/pairs/v1/summary"
 
-	response, err := p.http.Get(url)
-	if err != nil {
-		p.logger.Warn().
-			Err(err).
-			Msg("osmosis failed requesting tickers")
-		return err
-	}
-
-	if response.StatusCode != 200 {
-		p.logger.Warn().
-			Int("code", response.StatusCode).
-			Msg("osmosis tickers request returned invalid status")
-	}
-
-	content, err := ioutil.ReadAll(response.Body)
+	content, err := p.makeHttpRequest(url)
 	if err != nil {
 		return err
 	}

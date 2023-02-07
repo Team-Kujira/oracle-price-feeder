@@ -18,10 +18,10 @@ import (
 
 	"price-feeder/config"
 	"price-feeder/oracle/client"
-	"price-feeder/oracle/provider"
 	"price-feeder/oracle/derivative"
-	"price-feeder/oracle/types"
 	"price-feeder/oracle/history"
+	"price-feeder/oracle/provider"
+	"price-feeder/oracle/types"
 	pfsync "price-feeder/pkg/sync"
 
 	oracletypes "github.com/Team-Kujira/core/x/oracle/types"
@@ -68,10 +68,10 @@ type Oracle struct {
 	oracleClient       client.OracleClient
 	deviations         map[string]sdk.Dec
 	endpoints          map[provider.Name]provider.Endpoint
-	history history.PriceHistory
-	derivatives map[string]derivative.Derivative
-	derivativePairs map[string][]types.CurrencyPair
-	derivativeDenoms map[string]struct{}
+	history            history.PriceHistory
+	derivatives        map[string]derivative.Derivative
+	derivativePairs    map[string][]types.CurrencyPair
+	derivativeDenoms   map[string]struct{}
 
 	mtx             sync.RWMutex
 	lastPriceSyncTS time.Time
@@ -116,21 +116,21 @@ func New(
 		}
 	}
 	return &Oracle{
-		logger:          logger.With().Str("module", "oracle").Logger(),
-		closer:          pfsync.NewCloser(),
-		oracleClient:    oc,
-		providerPairs:   providerPairs,
-		priceProviders:  make(map[provider.Name]provider.Provider),
-		previousPrevote: nil,
-		providerTimeout: providerTimeout,
-		deviations:      deviations,
-		paramCache:      ParamCache{},
-		endpoints:       endpoints,
-		healthchecks:    healthchecks,
-		derivatives: derivatives,
-		derivativePairs: derivativePairs,
+		logger:           logger.With().Str("module", "oracle").Logger(),
+		closer:           pfsync.NewCloser(),
+		oracleClient:     oc,
+		providerPairs:    providerPairs,
+		priceProviders:   make(map[provider.Name]provider.Provider),
+		previousPrevote:  nil,
+		providerTimeout:  providerTimeout,
+		deviations:       deviations,
+		paramCache:       ParamCache{},
+		endpoints:        endpoints,
+		healthchecks:     healthchecks,
+		derivatives:      derivatives,
+		derivativePairs:  derivativePairs,
 		derivativeDenoms: derivativeDenoms,
-		history: history,
+		history:          history,
 	}
 }
 
@@ -460,12 +460,22 @@ func NewProvider(
 
 	case provider.ProviderBinance, provider.ProviderBinanceUS:
 		return provider.NewBinanceProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderBitfinex:
+		return provider.NewBitfinexProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderBitget:
+		return provider.NewBitgetProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderBybit:
 		return provider.NewBybitProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderCoinbase:
+		return provider.NewCoinbaseProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderCrypto:
 		return provider.NewCryptoProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderFin:
+		return provider.NewFinProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderGate:
 		return provider.NewGateProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderHitBtc:
+		return provider.NewHitBtcProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderHuobi:
 		return provider.NewHuobiProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderKucoin:
@@ -478,6 +488,10 @@ func NewProvider(
 		return provider.NewOkxProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderOsmosis:
 		return provider.NewOsmosisProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderOsmosisV2:
+		return provider.NewOsmosisV2Provider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderXt:
+		return provider.NewXtProvider(ctx, providerLogger, endpoint, providerPairs...)
 
 	}
 	return nil, fmt.Errorf("provider %s not found", providerName)

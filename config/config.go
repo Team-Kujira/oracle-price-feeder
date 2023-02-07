@@ -23,8 +23,8 @@ const (
 	defaultSrvReadTimeout     = 15 * time.Second
 	defaultProviderTimeout    = 100 * time.Millisecond
 	defaultHeightPollInterval = 1 * time.Second
-	defaultHistoryDb = "prices.db"
-	defaultDerivativePeriod = 30 * time.Minute
+	defaultHistoryDb          = "prices.db"
+	defaultDerivativePeriod   = 30 * time.Minute
 )
 
 var (
@@ -39,10 +39,11 @@ var (
 		provider.ProviderBybit:     {},
 		provider.ProviderBitfinex:  {},
 		provider.ProviderBitforex:  {},
+		provider.ProviderFin:       {},
 		provider.ProviderPoloniex:  {},
 		provider.ProviderPhemex:    {},
 		provider.ProviderLbank:     {},
-		provider.ProviderHitbtc:    {},
+		provider.ProviderHitBtc:    {},
 		provider.ProviderKraken:    {},
 		provider.ProviderKucoin:    {},
 		provider.ProviderBinance:   {},
@@ -58,6 +59,7 @@ var (
 		provider.ProviderCrypto:    {},
 		provider.ProviderMock:      {},
 		provider.ProviderStride:    {},
+		provider.ProviderXt:        {},
 	}
 
 	SupportedDerivatives = map[string]struct{}{
@@ -102,7 +104,7 @@ type (
 		EnableVoter         bool                `toml:"enable_voter"`
 		Healthchecks        []Healthchecks      `toml:"healthchecks" validate:"dive"`
 		HeightPollInterval  string              `toml:"height_poll_interval"`
-		HistoryDb string `toml:"history_db"`
+		HistoryDb           string              `toml:"history_db"`
 	}
 
 	// Server defines the API server configuration.
@@ -117,11 +119,11 @@ type (
 	// CurrencyPair defines a price quote of the exchange rate for two different
 	// currencies and the supported providers for getting the exchange rate.
 	CurrencyPair struct {
-		Base      string          `toml:"base" validate:"required"`
-		Quote     string          `toml:"quote" validate:"required"`
-		Providers []provider.Name `toml:"providers" validate:"required,gt=0,dive,required"`
-		Derivative string `toml:"derivative"`
-		DerivativePeriod string `toml:"derivative_period"`
+		Base             string          `toml:"base" validate:"required"`
+		Quote            string          `toml:"quote" validate:"required"`
+		Providers        []provider.Name `toml:"providers" validate:"required,gt=0,dive,required"`
+		Derivative       string          `toml:"derivative"`
+		DerivativePeriod string          `toml:"derivative_period"`
 	}
 
 	// Deviation defines a maximum amount of standard deviations that a given asset can

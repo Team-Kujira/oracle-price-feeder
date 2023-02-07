@@ -3,7 +3,6 @@ package provider
 import (
 	"context"
 	"encoding/json"
-	"io/ioutil"
 	"time"
 
 	"price-feeder/oracle/types"
@@ -56,34 +55,15 @@ func NewMexcProvider(
 }
 
 func (p *MexcProvider) Poll() error {
-	symbols := make(map[string]bool, len(p.pairs))
-	for _, pair := range p.pairs {
-		symbols[pair.String()] = true
-	}
-
 	url := p.endpoints.Rest + "/api/v3/ticker/24hr"
 
-	tickersResponse, err := p.http.Get(url)
-	if err != nil {
-		p.logger.Warn().
-			Err(err).
-			Msg("mexc failed requesting tickers")
-		return err
-	}
-
-	if tickersResponse.StatusCode != 200 {
-		p.logger.Warn().
-			Int("code", tickersResponse.StatusCode).
-			Msg("mexc tickers request returned invalid status")
-	}
-
-	tickersContent, err := ioutil.ReadAll(tickersResponse.Body)
+	content, err := p.makeHttpRequest(url)
 	if err != nil {
 		return err
 	}
 
 	var tickers []MexcTicker
-	err = json.Unmarshal(tickersContent, &tickers)
+	err = json.Unmarshal(content, &tickers)
 	if err != nil {
 		return err
 	}
@@ -92,7 +72,7 @@ func (p *MexcProvider) Poll() error {
 	defer p.mtx.Unlock()
 	now := time.Now()
 	for _, ticker := range tickers {
-		_, ok := symbols[ticker.Symbol]
+		_, ok := p.pairs[ticker.Symbol]
 		if !ok {
 			continue
 		}
