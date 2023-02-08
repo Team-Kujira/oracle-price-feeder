@@ -464,6 +464,10 @@ func NewProvider(
 		return provider.NewBitfinexProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderBitget:
 		return provider.NewBitgetProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderBkex:
+		return provider.NewBkexProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderBitmart:
+		return provider.NewBitmartProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderBybit:
 		return provider.NewBybitProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderCoinbase:
@@ -478,10 +482,12 @@ func NewProvider(
 		return provider.NewHitBtcProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderHuobi:
 		return provider.NewHuobiProvider(ctx, providerLogger, endpoint, providerPairs...)
-	case provider.ProviderKucoin:
-		return provider.NewKucoinProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderKraken:
 		return provider.NewKrakenProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderKucoin:
+		return provider.NewKucoinProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderLbank:
+		return provider.NewLbankProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderMexc:
 		return provider.NewMexcProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderMock:
@@ -492,6 +498,10 @@ func NewProvider(
 		return provider.NewOsmosisProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderOsmosisV2:
 		return provider.NewOsmosisV2Provider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderPhemex:
+		return provider.NewPhemexProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderPoloniex:
+		return provider.NewPoloniexProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderXt:
 		return provider.NewXtProvider(ctx, providerLogger, endpoint, providerPairs...)
 
