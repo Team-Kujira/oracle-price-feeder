@@ -3,44 +3,36 @@ package provider
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"strings"
 	"time"
 
 	"price-feeder/oracle/types"
 
-	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/rs/zerolog"
 )
 
 var (
 	_                       Provider = (*OsmosisProvider)(nil)
 	osmosisDefaultEndpoints          = Endpoint{
-		Name: ProviderGate,
-		// Rest:         "https://api.osmosis.zone",
-		Rest:         "https://fake.starsquid.io",
+		Name:         ProviderOsmosis,
+		Rest:         "https://api-osmosis.imperator.co",
 		PollInterval: 6 * time.Second,
 	}
 )
 
 type (
-	// OsmosisProvider defines an oracle provider implemented by the Gate.io
-	// public API.
+	// OsmosisProvider defines an oracle provider implemented by the
+	// imperator.co API.
 	//
-	// REF: https://www.gate.io/docs/developers/apiv4/en/
+	// REF: -
 	OsmosisProvider struct {
 		provider
 	}
 
-	OsmosisPairsResponse struct {
-		Time int64         `json:"updated_at"`
-		Data []OsmosisPair `json:"data"`
-	}
-
-	OsmosisPair struct {
-		Base   string  `json:"base_symbol"`     // Base symbol ex.: "ATOM"
-		Quote  string  `json:"quote_symbol"`    // Quote symbol ex.: "OSMO"
-		Price  float64 `json:"price"`           // Last price ex.: 0.07204
-		Volume float64 `json:"base_volume_24h"` // Total traded base asset volume ex.: 167107.988
+	OsmosisTicker struct {
+		Symbol string  `json:"symbol"`     // ex.: "ATOM"
+		Price  float64 `json:"price"`      // ex.: 14.8830587017
+		Volume float64 `json:"volume_24h"` // ex.: 6428474.562418117
 	}
 )
 
@@ -64,46 +56,42 @@ func NewOsmosisProvider(
 }
 
 func (p *OsmosisProvider) Poll() error {
-	symbols := make(map[string]bool, len(p.pairs))
+	denoms := map[string]bool{}
 	for _, pair := range p.pairs {
-		symbols[pair.String()] = true
+		if pair.Quote == "USD" {
+			denoms[strings.ToUpper(pair.Base)] = true
+		}
 	}
 
-	url := p.endpoints.Rest + "/pairs/v1/summary"
+	url := p.endpoints.Rest + "/tokens/v2/all"
 
 	content, err := p.makeHttpRequest(url)
 	if err != nil {
 		return err
 	}
 
-	var pairsResponse OsmosisPairsResponse
-	err = json.Unmarshal(content, &pairsResponse)
+	var tickers []OsmosisTicker
+	err = json.Unmarshal(content, &tickers)
 	if err != nil {
 		return err
 	}
 
+	timestamp := time.Now()
+
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 
-	timestamp := time.Unix(pairsResponse.Time, 0)
-
-	for _, pair := range pairsResponse.Data {
-		symbol := pair.Base + pair.Quote
-
-		_, ok := symbols[symbol]
+	for _, ticker := range tickers {
+		_, ok := denoms[ticker.Symbol]
 		if !ok {
 			continue
 		}
 
-		fmt.Println(pair)
-
-		p.tickers[symbol] = types.TickerPrice{
-			Price:  sdk.NewDec(1).Quo(floatToDec(pair.Price)),
-			Volume: floatToDec(pair.Volume),
+		p.tickers[ticker.Symbol+"USD"] = types.TickerPrice{
+			Price:  floatToDec(ticker.Price),
+			Volume: floatToDec(ticker.Volume),
 			Time:   timestamp,
 		}
-
-		fmt.Println(p.tickers[symbol])
 	}
 	p.logger.Debug().Msg("updated tickers")
 	return nil
