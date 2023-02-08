@@ -3,7 +3,6 @@ package provider
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"strings"
 	"time"
 
@@ -112,8 +111,6 @@ func (p *KrakenProvider) Poll() error {
 		krakenSymbol := p.symbols[pair.String()]
 		symbols[krakenSymbol] = pair.String()
 	}
-
-	fmt.Println(symbols)
 
 	url := p.endpoints.Rest + "/0/public/Ticker"
 
