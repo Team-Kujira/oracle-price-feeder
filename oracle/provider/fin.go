@@ -3,7 +3,6 @@ package provider
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"strings"
 	"time"
 
@@ -63,21 +62,14 @@ func NewFinProvider(
 
 func (p *FinProvider) Poll() error {
 	url := p.endpoints.Rest + "/api/coingecko/tickers"
-
-	fmt.Println(url)
-
 	content, err := p.makeHttpRequest(url)
 	if err != nil {
-		fmt.Println(1)
 		return err
 	}
 
 	var tickersResponse FinTickersResponse
 	err = json.Unmarshal(content, &tickersResponse)
 	if err != nil {
-		fmt.Println(2)
-		fmt.Println(string(content))
-
 		return err
 	}
 
