@@ -87,11 +87,8 @@ func (p *FinProvider) Poll() error {
 	timestamp := time.Now()
 
 	for _, ticker := range tickersResponse.Tickers {
-		base := strings.Replace(ticker.Base, "axl", "", 1)
-		quote := strings.Replace(ticker.Quote, "axl", "", 1)
-		if quote == "USDC" {
-			quote = "USD"
-		}
+		base := finTranslateProviderSymbol(ticker.Base)
+		quote := finTranslateProviderSymbol(ticker.Quote)
 		symbol := base + quote
 
 		_, ok := p.pairs[symbol]
@@ -107,4 +104,8 @@ func (p *FinProvider) Poll() error {
 	}
 	p.logger.Debug().Msg("updated tickers")
 	return nil
+}
+
+func finTranslateProviderSymbol(symbol string) string {
+	return strings.ToUpper(strings.Replace(symbol, "axl", "", 1))
 }
