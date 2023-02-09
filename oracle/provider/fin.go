@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 
@@ -30,7 +31,7 @@ type (
 	}
 
 	FinTickersResponse struct {
-		Tickers []FinTicker `json:"pools"`
+		Tickers []FinTicker `json:"tickers"`
 	}
 
 	FinTicker struct {
@@ -63,14 +64,20 @@ func NewFinProvider(
 func (p *FinProvider) Poll() error {
 	url := p.endpoints.Rest + "/api/coingecko/tickers"
 
+	fmt.Println(url)
+
 	content, err := p.makeHttpRequest(url)
 	if err != nil {
+		fmt.Println(1)
 		return err
 	}
 
 	var tickersResponse FinTickersResponse
 	err = json.Unmarshal(content, &tickersResponse)
 	if err != nil {
+		fmt.Println(2)
+		fmt.Println(string(content))
+
 		return err
 	}
 
@@ -82,6 +89,9 @@ func (p *FinProvider) Poll() error {
 	for _, ticker := range tickersResponse.Tickers {
 		base := strings.Replace(ticker.Base, "axl", "", 1)
 		quote := strings.Replace(ticker.Quote, "axl", "", 1)
+		if quote == "USDC" {
+			quote = "USD"
+		}
 		symbol := base + quote
 
 		_, ok := p.pairs[symbol]
