@@ -33,6 +33,8 @@ const (
 	ProviderGate      Name = "gate"
 	ProviderCoinbase  Name = "coinbase"
 	ProviderBitget    Name = "bitget"
+	ProviderBitmart   Name = "bitmart"
+	ProviderBkex      Name = "bkex"
 	ProviderBitfinex  Name = "bitfinex"
 	ProviderBitforex  Name = "bitforex"
 	ProviderHitBtc    Name = "hitbtc"
@@ -237,6 +239,10 @@ func (e *Endpoint) SetDefaults() {
 		defaults = binanceUSDefaultEndpoints
 	case ProviderBitget:
 		defaults = bitgetDefaultEndpoints
+	case ProviderBitmart:
+		defaults = bitmartDefaultEndpoints
+	case ProviderBkex:
+		defaults = bkexDefaultEndpoints
 	case ProviderBybit:
 		defaults = bybitDefaultEndpoints
 	case ProviderCoinbase:
@@ -251,8 +257,12 @@ func (e *Endpoint) SetDefaults() {
 		defaults = hitbtcDefaultEndpoints
 	case ProviderHuobi:
 		defaults = huobiDefaultEndpoints
+	case ProviderKraken:
+		defaults = krakenDefaultEndpoints
 	case ProviderKucoin:
 		defaults = kucoinDefaultEndpoints
+	case ProviderLbank:
+		defaults = lbankDefaultEndpoints
 	case ProviderMexc:
 		defaults = mexcDefaultEndpoints
 	case ProviderMock:
@@ -263,6 +273,10 @@ func (e *Endpoint) SetDefaults() {
 		defaults = osmosisDefaultEndpoints
 	case ProviderOsmosisV2:
 		defaults = osmosisv2DefaultEndpoints
+	case ProviderPhemex:
+		defaults = phemexDefaultEndpoints
+	case ProviderPoloniex:
+		defaults = poloniexDefaultEndpoints
 	case ProviderXt:
 		defaults = xtDefaultEndpoints
 	default:

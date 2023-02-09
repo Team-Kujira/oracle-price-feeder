@@ -15,7 +15,7 @@ var (
 	hitbtcDefaultEndpoints          = Endpoint{
 		Name:         ProviderHitBtc,
 		Rest:         "https://api.hitbtc.com",
-		PollInterval: 3 * time.Second,
+		PollInterval: 2 * time.Second,
 	}
 )
 
