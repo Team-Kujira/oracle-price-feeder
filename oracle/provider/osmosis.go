@@ -82,12 +82,12 @@ func (p *OsmosisProvider) Poll() error {
 	defer p.mtx.Unlock()
 
 	for _, ticker := range tickers {
-		_, ok := denoms[ticker.Symbol]
+		_, ok := denoms[strings.ToUpper(ticker.Symbol)]
 		if !ok {
 			continue
 		}
 
-		p.tickers[ticker.Symbol+"USD"] = types.TickerPrice{
+		p.tickers[strings.ToUpper(ticker.Symbol+"USD")] = types.TickerPrice{
 			Price:  floatToDec(ticker.Price),
 			Volume: floatToDec(ticker.Volume),
 			Time:   timestamp,
