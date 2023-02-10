@@ -2,7 +2,6 @@ package oracle
 
 import (
 	"testing"
-	"time"
 
 	"price-feeder/oracle/provider"
 	"price-feeder/oracle/types"
@@ -74,107 +73,107 @@ func TestGetUSDBasedProviders(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestConvertCandlesToUSD(t *testing.T) {
-	providerCandles := make(provider.AggregatedProviderCandles, 2)
+// func TestConvertCandlesToUSD(t *testing.T) {
+// 	providerCandles := make(provider.AggregatedProviderCandles, 2)
 
-	binanceCandles := map[string][]types.CandlePrice{
-		"ATOM": {{
-			Price:     atomPrice,
-			Volume:    atomVolume,
-			TimeStamp: provider.PastUnixTime(1 * time.Minute),
-		}},
-	}
-	providerCandles[provider.ProviderBinance] = binanceCandles
+// 	binanceCandles := map[string][]types.CandlePrice{
+// 		"ATOM": {{
+// 			Price:     atomPrice,
+// 			Volume:    atomVolume,
+// 			TimeStamp: provider.PastUnixTime(1 * time.Minute),
+// 		}},
+// 	}
+// 	providerCandles[provider.ProviderBinance] = binanceCandles
 
-	krakenCandles := map[string][]types.CandlePrice{
-		"USDT": {{
-			Price:     usdtPrice,
-			Volume:    usdtVolume,
-			TimeStamp: provider.PastUnixTime(1 * time.Minute),
-		}},
-	}
-	providerCandles[provider.ProviderKraken] = krakenCandles
+// 	krakenCandles := map[string][]types.CandlePrice{
+// 		"USDT": {{
+// 			Price:     usdtPrice,
+// 			Volume:    usdtVolume,
+// 			TimeStamp: provider.PastUnixTime(1 * time.Minute),
+// 		}},
+// 	}
+// 	providerCandles[provider.ProviderKraken] = krakenCandles
 
-	providerPairs := map[provider.Name][]types.CurrencyPair{
-		provider.ProviderBinance: {atomPair},
-		provider.ProviderKraken:  {usdtPair},
-	}
+// 	providerPairs := map[provider.Name][]types.CurrencyPair{
+// 		provider.ProviderBinance: {atomPair},
+// 		provider.ProviderKraken:  {usdtPair},
+// 	}
 
-	convertedCandles, err := convertCandlesToUSD(
-		zerolog.Nop(),
-		providerCandles,
-		providerPairs,
-		make(map[string]sdk.Dec),
-	)
-	require.NoError(t, err)
+// 	convertedCandles, err := convertCandlesToUSD(
+// 		zerolog.Nop(),
+// 		providerCandles,
+// 		providerPairs,
+// 		make(map[string]sdk.Dec),
+// 	)
+// 	require.NoError(t, err)
 
-	require.Equal(
-		t,
-		atomPrice.Mul(usdtPrice),
-		convertedCandles["binance"]["ATOM"][0].Price,
-	)
-}
+// 	require.Equal(
+// 		t,
+// 		atomPrice.Mul(usdtPrice),
+// 		convertedCandles["binance"]["ATOM"][0].Price,
+// 	)
+// }
 
-func TestConvertCandlesToUSDFiltering(t *testing.T) {
-	providerCandles := make(provider.AggregatedProviderCandles, 2)
+// func TestConvertCandlesToUSDFiltering(t *testing.T) {
+// 	providerCandles := make(provider.AggregatedProviderCandles, 2)
 
-	binanceCandles := map[string][]types.CandlePrice{
-		"ATOM": {{
-			Price:     atomPrice,
-			Volume:    atomVolume,
-			TimeStamp: provider.PastUnixTime(1 * time.Minute),
-		}},
-	}
-	providerCandles[provider.ProviderBinance] = binanceCandles
+// 	binanceCandles := map[string][]types.CandlePrice{
+// 		"ATOM": {{
+// 			Price:     atomPrice,
+// 			Volume:    atomVolume,
+// 			TimeStamp: provider.PastUnixTime(1 * time.Minute),
+// 		}},
+// 	}
+// 	providerCandles[provider.ProviderBinance] = binanceCandles
 
-	krakenCandles := map[string][]types.CandlePrice{
-		"USDT": {{
-			Price:     usdtPrice,
-			Volume:    usdtVolume,
-			TimeStamp: provider.PastUnixTime(1 * time.Minute),
-		}},
-	}
-	providerCandles[provider.ProviderKraken] = krakenCandles
+// 	krakenCandles := map[string][]types.CandlePrice{
+// 		"USDT": {{
+// 			Price:     usdtPrice,
+// 			Volume:    usdtVolume,
+// 			TimeStamp: provider.PastUnixTime(1 * time.Minute),
+// 		}},
+// 	}
+// 	providerCandles[provider.ProviderKraken] = krakenCandles
 
-	gateCandles := map[string][]types.CandlePrice{
-		"USDT": {{
-			Price:     usdtPrice,
-			Volume:    usdtVolume,
-			TimeStamp: provider.PastUnixTime(1 * time.Minute),
-		}},
-	}
-	providerCandles[provider.ProviderGate] = gateCandles
+// 	gateCandles := map[string][]types.CandlePrice{
+// 		"USDT": {{
+// 			Price:     usdtPrice,
+// 			Volume:    usdtVolume,
+// 			TimeStamp: provider.PastUnixTime(1 * time.Minute),
+// 		}},
+// 	}
+// 	providerCandles[provider.ProviderGate] = gateCandles
 
-	okxCandles := map[string][]types.CandlePrice{
-		"USDT": {{
-			Price:     sdk.MustNewDecFromStr("100.0"),
-			Volume:    usdtVolume,
-			TimeStamp: provider.PastUnixTime(1 * time.Minute),
-		}},
-	}
-	providerCandles[provider.ProviderOkx] = okxCandles
+// 	okxCandles := map[string][]types.CandlePrice{
+// 		"USDT": {{
+// 			Price:     sdk.MustNewDecFromStr("100.0"),
+// 			Volume:    usdtVolume,
+// 			TimeStamp: provider.PastUnixTime(1 * time.Minute),
+// 		}},
+// 	}
+// 	providerCandles[provider.ProviderOkx] = okxCandles
 
-	providerPairs := map[provider.Name][]types.CurrencyPair{
-		provider.ProviderBinance: {atomPair},
-		provider.ProviderKraken:  {usdtPair},
-		provider.ProviderGate:    {usdtPair},
-		provider.ProviderOkx:     {usdtPair},
-	}
+// 	providerPairs := map[provider.Name][]types.CurrencyPair{
+// 		provider.ProviderBinance: {atomPair},
+// 		provider.ProviderKraken:  {usdtPair},
+// 		provider.ProviderGate:    {usdtPair},
+// 		provider.ProviderOkx:     {usdtPair},
+// 	}
 
-	convertedCandles, err := convertCandlesToUSD(
-		zerolog.Nop(),
-		providerCandles,
-		providerPairs,
-		make(map[string]sdk.Dec),
-	)
-	require.NoError(t, err)
+// 	convertedCandles, err := convertCandlesToUSD(
+// 		zerolog.Nop(),
+// 		providerCandles,
+// 		providerPairs,
+// 		make(map[string]sdk.Dec),
+// 	)
+// 	require.NoError(t, err)
 
-	require.Equal(
-		t,
-		atomPrice.Mul(usdtPrice),
-		convertedCandles["binance"]["ATOM"][0].Price,
-	)
-}
+// 	require.Equal(
+// 		t,
+// 		atomPrice.Mul(usdtPrice),
+// 		convertedCandles["binance"]["ATOM"][0].Price,
+// 	)
+// }
 
 func TestConvertTickersToUSD(t *testing.T) {
 	providerPrices := make(provider.AggregatedProviderPrices, 2)

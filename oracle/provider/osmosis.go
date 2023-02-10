@@ -1,216 +1,98 @@
 package provider
 
 import (
+	"context"
 	"encoding/json"
-	"fmt"
-	"io"
-	"net/http"
 	"strings"
+	"time"
 
 	"price-feeder/oracle/types"
+
+	"github.com/rs/zerolog"
 )
 
-const (
-	osmosisRestURL        = "https://api-osmosis.imperator.co"
-	osmosisTokenEndpoint  = "/tokens/v2"
-	osmosisCandleEndpoint = "/tokens/v2/historical"
-	osmosisPairsEndpoint  = "/pairs/v1/summary"
+var (
+	_                       Provider = (*OsmosisProvider)(nil)
+	osmosisDefaultEndpoints          = Endpoint{
+		Name:         ProviderOsmosis,
+		Rest:         "https://api-osmosis.imperator.co",
+		PollInterval: 6 * time.Second,
+	}
 )
-
-var _ Provider = (*OsmosisProvider)(nil)
 
 type (
-	// OsmosisProvider defines an Oracle provider implemented by the Osmosis public
-	// API.
+	// OsmosisProvider defines an oracle provider implemented by the
+	// imperator.co API.
 	//
-	// REF: https://api-osmosis.imperator.co/swagger/
+	// REF: -
 	OsmosisProvider struct {
-		baseURL string
-		client  *http.Client
+		provider
 	}
 
-	// OsmosisTokenResponse defines the response structure for an Osmosis token
-	// request.
-	OsmosisTokenResponse struct {
-		Price  float64 `json:"price"`
-		Symbol string  `json:"symbol"`
-		Volume float64 `json:"volume_24h"`
-	}
-
-	// OsmosisCandleResponse defines the response structure for an Osmosis candle
-	// request.
-	OsmosisCandleResponse struct {
-		Time   int64   `json:"time"`
-		Close  float64 `json:"close"`
-		Volume float64 `json:"volume"`
-	}
-
-	// OsmosisPairsSummary defines the response structure for an Osmosis pairs
-	// summary.
-	OsmosisPairsSummary struct {
-		Data []OsmosisPairData `json:"data"`
-	}
-
-	// OsmosisPairData defines the data response structure for an Osmosis pair.
-	OsmosisPairData struct {
-		Base  string `json:"base_symbol"`
-		Quote string `json:"quote_symbol"`
+	OsmosisTicker struct {
+		Symbol string  `json:"symbol"`     // ex.: "ATOM"
+		Price  float64 `json:"price"`      // ex.: 14.8830587017
+		Volume float64 `json:"volume_24h"` // ex.: 6428474.562418117
 	}
 )
 
-func NewOsmosisProvider(endpoint Endpoint) *OsmosisProvider {
-	if endpoint.Name == ProviderOsmosis {
-		return &OsmosisProvider{
-			baseURL: endpoint.Rest,
-			client:  newDefaultHTTPClient(),
+func NewOsmosisProvider(
+	ctx context.Context,
+	logger zerolog.Logger,
+	endpoints Endpoint,
+	pairs ...types.CurrencyPair,
+) (*OsmosisProvider, error) {
+	provider := &OsmosisProvider{}
+	provider.Init(
+		ctx,
+		endpoints,
+		logger,
+		pairs,
+		nil,
+		nil,
+	)
+	go startPolling(provider, provider.endpoints.PollInterval, logger)
+	return provider, nil
+}
+
+func (p *OsmosisProvider) Poll() error {
+	denoms := map[string]bool{}
+	for _, pair := range p.pairs {
+		if pair.Quote == "USD" {
+			denoms[strings.ToUpper(pair.Base)] = true
 		}
 	}
-	return &OsmosisProvider{
-		baseURL: osmosisRestURL,
-		client:  newDefaultHTTPClient(),
-	}
-}
 
-// SubscribeCurrencyPairs performs a no-op since osmosis does not use websockets
-func (p OsmosisProvider) SubscribeCurrencyPairs(pairs ...types.CurrencyPair) error {
-	return nil
-}
+	url := p.endpoints.Rest + "/tokens/v2/all"
 
-func (p OsmosisProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
-	path := fmt.Sprintf("%s%s/all", p.baseURL, osmosisTokenEndpoint)
-
-	resp, err := p.client.Get(path)
+	content, err := p.makeHttpRequest(url)
 	if err != nil {
-		return nil, fmt.Errorf("failed to make Osmosis request: %w", err)
+		return err
 	}
-	err = checkHTTPStatus(resp)
+
+	var tickers []OsmosisTicker
+	err = json.Unmarshal(content, &tickers)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	defer resp.Body.Close()
+	timestamp := time.Now()
 
-	bz, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read Osmosis response body: %w", err)
-	}
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
 
-	var tokensResp []OsmosisTokenResponse
-	if err := json.Unmarshal(bz, &tokensResp); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal Osmosis response body: %w", err)
-	}
-
-	baseDenomIdx := make(map[string]types.CurrencyPair)
-	for _, cp := range pairs {
-		baseDenomIdx[strings.ToUpper(cp.Base)] = cp
-	}
-
-	tickerPrices := make(map[string]types.TickerPrice, len(pairs))
-	for _, tr := range tokensResp {
-		symbol := strings.ToUpper(tr.Symbol) // symbol == base in a currency pair
-
-		cp, ok := baseDenomIdx[symbol]
+	for _, ticker := range tickers {
+		_, ok := denoms[strings.ToUpper(ticker.Symbol)]
 		if !ok {
-			// skip tokens that are not requested
 			continue
 		}
 
-		if _, ok := tickerPrices[symbol]; ok {
-			return nil, fmt.Errorf("duplicate token found in Osmosis response: %s", symbol)
-		}
-
-		tickerPrices[cp.String()] = types.TickerPrice{
-			Price: floatToDec(tr.Price),
-			Volume: floatToDec(tr.Volume),
+		p.tickers[strings.ToUpper(ticker.Symbol+"USD")] = types.TickerPrice{
+			Price:  floatToDec(ticker.Price),
+			Volume: floatToDec(ticker.Volume),
+			Time:   timestamp,
 		}
 	}
-
-	for _, cp := range pairs {
-		if _, ok := tickerPrices[cp.String()]; !ok {
-			return nil, fmt.Errorf(types.ErrMissingExchangeRate.Error(), cp.String())
-		}
-	}
-
-	return tickerPrices, nil
-}
-
-func (p OsmosisProvider) GetCandlePrices(pairs ...types.CurrencyPair) (map[string][]types.CandlePrice, error) {
-	candles := make(map[string][]types.CandlePrice)
-	for _, pair := range pairs {
-		if _, ok := candles[pair.Base]; !ok {
-			candles[pair.String()] = []types.CandlePrice{}
-		}
-
-		path := fmt.Sprintf("%s%s/%s/chart?tf=5", p.baseURL, osmosisCandleEndpoint, pair.Base)
-
-		resp, err := p.client.Get(path)
-		if err != nil {
-			return nil, fmt.Errorf("failed to make Osmosis request: %w", err)
-		}
-		err = checkHTTPStatus(resp)
-		if err != nil {
-			return nil, err
-		}
-
-		defer resp.Body.Close()
-
-		bz, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read Osmosis response body: %w", err)
-		}
-
-		var candlesResp []OsmosisCandleResponse
-		if err := json.Unmarshal(bz, &candlesResp); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal Osmosis response body: %w", err)
-		}
-
-		staleTime := PastUnixTime(providerCandlePeriod)
-
-		candlePrices := []types.CandlePrice{}
-		for _, responseCandle := range candlesResp {
-			if staleTime >= responseCandle.Time {
-				continue
-			}
-			candlePrices = append(candlePrices, types.CandlePrice{
-				Price:  floatToDec(responseCandle.Close),
-				Volume: floatToDec(responseCandle.Volume),
-				// convert osmosis timestamp seconds -> milliseconds
-				TimeStamp: SecondsToMilli(responseCandle.Time),
-			})
-		}
-		candles[pair.String()] = candlePrices
-	}
-
-	return candles, nil
-}
-
-// GetAvailablePairs return all available pairs symbol to susbscribe.
-func (p OsmosisProvider) GetAvailablePairs() (map[string]struct{}, error) {
-	path := fmt.Sprintf("%s%s", p.baseURL, osmosisPairsEndpoint)
-
-	resp, err := p.client.Get(path)
-	if err != nil {
-		return nil, err
-	}
-	err = checkHTTPStatus(resp)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	var pairsSummary OsmosisPairsSummary
-	if err := json.NewDecoder(resp.Body).Decode(&pairsSummary); err != nil {
-		return nil, err
-	}
-
-	availablePairs := make(map[string]struct{}, len(pairsSummary.Data))
-	for _, pair := range pairsSummary.Data {
-		cp := types.CurrencyPair{
-			Base:  strings.ToUpper(pair.Base),
-			Quote: strings.ToUpper(pair.Quote),
-		}
-		availablePairs[cp.String()] = struct{}{}
-	}
-
-	return availablePairs, nil
+	p.logger.Debug().Msg("updated tickers")
+	return nil
 }

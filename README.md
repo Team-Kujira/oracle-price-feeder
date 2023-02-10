@@ -13,15 +13,26 @@ This is a standalone version of [Umee's fantastic work](https://github.com/umee-
 
 The list of current supported providers:
 
-- [FIN](https://fin.kujira.app)
 - [Binance](https://www.binance.com/en)
-- [MEXC](https://www.mexc.com/)
+- [BinanceUS](https://www.binance.us)
+- [Bitfinex](https://www.bitfinex.com)
+- [BitForex](https://www.bitforex.com)
+- [Bitget](https://www.bitget.com/en/)
+- [Bybit](https://www.bybit.com/en-US/)
 - [Coinbase](https://www.coinbase.com/)
-- [Gate](https://www.gate.io/)
+- [Crypto.com](https://crypto.com/eea)
+- [FIN](https://fin.kujira.app)
+- [Gate.io](https://www.gate.io)
+- [HitBTC](https://hitbtc.com)
 - [Huobi](https://www.huobi.com/en-us/)
 - [Kraken](https://www.kraken.com/en-us/)
+- [Kucoin](https://www.kucoin.com)
+- [LBank](https://www.lbank.com)
+- [MEXC](https://www.mexc.com/)
 - [Okx](https://www.okx.com/)
 - [Osmosis](https://app.osmosis.zone/)
+- [Phemex](https://phemex.com)
+- [Poloniex](https://poloniex.com)
 
 ## Usage
 

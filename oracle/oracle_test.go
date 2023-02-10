@@ -13,8 +13,10 @@ import (
 
 	"price-feeder/config"
 	"price-feeder/oracle/client"
+	"price-feeder/oracle/history"
 	"price-feeder/oracle/provider"
 	"price-feeder/oracle/types"
+	"price-feeder/oracle/derivative"
 )
 
 type mockProvider struct {
@@ -25,20 +27,6 @@ func (m mockProvider) GetTickerPrices(_ ...types.CurrencyPair) (map[string]types
 	return m.prices, nil
 }
 
-func (m mockProvider) GetCandlePrices(_ ...types.CurrencyPair) (map[string][]types.CandlePrice, error) {
-	candles := make(map[string][]types.CandlePrice)
-	for pair, price := range m.prices {
-		candles[pair] = []types.CandlePrice{
-			{
-				Price:     price.Price,
-				TimeStamp: provider.PastUnixTime(1 * time.Minute),
-				Volume:    price.Volume,
-			},
-		}
-	}
-	return candles, nil
-}
-
 func (m mockProvider) SubscribeCurrencyPairs(_ ...types.CurrencyPair) error {
 	return nil
 }
@@ -47,24 +35,20 @@ func (m mockProvider) GetAvailablePairs() (map[string]struct{}, error) {
 	return map[string]struct{}{}, nil
 }
 
+func (m mockProvider) CurrencyPairToProviderPair(pair types.CurrencyPair) string {
+	return ""
+}
+
+func (m mockProvider) ProviderPairToCurrencyPair(pair string) types.CurrencyPair {
+	return types.CurrencyPair{}
+}
+
 type failingProvider struct {
-	prices map[string]types.TickerPrice
+	mockProvider
 }
 
 func (m failingProvider) GetTickerPrices(_ ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
 	return nil, fmt.Errorf("unable to get ticker prices")
-}
-
-func (m failingProvider) GetCandlePrices(_ ...types.CurrencyPair) (map[string][]types.CandlePrice, error) {
-	return nil, fmt.Errorf("unable to get candle prices")
-}
-
-func (m failingProvider) SubscribeCurrencyPairs(_ ...types.CurrencyPair) error {
-	return nil
-}
-
-func (m failingProvider) GetAvailablePairs() (map[string]struct{}, error) {
-	return map[string]struct{}{}, nil
 }
 
 type OracleTestSuite struct {
@@ -75,6 +59,8 @@ type OracleTestSuite struct {
 
 // SetupSuite executes once before the suite's tests are executed.
 func (ots *OracleTestSuite) SetupSuite() {
+	history, err := history.NewPriceHistory(":memory:", zerolog.Nop())
+	ots.NoError(err)
 	ots.oracle = New(
 		zerolog.Nop(),
 		client.OracleClient{},
@@ -108,9 +94,13 @@ func (ots *OracleTestSuite) SetupSuite() {
 		time.Millisecond*100,
 		make(map[string]sdk.Dec),
 		make(map[provider.Name]provider.Endpoint),
+		map[string]derivative.Derivative{},
+		map[string][]types.CurrencyPair{},
+		map[string]struct{}{},
 		[]config.Healthchecks{
 			{URL: "https://hc-ping.com/HEALTHCHECK-UUID", Timeout: "200ms"},
 		},
+		history,
 	)
 }
 
@@ -295,10 +285,12 @@ func (ots *OracleTestSuite) TestPrices() {
 	// use one working provider and one provider that fails
 	ots.oracle.priceProviders = map[provider.Name]provider.Provider{
 		provider.ProviderBinance: failingProvider{
-			prices: map[string]types.TickerPrice{
-				"UMEEUSDC": {
-					Price:  sdk.MustNewDecFromStr("3.72"),
-					Volume: sdk.MustNewDecFromStr("2396974.02000000"),
+			mockProvider: mockProvider{
+				prices: map[string]types.TickerPrice{
+					"UMEEUSDC": {
+						Price:  sdk.MustNewDecFromStr("3.72"),
+						Volume: sdk.MustNewDecFromStr("2396974.02000000"),
+					},
 				},
 			},
 		},
@@ -387,98 +379,6 @@ func TestGenerateExchangeRatesString(t *testing.T) {
 	}
 }
 
-func TestSuccessSetProviderTickerPricesAndCandles(t *testing.T) {
-	providerPrices := make(provider.AggregatedProviderPrices, 1)
-	providerCandles := make(provider.AggregatedProviderCandles, 1)
-	pair := types.CurrencyPair{
-		Base:  "ATOM",
-		Quote: "USDT",
-	}
-
-	atomPrice := sdk.MustNewDecFromStr("29.93")
-	atomVolume := sdk.MustNewDecFromStr("894123.00")
-
-	prices := make(map[string]types.TickerPrice, 1)
-	prices[pair.String()] = types.TickerPrice{
-		Price:  atomPrice,
-		Volume: atomVolume,
-	}
-
-	candles := make(map[string][]types.CandlePrice, 1)
-	candles[pair.String()] = []types.CandlePrice{
-		{
-			Price:     atomPrice,
-			Volume:    atomVolume,
-			TimeStamp: provider.PastUnixTime(1 * time.Minute),
-		},
-	}
-
-	success := SetProviderTickerPricesAndCandles(
-		provider.ProviderGate,
-		providerPrices,
-		providerCandles,
-		prices,
-		candles,
-		pair,
-	)
-
-	require.True(t, success, "It should successfully set the prices")
-	require.Equal(t, atomPrice, providerPrices[provider.ProviderGate][pair.Base].Price)
-	require.Equal(t, atomPrice, providerCandles[provider.ProviderGate][pair.Base][0].Price)
-}
-
-func TestFailedSetProviderTickerPricesAndCandles(t *testing.T) {
-	success := SetProviderTickerPricesAndCandles(
-		provider.ProviderCoinbase,
-		make(provider.AggregatedProviderPrices, 1),
-		make(provider.AggregatedProviderCandles, 1),
-		make(map[string]types.TickerPrice, 1),
-		make(map[string][]types.CandlePrice, 1),
-		types.CurrencyPair{
-			Base:  "ATOM",
-			Quote: "USDT",
-		},
-	)
-
-	require.False(t, success, "It should failed to set the prices, prices and candle are empty")
-}
-
-func TestSuccessGetComputedPricesCandles(t *testing.T) {
-	providerCandles := make(provider.AggregatedProviderCandles, 1)
-	pair := types.CurrencyPair{
-		Base:  "ATOM",
-		Quote: "USD",
-	}
-
-	atomPrice := sdk.MustNewDecFromStr("29.93")
-	atomVolume := sdk.MustNewDecFromStr("894123.00")
-
-	candles := make(map[string][]types.CandlePrice, 1)
-	candles[pair.Base] = []types.CandlePrice{
-		{
-			Price:     atomPrice,
-			Volume:    atomVolume,
-			TimeStamp: provider.PastUnixTime(1 * time.Minute),
-		},
-	}
-	providerCandles[provider.ProviderBinance] = candles
-
-	providerPair := map[provider.Name][]types.CurrencyPair{
-		"binance": {pair},
-	}
-
-	prices, err := GetComputedPrices(
-		zerolog.Nop(),
-		providerCandles,
-		make(provider.AggregatedProviderPrices, 1),
-		providerPair,
-		make(map[string]sdk.Dec),
-	)
-
-	require.NoError(t, err, "It should successfully get computed candle prices")
-	require.Equal(t, prices[pair.Base], atomPrice)
-}
-
 func TestSuccessGetComputedPricesTickers(t *testing.T) {
 	providerPrices := make(provider.AggregatedProviderPrices, 1)
 	pair := types.CurrencyPair{
@@ -502,7 +402,6 @@ func TestSuccessGetComputedPricesTickers(t *testing.T) {
 
 	prices, err := GetComputedPrices(
 		zerolog.Nop(),
-		make(provider.AggregatedProviderCandles, 1),
 		providerPrices,
 		providerPair,
 		make(map[string]sdk.Dec),
@@ -510,108 +409,6 @@ func TestSuccessGetComputedPricesTickers(t *testing.T) {
 
 	require.NoError(t, err, "It should successfully get computed ticker prices")
 	require.Equal(t, prices[pair.Base], atomPrice)
-}
-
-func TestGetComputedPricesCandlesConversion(t *testing.T) {
-	btcPair := types.CurrencyPair{
-		Base:  "BTC",
-		Quote: "ETH",
-	}
-	btcUSDPair := types.CurrencyPair{
-		Base:  "BTC",
-		Quote: "USD",
-	}
-	ethPair := types.CurrencyPair{
-		Base:  "ETH",
-		Quote: "USD",
-	}
-	btcEthPrice := sdk.MustNewDecFromStr("17.55")
-	btcUSDPrice := sdk.MustNewDecFromStr("20962.601")
-	ethUsdPrice := sdk.MustNewDecFromStr("1195.02")
-	volume := sdk.MustNewDecFromStr("894123.00")
-	providerCandles := make(provider.AggregatedProviderCandles, 4)
-
-	// normal rates
-	binanceCandles := make(map[string][]types.CandlePrice, 2)
-	binanceCandles[btcPair.Base] = []types.CandlePrice{
-		{
-			Price:     btcEthPrice,
-			Volume:    volume,
-			TimeStamp: provider.PastUnixTime(1 * time.Minute),
-		},
-	}
-	binanceCandles[ethPair.Base] = []types.CandlePrice{
-		{
-			Price:     ethUsdPrice,
-			Volume:    volume,
-			TimeStamp: provider.PastUnixTime(1 * time.Minute),
-		},
-	}
-	providerCandles[provider.ProviderBinance] = binanceCandles
-
-	// normal rates
-	gateCandles := make(map[string][]types.CandlePrice, 1)
-	gateCandles[ethPair.Base] = []types.CandlePrice{
-		{
-			Price:     ethUsdPrice,
-			Volume:    volume,
-			TimeStamp: provider.PastUnixTime(1 * time.Minute),
-		},
-	}
-	gateCandles[btcPair.Base] = []types.CandlePrice{
-		{
-			Price:     btcEthPrice,
-			Volume:    volume,
-			TimeStamp: provider.PastUnixTime(1 * time.Minute),
-		},
-	}
-	providerCandles[provider.ProviderGate] = gateCandles
-
-	// abnormal eth rate
-	okxCandles := make(map[string][]types.CandlePrice, 1)
-	okxCandles[ethPair.Base] = []types.CandlePrice{
-		{
-			Price:     sdk.MustNewDecFromStr("1.0"),
-			Volume:    volume,
-			TimeStamp: provider.PastUnixTime(1 * time.Minute),
-		},
-	}
-	providerCandles[provider.ProviderOkx] = okxCandles
-
-	// btc / usd rate
-	krakenCandles := make(map[string][]types.CandlePrice, 1)
-	krakenCandles[btcUSDPair.Base] = []types.CandlePrice{
-		{
-			Price:     btcUSDPrice,
-			Volume:    volume,
-			TimeStamp: provider.PastUnixTime(1 * time.Minute),
-		},
-	}
-	providerCandles[provider.ProviderKraken] = krakenCandles
-
-	providerPair := map[provider.Name][]types.CurrencyPair{
-		provider.ProviderBinance: {btcPair, ethPair},
-		provider.ProviderGate:    {ethPair},
-		provider.ProviderOkx:     {ethPair},
-		provider.ProviderKraken:  {btcUSDPair},
-	}
-
-	prices, err := GetComputedPrices(
-		zerolog.Nop(),
-		providerCandles,
-		make(provider.AggregatedProviderPrices, 1),
-		providerPair,
-		make(map[string]sdk.Dec),
-	)
-
-	require.NoError(t, err,
-		"It should successfully filter out bad candles and convert everything to USD",
-	)
-	require.Equal(t,
-		ethUsdPrice.Mul(
-			btcEthPrice).Add(btcUSDPrice).Quo(sdk.MustNewDecFromStr("2")),
-		prices[btcPair.Base],
-	)
 }
 
 func TestGetComputedPricesTickersConversion(t *testing.T) {
@@ -682,7 +479,6 @@ func TestGetComputedPricesTickersConversion(t *testing.T) {
 
 	prices, err := GetComputedPrices(
 		zerolog.Nop(),
-		make(provider.AggregatedProviderCandles, 1),
 		providerPrices,
 		providerPair,
 		make(map[string]sdk.Dec),

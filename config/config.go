@@ -7,20 +7,24 @@ import (
 	"strings"
 	"time"
 
+	"price-feeder/oracle/derivative"
+	"price-feeder/oracle/provider"
+
 	"github.com/BurntSushi/toml"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/go-playground/validator/v10"
-	"price-feeder/oracle/provider"
 )
 
 const (
 	DenomUSD = "USD"
 
-	defaultListenAddr      = "0.0.0.0:7171"
-	defaultSrvWriteTimeout = 15 * time.Second
-	defaultSrvReadTimeout  = 15 * time.Second
-	defaultProviderTimeout = 100 * time.Millisecond
+	defaultListenAddr         = "0.0.0.0:7171"
+	defaultSrvWriteTimeout    = 15 * time.Second
+	defaultSrvReadTimeout     = 15 * time.Second
+	defaultProviderTimeout    = 100 * time.Millisecond
 	defaultHeightPollInterval = 1 * time.Second
+	defaultHistoryDb          = "prices.db"
+	defaultDerivativePeriod   = 30 * time.Minute
 )
 
 var (
@@ -32,7 +36,18 @@ var (
 	// SupportedProviders defines a lookup table of all the supported currency API
 	// providers.
 	SupportedProviders = map[provider.Name]struct{}{
+		provider.ProviderBybit:     {},
+		provider.ProviderBitfinex:  {},
+		provider.ProviderBitforex:  {},
+		provider.ProviderBkex:      {},
+		provider.ProviderBitmart:   {},
+		provider.ProviderFin:       {},
+		provider.ProviderPoloniex:  {},
+		provider.ProviderPhemex:    {},
+		provider.ProviderLbank:     {},
+		provider.ProviderHitBtc:    {},
 		provider.ProviderKraken:    {},
+		provider.ProviderKucoin:    {},
 		provider.ProviderBinance:   {},
 		provider.ProviderBinanceUS: {},
 		provider.ProviderOsmosis:   {},
@@ -45,6 +60,12 @@ var (
 		provider.ProviderMexc:      {},
 		provider.ProviderCrypto:    {},
 		provider.ProviderMock:      {},
+		provider.ProviderStride:    {},
+		provider.ProviderXt:        {},
+	}
+
+	SupportedDerivatives = map[string]struct{}{
+		derivative.DerivativeTvwap: {},
 	}
 
 	// maxDeviationThreshold is the maxmimum allowed amount of standard
@@ -62,28 +83,30 @@ var (
 		"BTC":     {},
 		"ETH":     {},
 		"ATOM":    {},
+		"OSMO":    {},
 	}
 )
 
 type (
 	// Config defines all necessary price-feeder configuration parameters.
 	Config struct {
-		Server            Server             `toml:"server"`
-		CurrencyPairs     []CurrencyPair     `toml:"currency_pairs" validate:"required,gt=0,dive,required"`
-		Deviations        []Deviation        `toml:"deviation_thresholds"`
-		Account           Account            `toml:"account" validate:"required,gt=0,dive,required"`
-		Keyring           Keyring            `toml:"keyring" validate:"required,gt=0,dive,required"`
-		RPC               RPC                `toml:"rpc" validate:"required,gt=0,dive,required"`
-		Telemetry         Telemetry          `toml:"telemetry"`
-		GasAdjustment     float64            `toml:"gas_adjustment" validate:"required"`
-		GasPrices         string             `toml:"gas_prices" validate:"required"`
-		ProviderTimeout   string             `toml:"provider_timeout"`
-		ProviderEndpoints []provider.Endpoint `toml:"provider_endpoints" validate:"dive"`
-		ProviderMinOverride bool `toml:"provider_min_override"`
-		EnableServer      bool               `toml:"enable_server"`
-		EnableVoter       bool               `toml:"enable_voter"`
-		Healthchecks      []Healthchecks     `toml:"healthchecks" validate:"dive"`
-		HeightPollInterval string `toml:"height_poll_interval"`
+		Server              Server              `toml:"server"`
+		CurrencyPairs       []CurrencyPair      `toml:"currency_pairs" validate:"required,gt=0,dive,required"`
+		Deviations          []Deviation         `toml:"deviation_thresholds"`
+		Account             Account             `toml:"account" validate:"required,gt=0,dive,required"`
+		Keyring             Keyring             `toml:"keyring" validate:"required,gt=0,dive,required"`
+		RPC                 RPC                 `toml:"rpc" validate:"required,gt=0,dive,required"`
+		Telemetry           Telemetry           `toml:"telemetry"`
+		GasAdjustment       float64             `toml:"gas_adjustment" validate:"required"`
+		GasPrices           string              `toml:"gas_prices" validate:"required"`
+		ProviderTimeout     string              `toml:"provider_timeout"`
+		ProviderEndpoints   []ProviderEndpoints `toml:"provider_endpoints" validate:"dive"`
+		ProviderMinOverride bool                `toml:"provider_min_override"`
+		EnableServer        bool                `toml:"enable_server"`
+		EnableVoter         bool                `toml:"enable_voter"`
+		Healthchecks        []Healthchecks      `toml:"healthchecks" validate:"dive"`
+		HeightPollInterval  string              `toml:"height_poll_interval"`
+		HistoryDb           string              `toml:"history_db"`
 	}
 
 	// Server defines the API server configuration.
@@ -98,9 +121,11 @@ type (
 	// CurrencyPair defines a price quote of the exchange rate for two different
 	// currencies and the supported providers for getting the exchange rate.
 	CurrencyPair struct {
-		Base      string   `toml:"base" validate:"required"`
-		Quote     string   `toml:"quote" validate:"required"`
-		Providers []provider.Name `toml:"providers" validate:"required,gt=0,dive,required"`
+		Base             string          `toml:"base" validate:"required"`
+		Quote            string          `toml:"quote" validate:"required"`
+		Providers        []provider.Name `toml:"providers" validate:"required,gt=0,dive,required"`
+		Derivative       string          `toml:"derivative"`
+		DerivativePeriod string          `toml:"derivative_period"`
 	}
 
 	// Deviation defines a maximum amount of standard deviations that a given asset can
@@ -165,8 +190,16 @@ type (
 	}
 
 	Healthchecks struct {
-		URL string `toml:"url" validate:"required"`
+		URL     string `toml:"url" validate:"required"`
 		Timeout string `toml:"timeout" validate:"required"`
+	}
+
+	ProviderEndpoints struct {
+		Name          provider.Name `toml:"name" validate:"required"`
+		Rest          string        `toml:"rest"`
+		Websocket     string        `toml:"websocket"`
+		WebsocketPath string        `toml:"websocket_path"`
+		PollInterval  string        `toml:"poll_interval"`
 	}
 )
 
@@ -181,7 +214,7 @@ func telemetryValidation(sl validator.StructLevel) {
 
 // endpointValidation is custom validation for the ProviderEndpoint struct.
 func endpointValidation(sl validator.StructLevel) {
-	endpoint := sl.Current().Interface().(provider.Endpoint)
+	endpoint := sl.Current().Interface().(ProviderEndpoints)
 
 	if len(endpoint.Name) < 1 || len(endpoint.Rest) < 1 || len(endpoint.Websocket) < 1 {
 		sl.ReportError(endpoint, "endpoint", "Endpoint", "unsupportedEndpointType", "")
@@ -194,8 +227,27 @@ func endpointValidation(sl validator.StructLevel) {
 // Validate returns an error if the Config object is invalid.
 func (c Config) Validate() error {
 	validate.RegisterStructValidation(telemetryValidation, Telemetry{})
-	validate.RegisterStructValidation(endpointValidation, provider.Endpoint{})
+	validate.RegisterStructValidation(endpointValidation, ProviderEndpoints{})
 	return validate.Struct(c)
+}
+
+func (p ProviderEndpoints) ToEndpoint() (provider.Endpoint, error) {
+	var pollInterval time.Duration
+	if p.PollInterval != "" {
+		interval, err := time.ParseDuration(p.PollInterval)
+		if err != nil {
+			return provider.Endpoint{}, fmt.Errorf("failed to parse poll interval: %v", err)
+		}
+		pollInterval = interval
+	}
+	e := provider.Endpoint{
+		Name:          p.Name,
+		Rest:          p.Rest,
+		Websocket:     p.Websocket,
+		WebsocketPath: p.WebsocketPath,
+		PollInterval:  pollInterval,
+	}
+	return e, nil
 }
 
 // ParseConfig attempts to read and parse configuration from the given file path.
@@ -231,20 +283,44 @@ func ParseConfig(configPath string) (Config, error) {
 	if cfg.HeightPollInterval == "" {
 		cfg.HeightPollInterval = defaultHeightPollInterval.String()
 	}
+	if cfg.HistoryDb == "" {
+		cfg.HistoryDb = defaultHistoryDb
+	}
 
+	derivativeDenoms := map[string]struct{}{}
 	pairs := make(map[string]map[provider.Name]struct{})
 	coinQuotes := make(map[string]struct{})
-	for _, cp := range cfg.CurrencyPairs {
+	for i, cp := range cfg.CurrencyPairs {
 		if _, ok := pairs[cp.Base]; !ok {
 			pairs[cp.Base] = make(map[provider.Name]struct{})
 		}
 		if strings.ToUpper(cp.Quote) != DenomUSD {
 			coinQuotes[cp.Quote] = struct{}{}
 		}
-		if _, ok := SupportedQuotes[strings.ToUpper(cp.Quote)]; !ok {
-			return cfg, fmt.Errorf("unsupported quote: %s", cp.Quote)
+		if cp.Derivative != "" {
+			derivativeDenoms[cp.Base] = struct{}{}
+			_, ok := SupportedDerivatives[cp.Derivative]
+			if !ok {
+				return cfg, fmt.Errorf("unsupported derivative: %s", cp.Derivative)
+			}
+			if cp.DerivativePeriod != "" {
+				_, err := time.ParseDuration(cp.DerivativePeriod)
+				if err != nil {
+					return cfg, err
+				}
+			} else {
+				cfg.CurrencyPairs[i].DerivativePeriod = defaultDerivativePeriod.String()
+			}
+		} else {
+			_, ok := derivativeDenoms[cp.Base]
+			if ok {
+				return cfg, fmt.Errorf("cannot combine derivative and nonderivative pairs for %s", cp.Base)
+			}
+			_, ok = SupportedQuotes[cp.Quote]
+			if !ok {
+				return cfg, fmt.Errorf("unsupported quote: %s", cp.Quote)
+			}
 		}
-
 		for _, provider := range cp.Providers {
 			if _, ok := SupportedProviders[provider]; !ok {
 				return cfg, fmt.Errorf("unsupported provider: %s", provider)
@@ -267,20 +343,12 @@ func ParseConfig(configPath string) (Config, error) {
 
 	if !cfg.ProviderMinOverride {
 		for base, providers := range pairs {
-			if _, ok := pairs[base]["mock"]; !ok && len(providers) < 3 {
+			_, isMock := pairs[base]["mock"]
+			_, isDerivative := derivativeDenoms[base]
+			if !isDerivative && !isMock && len(providers) < 3 {
 				return cfg, fmt.Errorf("must have at least three providers for %s", base)
 			}
 		}
-	}
-
-	gatePairs := []string{}
-	for base, providers := range pairs {
-		if _, ok := providers["gate"]; ok {
-			gatePairs = append(gatePairs, base)
-		}
-	}
-	if len(gatePairs) > 1 {
-		return cfg, fmt.Errorf("gate provider does not support multiple pairs: %v", gatePairs)
 	}
 
 	for _, deviation := range cfg.Deviations {

@@ -1,14 +1,17 @@
 package provider
 
 import (
+	"context"
 	"encoding/csv"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
-	sdk "github.com/cosmos/cosmos-sdk/types"
 	"price-feeder/oracle/types"
+
+	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/rs/zerolog"
 )
 
 const (
@@ -18,37 +21,48 @@ const (
 	mockBaseURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQRVD0IMn8ZdRgmE2XeNkwjpSGglwelx1z0-hNV2ejfstVeuL2xF8i3EISBZfrGTjVTI0EXW9Wwq4F-/pub?output=csv"
 )
 
-var _ Provider = (*MockProvider)(nil)
+var (
+	_ Provider = (*MockProvider)(nil)
+	mockDefaultEndpoints = Endpoint{
+		Rest: mockBaseURL,
+	}
+)
 
 type (
 	// MockProvider defines a mocked exchange rate provider using a published
 	// Google sheets document to fetch mocked/fake exchange rates.
 	MockProvider struct {
-		baseURL string
-		client  *http.Client
+		provider
 	}
 )
 
-func NewMockProvider() *MockProvider {
-	return &MockProvider{
-		baseURL: mockBaseURL,
-		client: &http.Client{
-			Timeout: defaultTimeout,
-			// the mock provider is the only one which allows redirects
-			// because it gets prices from a google spreadsheet, which redirects
-		},
+func NewMockProvider(
+	ctx context.Context,
+	logger zerolog.Logger,
+	endpoints Endpoint,
+	pairs ...types.CurrencyPair,
+) (*MockProvider, error) {
+	provider := &MockProvider{}
+	provider.Init(
+		ctx,
+		endpoints,
+		logger,
+		pairs,
+		nil,
+		nil,
+	)
+	provider.http = &http.Client{
+		Timeout: defaultTimeout,
+		// the mock provider is the only one which allows redirects
+		// because it gets prices from a google spreadsheet, which redirects
 	}
-}
-
-// SubscribeCurrencyPairs performs a no-op since mock does not use websockets
-func (p MockProvider) SubscribeCurrencyPairs(pairs ...types.CurrencyPair) error {
-	return nil
+	return provider, nil
 }
 
 func (p MockProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
 	tickerPrices := make(map[string]types.TickerPrice, len(pairs))
 
-	resp, err := p.client.Get(p.baseURL)
+	resp, err := p.http.Get(p.endpoints.Rest)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +77,7 @@ func (p MockProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[string]t
 
 	tickerMap := make(map[string]struct{})
 	for _, cp := range pairs {
-		tickerMap[strings.ToUpper(cp.String())] = struct{}{}
+		tickerMap[cp.String()] = struct{}{}
 	}
 
 	// Records are of the form [base, quote, price, volume] and we skip the first
@@ -121,7 +135,7 @@ func (p MockProvider) GetCandlePrices(pairs ...types.CurrencyPair) (map[string][
 
 // GetAvailablePairs return all available pairs symbol to susbscribe.
 func (p MockProvider) GetAvailablePairs() (map[string]struct{}, error) {
-	resp, err := http.Get(p.baseURL)
+	resp, err := p.http.Get(p.endpoints.Rest)
 	if err != nil {
 		return nil, err
 	}

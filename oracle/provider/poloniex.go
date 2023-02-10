@@ -11,37 +11,38 @@ import (
 )
 
 var (
-	_                    Provider = (*GateProvider)(nil)
-	gateDefaultEndpoints          = Endpoint{
-		Name:         ProviderGate,
-		Rest:         "https://api.gateio.ws",
+	_                        Provider = (*PoloniexProvider)(nil)
+	poloniexDefaultEndpoints          = Endpoint{
+		Name:         ProviderPoloniex,
+		Rest:         "https://api.poloniex.com",
 		PollInterval: 2 * time.Second,
 	}
 )
 
 type (
-	// GateProvider defines an oracle provider implemented by the Gate.io
+	// PoloniexProvider defines an oracle provider implemented by the Poloniex
 	// public API.
 	//
-	// REF: https://www.gate.io/docs/developers/apiv4/en/
-	GateProvider struct {
+	// REF: https://docs.poloniex.com
+	PoloniexProvider struct {
 		provider
 	}
 
-	GateTicker struct {
-		Symbol string `json:"currency_pair"` // Symbol ex.: BTC_USDT
-		Price  string `json:"last"`          // Last price ex.: 0.0025
-		Volume string `json:"base_volume"`   // Total traded base asset volume ex.: 1000
+	PoloniexTicker struct {
+		Symbol string `json:"symbol"`    // ec.: "BTC_USDT"
+		Price  string `json:"close"`     // ex.: "23114.84"
+		Volume string `json:"quantity"`  // ex.: "118.065209"
+		Time   int64  `json:"closeTime"` // ex.: 1675862101027
 	}
 )
 
-func NewGateProvider(
+func NewPoloniexProvider(
 	ctx context.Context,
 	logger zerolog.Logger,
 	endpoints Endpoint,
 	pairs ...types.CurrencyPair,
-) (*GateProvider, error) {
-	provider := &GateProvider{}
+) (*PoloniexProvider, error) {
+	provider := &PoloniexProvider{}
 	provider.Init(
 		ctx,
 		endpoints,
@@ -54,20 +55,20 @@ func NewGateProvider(
 	return provider, nil
 }
 
-func (p *GateProvider) Poll() error {
+func (p *PoloniexProvider) Poll() error {
 	symbols := make(map[string]string, len(p.pairs))
 	for _, pair := range p.pairs {
 		symbols[pair.Join("_")] = pair.String()
 	}
 
-	url := p.endpoints.Rest + "/api/v4/spot/tickers"
+	url := p.endpoints.Rest + "/markets/ticker24h"
 
 	content, err := p.makeHttpRequest(url)
 	if err != nil {
 		return err
 	}
 
-	var tickers []GateTicker
+	var tickers []PoloniexTicker
 	err = json.Unmarshal(content, &tickers)
 	if err != nil {
 		return err
@@ -75,16 +76,18 @@ func (p *GateProvider) Poll() error {
 
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
-	now := time.Now()
+
 	for _, ticker := range tickers {
+
 		symbol, ok := symbols[ticker.Symbol]
 		if !ok {
 			continue
 		}
+
 		p.tickers[symbol] = types.TickerPrice{
 			Price:  strToDec(ticker.Price),
 			Volume: strToDec(ticker.Volume),
-			Time:   now,
+			Time:   time.UnixMilli(ticker.Time),
 		}
 	}
 	p.logger.Debug().Msg("updated tickers")

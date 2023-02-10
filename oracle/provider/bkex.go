@@ -11,37 +11,42 @@ import (
 )
 
 var (
-	_                    Provider = (*GateProvider)(nil)
-	gateDefaultEndpoints          = Endpoint{
-		Name:         ProviderGate,
-		Rest:         "https://api.gateio.ws",
+	_                    Provider = (*BkexProvider)(nil)
+	bkexDefaultEndpoints          = Endpoint{
+		Name:         ProviderBkex,
+		Rest:         "https://api.bkex.com",
 		PollInterval: 2 * time.Second,
 	}
 )
 
 type (
-	// GateProvider defines an oracle provider implemented by the Gate.io
+	// BkexProvider defines an oracle provider implemented by the BKEX
 	// public API.
 	//
-	// REF: https://www.gate.io/docs/developers/apiv4/en/
-	GateProvider struct {
+	// REF: https://bkexapi.github.io/docs/api_en.htm
+	BkexProvider struct {
 		provider
 	}
 
-	GateTicker struct {
-		Symbol string `json:"currency_pair"` // Symbol ex.: BTC_USDT
-		Price  string `json:"last"`          // Last price ex.: 0.0025
-		Volume string `json:"base_volume"`   // Total traded base asset volume ex.: 1000
+	BkexTickersResponse struct {
+		Data []BkexTicker `json:"data"`
+	}
+
+	BkexTicker struct {
+		Symbol string  `json:"symbol"` // ex.: "BTC_USDT"
+		Price  float64 `json:"close"`  // ex.: 23197.24
+		Volume float64 `json:"volume"` // ex.: 17603.2275
+		Time   int64   `json:"ts"`     // ex.: 1675858514163
 	}
 )
 
-func NewGateProvider(
+func NewBkexProvider(
 	ctx context.Context,
 	logger zerolog.Logger,
 	endpoints Endpoint,
 	pairs ...types.CurrencyPair,
-) (*GateProvider, error) {
-	provider := &GateProvider{}
+) (*BkexProvider, error) {
+	provider := &BkexProvider{}
 	provider.Init(
 		ctx,
 		endpoints,
@@ -54,20 +59,20 @@ func NewGateProvider(
 	return provider, nil
 }
 
-func (p *GateProvider) Poll() error {
+func (p *BkexProvider) Poll() error {
 	symbols := make(map[string]string, len(p.pairs))
 	for _, pair := range p.pairs {
 		symbols[pair.Join("_")] = pair.String()
 	}
 
-	url := p.endpoints.Rest + "/api/v4/spot/tickers"
+	url := p.endpoints.Rest + "/v2/q/tickers"
 
 	content, err := p.makeHttpRequest(url)
 	if err != nil {
 		return err
 	}
 
-	var tickers []GateTicker
+	var tickers BkexTickersResponse
 	err = json.Unmarshal(content, &tickers)
 	if err != nil {
 		return err
@@ -75,16 +80,17 @@ func (p *GateProvider) Poll() error {
 
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
-	now := time.Now()
-	for _, ticker := range tickers {
+
+	for _, ticker := range tickers.Data {
 		symbol, ok := symbols[ticker.Symbol]
 		if !ok {
 			continue
 		}
+
 		p.tickers[symbol] = types.TickerPrice{
-			Price:  strToDec(ticker.Price),
-			Volume: strToDec(ticker.Volume),
-			Time:   now,
+			Price:  floatToDec(ticker.Price),
+			Volume: floatToDec(ticker.Volume),
+			Time:   time.UnixMilli(ticker.Time),
 		}
 	}
 	p.logger.Debug().Msg("updated tickers")

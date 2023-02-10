@@ -2,6 +2,7 @@ package types
 
 import (
 	"fmt"
+	"time"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
@@ -10,19 +11,22 @@ import (
 type TickerPrice struct {
 	Price  sdk.Dec // last trade price
 	Volume sdk.Dec // 24h volume
+	Time   time.Time
 }
 
-// NewTickerPrice parses the lastPrice and volume to a decimal and returns a TickerPrice
-func NewTickerPrice(provider, symbol, lastPrice, volume string) (TickerPrice, error) {
-	price, err := sdk.NewDecFromStr(lastPrice)
+func NewTickerPrice(price string, volume string, timestamp time.Time) (TickerPrice, error) {
+	priceDec, err := sdk.NewDecFromStr(price)
 	if err != nil {
-		return TickerPrice{}, fmt.Errorf("failed to parse %s price (%s) for %s: %w", provider, lastPrice, symbol, err)
+		return TickerPrice{}, fmt.Errorf("failed to convert ticker price: %v", err)
 	}
-
 	volumeDec, err := sdk.NewDecFromStr(volume)
 	if err != nil {
-		return TickerPrice{}, fmt.Errorf("failed to parse %s volume (%s) for %s: %w", provider, volume, symbol, err)
+		return TickerPrice{}, fmt.Errorf("failed to convert ticker volume: %v", err)
 	}
-
-	return TickerPrice{Price: price, Volume: volumeDec}, nil
+	ticker := TickerPrice{
+		Price: priceDec,
+		Volume: volumeDec,
+		Time: timestamp,
+	}
+	return ticker, nil
 }
