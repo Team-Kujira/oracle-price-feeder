@@ -4,242 +4,107 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
-	"net/url"
-	"strings"
-	"sync"
 	"time"
 
-	"github.com/gorilla/websocket"
-	"github.com/rs/zerolog"
-
 	"price-feeder/oracle/types"
-)
 
-const (
-	coinbaseWSHost    = "ws-feed.exchange.coinbase.com"
-	coinbasePingCheck = time.Second * 28 // should be < 30
-	coinbaseRestHost  = "https://api.exchange.coinbase.com"
-	coinbaseRestPath  = "/products"
-	coinbaseTimeFmt   = "2006-01-02T15:04:05.000000Z"
-	unixMinute        = 60000
+	"github.com/rs/zerolog"
 )
 
 var (
-	_                  Provider = (*CoinbaseProvider)(nil)
-	CoinbaseTimeFormat          = "2006-01-02T15:04:05.000000Z"
+	_                        Provider = (*CoinbaseProvider)(nil)
+	coinbaseDefaultEndpoints          = Endpoint{
+		Name: ProviderCoinbase,
+		Rest: "https://api.exchange.coinbase.com",
+	}
 )
 
 type (
-	// CoinbaseProvider defines an Oracle provider implemented by the Coinbase public
-	// API.
+	// CoinbaseProvider defines an oracle provider implemented by the XT.COM
+	// public API.
 	//
-	// REF: https://www.coinbase.io/docs/websocket/index.html
+	// REF: https://bitgetlimited.github.io/apidoc/en/spot
 	CoinbaseProvider struct {
-		wsc             *WebsocketController
-		logger          zerolog.Logger
-		reconnectTimer  *time.Ticker
-		mtx             sync.RWMutex
-		endpoints       Endpoint
-		tickers         map[string]CoinbaseWsTickerMsg // Symbol => CoinbaseWsTickerMsg
-		subscribedPairs map[string]types.CurrencyPair  // Symbol => types.CurrencyPair
+		provider
 	}
 
-	// CoinbaseWsSubscriptionMsg Msg to subscribe to all channels.
-	CoinbaseWsSubscriptionMsg struct {
-		Type       string   `json:"type"`        // ex. "subscribe"
-		ProductIDs []string `json:"product_ids"` // streams to subscribe ex.: ["BOT-USDT", ...]
-		Channels   []string `json:"channels"`    // channels to subscribe to ex.: "ticker"
-	}
-
-	// CoinbaseWsTickerMsg defines the ticker info we'd like to save.
-	CoinbaseWsTickerMsg struct {
-		ProductID string `json:"product_id"` // ex.: ATOM-USDT
-		Price     string `json:"price"`      // ex.: 523.0
-		Volume    string `json:"volume_24h"` // 24-hour volume
-		Time      string `json:"time"`       // timestamp
-	}
-
-	// CoinbaseErrResponse defines the response body for errors.
-	CoinbaseErrResponse struct {
-		Type   string `json:"type"`   // should be "error"
-		Reason string `json:"reason"` // ex.: "tickers" is not a valid channel
-	}
-
-	// CoinbasePairSummary defines the response structure for a Coinbase pair summary.
-	CoinbasePairSummary struct {
-		Base  string `json:"base_currency"`
-		Quote string `json:"quote_currency"`
+	CoinbaseTicker struct {
+		Price  string `json:"price"`  // ex.: "24014.11"
+		Volume string `json:"volume"` // ex.: "7421.5009"
+		Time   string `json:"time"`   // ex.: "1660704288118"
 	}
 )
 
-// NewCoinbaseProvider creates a new CoinbaseProvider.
 func NewCoinbaseProvider(
 	ctx context.Context,
 	logger zerolog.Logger,
 	endpoints Endpoint,
 	pairs ...types.CurrencyPair,
 ) (*CoinbaseProvider, error) {
-	if endpoints.Name != ProviderCoinbase {
-		endpoints = Endpoint{
-			Name:      ProviderCoinbase,
-			Rest:      coinbaseRestHost,
-			Websocket: coinbaseWSHost,
-		}
-	}
-	wsURL := url.URL{
-		Scheme: "wss",
-		Host:   endpoints.Websocket,
-	}
-
-	coinbaseLogger := logger.With().Str("provider", string(ProviderCoinbase)).Logger()
-
-	provider := &CoinbaseProvider{
-		logger:          coinbaseLogger,
-		reconnectTimer:  time.NewTicker(coinbasePingCheck),
-		endpoints:       endpoints,
-		tickers:         map[string]CoinbaseWsTickerMsg{},
-		subscribedPairs: map[string]types.CurrencyPair{},
-	}
-
-	setSubscribedPairs(provider, pairs...)
-
-	provider.wsc = NewWebsocketController(
+	provider := &CoinbaseProvider{}
+	provider.Init(
 		ctx,
-		ProviderCoinbase,
-		wsURL,
-		provider.GetSubscriptionMsgs(pairs...),
-		provider.messageReceived,
-		defaultPingDuration,
-		websocket.PingMessage,
-		coinbaseLogger,
+		endpoints,
+		logger,
+		pairs,
+		nil,
+		nil,
 	)
-	go provider.wsc.Start()
 
+	interval := time.Duration(len(pairs)/10*2+1) * time.Second
+
+	go startPolling(provider, interval, logger)
 	return provider, nil
 }
 
-func (p *CoinbaseProvider) GetSubscriptionMsgs(cps ...types.CurrencyPair) []interface{} {
-	subscriptionMsgs := make([]interface{}, 1)
+func (p *CoinbaseProvider) Poll() error {
+	i := 0
+	for _, pair := range p.pairs {
+		go func(p *CoinbaseProvider, pair types.CurrencyPair) {
+			url := fmt.Sprintf(
+				"%s/products/%s/ticker", p.endpoints.Rest, pair.Join("-"),
+			)
 
-	productIDs := make([]string, len(cps))
+			content, err := p.makeHttpRequest(url)
+			if err != nil {
+				return
+			}
 
-	for i, cp := range cps {
-		productIDs[i] = cp.Join("-")
-	}
+			var ticker CoinbaseTicker
+			err = json.Unmarshal(content, &ticker)
+			if err != nil {
+				return
+			}
 
-	subscriptionMsgs[0] = CoinbaseWsSubscriptionMsg{
-		Type:       "subscribe",
-		ProductIDs: productIDs,
-		Channels:   []string{"ticker_batch"},
-	}
+			timestamp, err := time.Parse(
+				"2006-01-02T15:04:05.000000Z", ticker.Time,
+			)
+			if err != nil {
+				p.logger.
+					Err(err).
+					Msg("failed parsing timestamp")
+				return
+			}
 
-	return subscriptionMsgs
-}
+			p.mtx.Lock()
+			defer p.mtx.Unlock()
 
-func (p *CoinbaseProvider) GetSubscribedPair(s string) (types.CurrencyPair, bool) {
-	cp, ok := p.subscribedPairs[s]
-	return cp, ok
-}
+			p.tickers[pair.String()] = types.TickerPrice{
+				Price:  strToDec(ticker.Price),
+				Volume: strToDec(ticker.Volume),
+				Time:   timestamp,
+			}
 
-func (p *CoinbaseProvider) SetSubscribedPair(cp types.CurrencyPair) {
-	p.mtx.Lock()
-	defer p.mtx.Unlock()
-
-	p.subscribedPairs[cp.String()] = cp
-}
-
-func (p *CoinbaseProvider) SubscribeCurrencyPairs(cps ...types.CurrencyPair) error {
-	return subscribeCurrencyPairs(p, cps)
-}
-
-func (p *CoinbaseProvider) SendSubscriptionMsgs(msgs []interface{}) error {
-	p.mtx.Lock()
-	defer p.mtx.Unlock()
-
-	return p.wsc.AddSubscriptionMsgs(msgs)
-}
-
-// GetTickerPrices returns the tickerPrices based on the saved map.
-func (p *CoinbaseProvider) GetTickerPrices(cps ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
-	return getTickerPrices(p, cps)
-}
-
-func (p *CoinbaseProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPrice, error) {
-	p.mtx.RLock()
-	defer p.mtx.RUnlock()
-
-	gp := cp.Join("-")
-	if tickerPair, ok := p.tickers[gp]; ok {
-		return tickerPair.toTickerPrice()
-	}
-
-	return types.TickerPrice{}, fmt.Errorf("coinbase failed to get ticker price for %s", gp)
-}
-
-func (p *CoinbaseProvider) messageReceived(messageType int, bz []byte) {
-	var (
-		tickerResp CoinbaseWsTickerMsg
-		tickerErr  error
-	)
-
-	tickerErr = json.Unmarshal(bz, &tickerResp)
-	if tickerErr == nil {
-		p.setTickerPair(tickerResp)
-		telemetryWebsocketMessage(ProviderBinance, MessageTypeTicker)
-		return
-	}
-
-	p.logger.Error().
-		Int("length", len(bz)).
-		AnErr("ticker", tickerErr).
-		Str("msg", string(bz)).
-		Msg("Error on receive message")
-}
-
-func (p *CoinbaseProvider) setTickerPair(ticker CoinbaseWsTickerMsg) {
-	p.mtx.Lock()
-	defer p.mtx.Unlock()
-
-	p.tickers[ticker.ProductID] = ticker
-}
-
-// GetAvailablePairs returns all pairs to which the provider can subscribe.
-func (p *CoinbaseProvider) GetAvailablePairs() (map[string]struct{}, error) {
-	resp, err := http.Get(p.endpoints.Rest + coinbaseRestPath)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	var pairsSummary []CoinbasePairSummary
-	if err := json.NewDecoder(resp.Body).Decode(&pairsSummary); err != nil {
-		return nil, err
-	}
-
-	availablePairs := make(map[string]struct{}, len(pairsSummary))
-	for _, pair := range pairsSummary {
-		cp := types.CurrencyPair{
-			Base:  strings.ToUpper(pair.Base),
-			Quote: strings.ToUpper(pair.Quote),
+		}(p, pair)
+		// Coinbase has a rate limit of 10req/s, sleeping 1.2s before running
+		// the next batch of requests
+		i = i + 1
+		if i == 10 {
+			i = 0
+			time.Sleep(time.Millisecond * 1200)
 		}
-		availablePairs[cp.String()] = struct{}{}
 	}
 
-	return availablePairs, nil
-}
-
-func (ticker CoinbaseWsTickerMsg) toTickerPrice() (types.TickerPrice, error) {
-	timestamp, err := time.Parse(CoinbaseTimeFormat, ticker.Time)
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	return types.NewTickerPrice(
-		string(ProviderCoinbase),
-		strings.ReplaceAll(ticker.ProductID, "-", ""), // BTC-USDT -> BTCUSDT
-		ticker.Price,
-		ticker.Volume,
-		timestamp.UnixMilli(),
-	)
+	p.logger.Debug().Msg("updated tickers")
+	return nil
 }

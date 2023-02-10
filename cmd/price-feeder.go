@@ -25,6 +25,9 @@ import (
 	"price-feeder/oracle"
 	"price-feeder/oracle/client"
 	"price-feeder/oracle/provider"
+	"price-feeder/oracle/history"
+	"price-feeder/oracle/types"
+	"price-feeder/oracle/derivative"
 	v1 "price-feeder/router/v1"
 
 	"github.com/cosmos/cosmos-sdk/telemetry"
@@ -92,12 +95,16 @@ func priceFeederCmdHandler(cmd *cobra.Command, args []string) error {
 		logWriter = os.Stderr
 
 	case logLevelText:
-		logWriter = zerolog.ConsoleWriter{Out: os.Stderr}
+		logWriter = zerolog.ConsoleWriter{
+			Out:        os.Stderr,
+			TimeFormat: time.StampMilli,
+		}
 
 	default:
 		return fmt.Errorf("invalid logging format: %s", logFormatStr)
 	}
 
+	zerolog.TimeFieldFormat = time.StampMilli
 	logger := zerolog.New(logWriter).Level(logLvl).With().Timestamp().Logger()
 
 	cfg, err := config.ParseConfig(args[0])
@@ -165,18 +172,63 @@ func priceFeederCmdHandler(cmd *cobra.Command, args []string) error {
 	}
 
 	endpoints := make(map[provider.Name]provider.Endpoint, len(cfg.ProviderEndpoints))
-	for _, endpoint := range cfg.ProviderEndpoints {
+	for _, e := range cfg.ProviderEndpoints {
+		endpoint, err := e.ToEndpoint()
+		if err != nil {
+			return err
+		}
 		endpoints[endpoint.Name] = endpoint
+	}
+
+	history, err := history.NewPriceHistory(cfg.HistoryDb, logger)
+	if err != nil {
+		return fmt.Errorf("failed to init price history db: %v", err)
+	}
+
+	derivativePairs := map[string][]types.CurrencyPair{}
+	derivativePeriods := map[string]map[string]time.Duration{}
+	derivativeDenoms := map[string]struct{}{}
+	providerPairs := []config.CurrencyPair{}
+	for _, pair := range cfg.CurrencyPairs {
+		if pair.Derivative != "" {
+			period, err := time.ParseDuration(pair.DerivativePeriod)
+			if err != nil {
+				return err
+			}
+			pairs, ok := derivativePairs[pair.Derivative]
+			if !ok {
+				pairs = []types.CurrencyPair{}
+				derivativePeriods[pair.Derivative] = map[string]time.Duration{}
+			}
+			currencyPair := types.CurrencyPair{Base: pair.Base, Quote: pair.Quote}
+			derivativePairs[pair.Derivative] = append(pairs, currencyPair)
+			derivativePeriods[pair.Derivative][currencyPair.String()] = period
+			derivativeDenoms[pair.Base] = struct{}{}
+		}
+		providerPairs = append(providerPairs, pair)
+	}
+
+	derivatives := map[string]derivative.Derivative{}
+	for name, pairs := range derivativePairs {
+		d, err := derivative.NewDerivative(name, logger, &history, pairs, derivativePeriods[name])
+		if err != nil {
+			return err
+		}
+		derivatives[name] = d
 	}
 
 	oracle := oracle.New(
 		logger,
 		oracleClient,
-		cfg.CurrencyPairs,
+		providerPairs,
 		providerTimeout,
 		deviations,
 		endpoints,
+		derivatives,
+		derivativePairs,
+		derivativeDenoms,
 		cfg.Healthchecks,
+		history,
 	)
 
 	telemetryCfg := telemetry.Config{}

@@ -3,290 +3,101 @@ package provider
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"net/http"
-	"net/url"
-	"sync"
+	"strconv"
 	"time"
 
 	"price-feeder/oracle/types"
 
-	"github.com/gorilla/websocket"
 	"github.com/rs/zerolog"
 )
 
-const (
-	bitgetWSHost        = "ws.bitget.com"
-	bitgetWSPath        = "/spot/v1/stream"
-	bitgetReconnectTime = time.Minute * 2
-	bitgetRestHost      = "https://api.bitget.com"
-	bitgetRestPath      = "/api/spot/v1/public/products"
-	tickerChannel       = "ticker"
-	candleChannel       = "candle5m"
-	instType            = "SP"
+var (
+	_                      Provider = (*BitgetProvider)(nil)
+	bitgetDefaultEndpoints          = Endpoint{
+		Name:         ProviderBitget,
+		Rest:         "https://api.bitget.com",
+		PollInterval: 2 * time.Second,
+	}
 )
-
-var _ Provider = (*BitgetProvider)(nil)
 
 type (
-	// BitgetProvider defines an Oracle provider implemented by the Bitget public
-	// API.
+	// BitgetProvider defines an oracle provider implemented by the XT.COM
+	// public API.
 	//
-	// REF: https://bitgetlimited.github.io/apidoc/en/spot/#tickers-channel
-	// REF: https://bitgetlimited.github.io/apidoc/en/spot/#candlesticks-channel
+	// REF: https://bitgetlimited.github.io/apidoc/en/spot
 	BitgetProvider struct {
-		wsc             *WebsocketController
-		logger          zerolog.Logger
-		mtx             sync.RWMutex
-		endpoints       Endpoint
-		tickers         map[string]BitgetTicker       // Symbol => BitgetTicker
-		subscribedPairs map[string]types.CurrencyPair // Symbol => types.CurrencyPair
+		provider
 	}
 
-	// BitgetSubscriptionMsg Msg to subscribe all at once.
-	BitgetSubscriptionMsg struct {
-		Operation string                  `json:"op"`   // Operation (e.x. "subscribe")
-		Args      []BitgetSubscriptionArg `json:"args"` // Arguments to subscribe to
-	}
-	BitgetSubscriptionArg struct {
-		InstType string `json:"instType"` // Instrument type (e.g. "sp")
-		Channel  string `json:"channel"`  // Channel (e.x. "ticker" / "candle5m")
-		InstID   string `json:"instId"`   // Instrument ID (e.x. BTCUSDT)
+	BitgetTickersResponse struct {
+		Code    string         `json:"code"`
+		Message string         `json:"msg"`
+		Data    []BitgetTicker `json:"data"`
 	}
 
-	// BitgetErrResponse is the structure for bitget subscription errors.
-	BitgetErrResponse struct {
-		Event string `json:"event"` // e.x. "error"
-		Code  uint64 `json:"code"`  // e.x. 30003 for invalid op
-		Msg   string `json:"msg"`   // e.x. "INVALID op"
-	}
-	// BitgetSubscriptionResponse is the structure for bitget subscription confirmations.
-	BitgetSubscriptionResponse struct {
-		Event string                `json:"event"` // e.x. "subscribe"
-		Arg   BitgetSubscriptionArg `json:"arg"`   // subscription event argument
-	}
-
-	// BitgetTickerResponse is the structure for bitget ticker messages.
 	BitgetTicker struct {
-		Action string                `json:"action"` // e.x. "snapshot"
-		Arg    BitgetSubscriptionArg `json:"arg"`    // subscription event argument
-		Data   []BitgetTickerData    `json:"data"`   // ticker data
-	}
-	BitgetTickerData struct {
-		InstID string `json:"instId"`     // e.x. BTCUSD
-		Price  string `json:"last"`       // last price e.x. "12.3907"
-		Volume string `json:"baseVolume"` // volume in base asset (e.x. "112247.9173")
-		Time   int64  `json:"ts"`         // Timestamp
-	}
-
-	// BitgetPairsSummary defines the response structure for a Bitget pairs
-	// summary.
-	BitgetPairsSummary struct {
-		RespCode string           `json:"code"`
-		Data     []BitgetPairData `json:"data"`
-	}
-	BitgetPairData struct {
-		Base  string `json:"baseCoin"`
-		Quote string `json:"quoteCoin"`
+		Symbol string `json:"symbol"`  // ex.: "BTCUSD"
+		Price  string `json:"close"`   // ex.: "24014.11"
+		Volume string `json:"baseVol"` // ex.: "7421.5009"
+		Time   string `json:"ts"`      // ex.: "1660704288118"
 	}
 )
 
-// NewBitgetProvider returns a new Bitget provider with the WS connection
-// and msg handler.
 func NewBitgetProvider(
 	ctx context.Context,
 	logger zerolog.Logger,
 	endpoints Endpoint,
 	pairs ...types.CurrencyPair,
 ) (*BitgetProvider, error) {
-	if endpoints.Name != ProviderBitget {
-		endpoints = Endpoint{
-			Name:      ProviderBitget,
-			Rest:      bitgetRestHost,
-			Websocket: bitgetWSHost,
-		}
-	}
-
-	wsURL := url.URL{
-		Scheme: "wss",
-		Host:   endpoints.Websocket,
-		Path:   bitgetWSPath,
-	}
-
-	bitgetLogger := logger.With().Str("provider", string(ProviderBitget)).Logger()
-
-	provider := &BitgetProvider{
-		logger:          bitgetLogger,
-		endpoints:       endpoints,
-		tickers:         map[string]BitgetTicker{},
-		subscribedPairs: map[string]types.CurrencyPair{},
-	}
-
-	setSubscribedPairs(provider, pairs...)
-
-	provider.wsc = NewWebsocketController(
+	provider := &BitgetProvider{}
+	provider.Init(
 		ctx,
-		ProviderBitget,
-		wsURL,
-		provider.GetSubscriptionMsgs(pairs...),
-		provider.messageReceived,
-		defaultPingDuration,
-		websocket.TextMessage,
-		bitgetLogger,
+		endpoints,
+		logger,
+		pairs,
+		nil,
+		nil,
 	)
-	go provider.wsc.Start()
-
+	go startPolling(provider, provider.endpoints.PollInterval, logger)
 	return provider, nil
 }
 
-func (p *BitgetProvider) GetSubscriptionMsgs(cps ...types.CurrencyPair) []interface{} {
-	subscriptionMsgs := make([]interface{}, 1)
+func (p *BitgetProvider) Poll() error {
+	url := p.endpoints.Rest + "/api/spot/v1/market/tickers"
 
-	args := make([]BitgetSubscriptionArg, len(cps))
-
-	for i, cp := range cps {
-		args[i] = BitgetSubscriptionArg{
-			InstType: "SP",
-			Channel:  "ticker",
-			InstID:   cp.String(),
-		}
-	}
-
-	subscriptionMsgs[0] = BitgetSubscriptionMsg{
-		Operation: "subscribe",
-		Args:      args,
-	}
-
-	return subscriptionMsgs
-}
-
-func (p *BitgetProvider) SubscribeCurrencyPairs(cps ...types.CurrencyPair) error {
-	return subscribeCurrencyPairs(p, cps)
-}
-
-func (p *BitgetProvider) GetSubscribedPair(s string) (types.CurrencyPair, bool) {
-	cp, ok := p.subscribedPairs[s]
-	return cp, ok
-}
-
-func (p *BitgetProvider) SendSubscriptionMsgs(msgs []interface{}) error {
-	p.mtx.Lock()
-	defer p.mtx.Unlock()
-
-	return p.wsc.AddSubscriptionMsgs(msgs)
-}
-
-func (p *BitgetProvider) SetSubscribedPair(cp types.CurrencyPair) {
-	p.mtx.Lock()
-	defer p.mtx.Unlock()
-
-	p.subscribedPairs[cp.String()] = cp
-}
-
-// GetTickerPrices returns the tickerPrices based on the saved map.
-func (p *BitgetProvider) GetTickerPrices(cps ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
-	return getTickerPrices(p, cps)
-}
-
-func (p *BitgetProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPrice, error) {
-	p.mtx.RLock()
-	defer p.mtx.RUnlock()
-
-	ticker, ok := p.tickers[cp.String()]
-	if !ok {
-		return types.TickerPrice{}, fmt.Errorf("bitget failed to get ticker price for %s", cp.String())
-	}
-
-	return ticker.toTickerPrice()
-}
-
-// messageReceived handles the received data from the Bitget websocket.
-func (p *BitgetProvider) messageReceived(messageType int, bz []byte) {
-	var (
-		tickerResp           BitgetTicker
-		tickerErr            error
-		errResponse          BitgetErrResponse
-		subscriptionResponse BitgetSubscriptionResponse
-	)
-
-	err := json.Unmarshal(bz, &errResponse)
-	if err == nil && errResponse.Code != 0 {
-		p.logger.Error().
-			Int("length", len(bz)).
-			Str("msg", errResponse.Msg).
-			Str("body", string(bz)).
-			Msg("Error on receive bitget message")
-		return
-	}
-
-	err = json.Unmarshal(bz, &subscriptionResponse)
-	if err == nil && subscriptionResponse.Event == "subscribe" {
-		p.logger.Debug().
-			Str("InstID", subscriptionResponse.Arg.InstID).
-			Str("Channel", subscriptionResponse.Arg.Channel).
-			Str("InstType", subscriptionResponse.Arg.InstType).
-			Msg("Bitget subscription confirmed")
-		return
-	}
-
-	tickerErr = json.Unmarshal(bz, &tickerResp)
-	if tickerResp.Arg.Channel == tickerChannel {
-		p.setTickerPair(tickerResp)
-		telemetryWebsocketMessage(ProviderBitget, MessageTypeTicker)
-		return
-	}
-
-	p.logger.Error().
-		Int("length", len(bz)).
-		AnErr("ticker", tickerErr).
-		Str("msg", string(bz)).
-		Msg("Error on receive message")
-}
-
-func (p *BitgetProvider) setTickerPair(ticker BitgetTicker) {
-	p.mtx.Lock()
-	defer p.mtx.Unlock()
-	p.tickers[ticker.Arg.InstID] = ticker
-}
-
-// GetAvailablePairs returns all pairs to which the provider can subscribe.
-func (p *BitgetProvider) GetAvailablePairs() (map[string]struct{}, error) {
-	resp, err := http.Get(p.endpoints.Rest + bitgetRestPath)
+	content, err := p.makeHttpRequest(url)
 	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	var pairsSummary BitgetPairsSummary
-	if err := json.NewDecoder(resp.Body).Decode(&pairsSummary); err != nil {
-		return nil, err
-	}
-	if pairsSummary.RespCode != "00000" {
-		return nil, fmt.Errorf("unable to get bitget available pairs")
+		return err
 	}
 
-	availablePairs := make(map[string]struct{}, len(pairsSummary.Data))
-	for _, pair := range pairsSummary.Data {
-		cp := types.CurrencyPair{
-			Base:  pair.Base,
-			Quote: pair.Quote,
+	var tickers BitgetTickersResponse
+	err = json.Unmarshal(content, &tickers)
+	if err != nil {
+		return err
+	}
+
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+	for _, ticker := range tickers.Data {
+		_, ok := p.pairs[ticker.Symbol]
+		if !ok {
+			continue
 		}
-		availablePairs[cp.String()] = struct{}{}
-	}
 
-	return availablePairs, nil
-}
+		timestamp, err := strconv.ParseInt(ticker.Time, 0, 64)
+		if err != nil {
+			p.logger.
+				Err(err).
+				Msg("failed parsing timestamp")
+			continue
+		}
 
-// toTickerPrice converts current BitgetTicker to TickerPrice.
-func (ticker BitgetTicker) toTickerPrice() (types.TickerPrice, error) {
-	if len(ticker.Data) < 1 {
-		return types.TickerPrice{}, fmt.Errorf("ticker has no data")
+		p.tickers[ticker.Symbol] = types.TickerPrice{
+			Price:  strToDec(ticker.Price),
+			Volume: strToDec(ticker.Volume),
+			Time:   time.UnixMilli(timestamp),
+		}
 	}
-	return types.NewTickerPrice(
-		string(ProviderBitget),
-		ticker.Arg.InstID,
-		ticker.Data[0].Price,
-		ticker.Data[0].Volume,
-		ticker.Data[0].Time,
-	)
+	p.logger.Debug().Msg("updated tickers")
+	return nil
 }

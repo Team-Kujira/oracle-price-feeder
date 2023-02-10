@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -8,10 +9,11 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/require"
 	"price-feeder/oracle/types"
+	"github.com/rs/zerolog"
 )
 
 func TestMockProvider_GetTickerPrices(t *testing.T) {
-	mp := NewMockProvider()
+	mp, _ := NewMockProvider(context.Background(), zerolog.Nop(), mockDefaultEndpoints)
 
 	t.Run("valid_request_single_ticker", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
@@ -24,8 +26,8 @@ ATOM,USDC,21.84,1827884.77
 		}))
 		defer server.Close()
 
-		mp.client = server.Client()
-		mp.baseURL = server.URL
+		mp.http = server.Client()
+		mp.endpoints.Rest = server.URL
 
 		prices, err := mp.GetTickerPrices(types.CurrencyPair{Base: "UMEE", Quote: "USDT"})
 		require.NoError(t, err)
@@ -45,8 +47,8 @@ ATOM,USDC,21.84,1827884.77
 		}))
 		defer server.Close()
 
-		mp.client = server.Client()
-		mp.baseURL = server.URL
+		mp.http = server.Client()
+		mp.endpoints.Rest = server.URL
 
 		prices, err := mp.GetTickerPrices(
 			types.CurrencyPair{Base: "UMEE", Quote: "USDT"},
@@ -67,8 +69,8 @@ ATOM,USDC,21.84,1827884.77
 		}))
 		defer server.Close()
 
-		mp.client = server.Client()
-		mp.baseURL = server.URL
+		mp.http = server.Client()
+		mp.endpoints.Rest = server.URL
 
 		prices, err := mp.GetTickerPrices(types.CurrencyPair{Base: "UMEE", Quote: "USDT"})
 		require.Error(t, err)

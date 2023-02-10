@@ -1,168 +1,103 @@
 package provider
 
 import (
+	"context"
 	"encoding/json"
-	"fmt"
-	"io/ioutil"
-	"net/http"
 	"strings"
 	"time"
 
 	"price-feeder/oracle/types"
+
+	"github.com/rs/zerolog"
 )
 
-const (
-	finRestURL               = "https://api.kujira.app"
-	finPairsEndpoint         = "/api/coingecko/pairs"
-	finTickersEndpoint       = "/api/coingecko/tickers"
-	finCandlesEndpoint       = "/api/trades/candles"
-	finCandleBinSizeMinutes  = 5
-	finCandleWindowSizeHours = 240
+var (
+	_                   Provider = (*FinProvider)(nil)
+	finDefaultEndpoints          = Endpoint{
+		Name:         ProviderFin,
+		Rest:         "https://api.kujira.app",
+		PollInterval: 3 * time.Second,
+	}
 )
-
-var _ Provider = (*FinProvider)(nil)
 
 type (
+	// FinProvider defines an oracle provider implemented by the FIN
+	// public API.
+	//
+	// REF: https://docs.kujira.app/dapps-and-infrastructure/fin/coingecko-api
 	FinProvider struct {
-		baseURL string
-		client  *http.Client
+		provider
 	}
 
-	FinTickers struct {
+	FinTickersResponse struct {
 		Tickers []FinTicker `json:"tickers"`
 	}
 
 	FinTicker struct {
-		Base   string `json:"base_currency"`
-		Target string `json:"target_currency"`
-		Symbol string `json:"ticker_id"`
-		Price  string `json:"last_price"`
-		Volume string `json:"base_volume"`
-	}
-
-	FinPairs struct {
-		Pairs []FinPair `json:"pairs"`
-	}
-
-	FinPair struct {
-		Base    string `json:"base"`
-		Target  string `json:"target"`
-		Symbol  string `json:"ticker_id"`
-		Address string `json:"pool_id"`
+		Price  string `json:"last_price"`      // ex.: "2.0690000418"
+		Volume string `json:"base_volume"`     // ex.: "4875.4890980000"
+		Base   string `json:"base_currency"`   // ex.: "LUNA"
+		Quote  string `json:"target_currency"` // ex.: "axlUSDC"
 	}
 )
 
-func NewFinProvider(endpoint Endpoint) *FinProvider {
-	if endpoint.Name == ProviderFin {
-		return &FinProvider{
-			baseURL: endpoint.Rest,
-			client:  newDefaultHTTPClient(),
-		}
-	}
-	return &FinProvider{
-		baseURL: finRestURL,
-		client:  newDefaultHTTPClient(),
-	}
+func NewFinProvider(
+	ctx context.Context,
+	logger zerolog.Logger,
+	endpoints Endpoint,
+	pairs ...types.CurrencyPair,
+) (*FinProvider, error) {
+	provider := &FinProvider{}
+	provider.Init(
+		ctx,
+		endpoints,
+		logger,
+		pairs,
+		nil,
+		nil,
+	)
+	go startPolling(provider, provider.endpoints.PollInterval, logger)
+	return provider, nil
 }
 
-func (p FinProvider) GetSubscriptionMsgs(cps ...types.CurrencyPair) []interface{} {
-	return nil
-}
-
-func (p FinProvider) GetSubscribedPair(s string) (types.CurrencyPair, bool) {
-	return types.CurrencyPair{}, true
-}
-
-func (p FinProvider) SetSubscribedPair(cp types.CurrencyPair) {}
-
-// SubscribeCurrencyPairs performs a no-op since fin does not use websockets
-func (p FinProvider) SubscribeCurrencyPairs(cps ...types.CurrencyPair) error {
-	return nil
-}
-
-func (p FinProvider) SendSubscriptionMsgs(msgs []interface{}) error {
-	return nil
-}
-
-func (p FinProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
-	path := fmt.Sprintf("%s%s", p.baseURL, finTickersEndpoint)
-	tickerResponse, err := p.client.Get(path)
+func (p *FinProvider) Poll() error {
+	url := p.endpoints.Rest + "/api/coingecko/tickers"
+	content, err := p.makeHttpRequest(url)
 	if err != nil {
-		return nil, fmt.Errorf("FIN tickers request failed: %w", err)
+		return err
 	}
-	defer tickerResponse.Body.Close()
-	tickerContent, err := ioutil.ReadAll(tickerResponse.Body)
-	if err != nil {
-		return nil, fmt.Errorf("FIN tickers response read failed: %w", err)
-	}
-	var tickers FinTickers
-	err = json.Unmarshal(tickerContent, &tickers)
-	if err != nil {
-		return nil, fmt.Errorf("FIN tickers response unmarshal failed: %w", err)
-	}
-	tickerSymbolPairs := make(map[string]types.CurrencyPair, len(pairs))
-	for _, pair := range pairs {
-		tickerSymbolPairs[pair.Base+"_"+pair.Quote] = pair
-	}
-	tickerPrices := make(map[string]types.TickerPrice, len(pairs))
 
-	timestamp := time.Now().UnixMilli()
-	for _, ticker := range tickers.Tickers {
-		pair, ok := tickerSymbolPairs[strings.ToUpper(ticker.Symbol)]
+	var tickersResponse FinTickersResponse
+	err = json.Unmarshal(content, &tickersResponse)
+	if err != nil {
+		return err
+	}
+
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+
+	timestamp := time.Now()
+
+	for _, ticker := range tickersResponse.Tickers {
+		base := finTranslateProviderSymbol(ticker.Base)
+		quote := finTranslateProviderSymbol(ticker.Quote)
+		symbol := base + quote
+
+		_, ok := p.pairs[symbol]
 		if !ok {
-			// skip tokens that are not requested
 			continue
 		}
-		_, ok = tickerPrices[pair.String()]
-		if ok {
-			return nil, fmt.Errorf("FIN tickers response contained duplicate: %s", ticker.Symbol)
-		}
-		tickerPrices[pair.String()] = types.TickerPrice{
+
+		p.tickers[symbol] = types.TickerPrice{
 			Price:  strToDec(ticker.Price),
 			Volume: strToDec(ticker.Volume),
 			Time:   timestamp,
 		}
 	}
-	for _, pair := range pairs {
-		_, ok := tickerPrices[pair.String()]
-		if !ok {
-			return nil, fmt.Errorf("FIN ticker price missing for pair: %s", pair.String())
-		}
-	}
-	return tickerPrices, nil
+	p.logger.Debug().Msg("updated tickers")
+	return nil
 }
 
-func (p FinProvider) GetTickerPrice(cp types.CurrencyPair) (types.TickerPrice, error) {
-	return types.TickerPrice{}, nil
-}
-
-func (p FinProvider) GetAvailablePairs() (map[string]struct{}, error) {
-	finPairs, err := p.getFinPairs()
-	if err != nil {
-		return nil, err
-	}
-	availablePairs := make(map[string]struct{}, len(finPairs.Pairs))
-	for _, pair := range finPairs.Pairs {
-		pair := types.CurrencyPair{
-			Base:  strings.ToUpper(pair.Base),
-			Quote: strings.ToUpper(pair.Target),
-		}
-		availablePairs[pair.String()] = struct{}{}
-	}
-	return availablePairs, nil
-}
-
-func (p FinProvider) getFinPairs() (FinPairs, error) {
-	path := fmt.Sprintf("%s%s", p.baseURL, finPairsEndpoint)
-	pairsResponse, err := p.client.Get(path)
-	if err != nil {
-		return FinPairs{}, err
-	}
-	defer pairsResponse.Body.Close()
-	var pairs FinPairs
-	err = json.NewDecoder(pairsResponse.Body).Decode(&pairs)
-	if err != nil {
-		return FinPairs{}, err
-	}
-	return pairs, nil
+func finTranslateProviderSymbol(symbol string) string {
+	return strings.ToUpper(strings.Replace(symbol, "axl", "", 1))
 }

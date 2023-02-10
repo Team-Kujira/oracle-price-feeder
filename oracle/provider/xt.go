@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"price-feeder/oracle/types"
@@ -11,38 +12,44 @@ import (
 )
 
 var (
-	_                        Provider = (*PoloniexProvider)(nil)
-	poloniexDefaultEndpoints          = Endpoint{
-		Name:         ProviderPoloniex,
-		Rest:         "https://api.poloniex.com",
+	_                  Provider = (*XtProvider)(nil)
+	xtDefaultEndpoints          = Endpoint{
+		Name:         ProviderXt,
+		Rest:         "https://sapi.xt.com",
 		PollInterval: 2 * time.Second,
 	}
 )
 
 type (
-	// PoloniexProvider defines an oracle provider implemented by the Poloniex
+	// XtProvider defines an oracle provider implemented by the XT.COM
 	// public API.
 	//
-	// REF: https://docs.poloniex.com
-	PoloniexProvider struct {
+	// REF: hhttps://doc.xt.com/#documentationrestApi
+	XtProvider struct {
 		provider
 	}
 
-	PoloniexTicker struct {
-		Symbol string `json:"symbol"`    // ec.: "BTC_USDT"
-		Price  string `json:"close"`     // ex.: "23114.84"
-		Volume string `json:"quantity"`  // ex.: "118.065209"
-		Time   int64  `json:"closeTime"` // ex.: 1675862101027
+	XtTickersResponse struct {
+		Code    int64      `json:"rc"`
+		Message string     `json:"mc"`
+		Result  []XtTicker `json:"result"`
+	}
+
+	XtTicker struct {
+		Symbol string `json:"s"` // Symbol ex.: "btc_usdt"
+		Price  string `json:"c"` // Last price ex.: "0.0025"
+		Volume string `json:"q"` // Total traded base asset volume ex.: "1000"
+		Time   int64  `json:"t"` // Timestamp ex.: 1675246930699
 	}
 )
 
-func NewPoloniexProvider(
+func NewXtProvider(
 	ctx context.Context,
 	logger zerolog.Logger,
 	endpoints Endpoint,
 	pairs ...types.CurrencyPair,
-) (*PoloniexProvider, error) {
-	provider := &PoloniexProvider{}
+) (*XtProvider, error) {
+	provider := &XtProvider{}
 	provider.Init(
 		ctx,
 		endpoints,
@@ -55,20 +62,20 @@ func NewPoloniexProvider(
 	return provider, nil
 }
 
-func (p *PoloniexProvider) Poll() error {
+func (p *XtProvider) Poll() error {
 	symbols := make(map[string]string, len(p.pairs))
 	for _, pair := range p.pairs {
-		symbols[pair.Join("_")] = pair.String()
+		symbols[strings.ToLower(pair.Join("_"))] = pair.String()
 	}
 
-	url := p.endpoints.Rest + "/markets/ticker24h"
+	url := p.endpoints.Rest + "/v4/public/ticker"
 
 	content, err := p.makeHttpRequest(url)
 	if err != nil {
 		return err
 	}
 
-	var tickers []PoloniexTicker
+	var tickers XtTickersResponse
 	err = json.Unmarshal(content, &tickers)
 	if err != nil {
 		return err
@@ -76,9 +83,7 @@ func (p *PoloniexProvider) Poll() error {
 
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
-
-	for _, ticker := range tickers {
-
+	for _, ticker := range tickers.Result {
 		symbol, ok := symbols[ticker.Symbol]
 		if !ok {
 			continue

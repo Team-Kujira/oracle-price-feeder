@@ -2,7 +2,6 @@ package oracle
 
 import (
 	"price-feeder/oracle/provider"
-	"time"
 
 	"price-feeder/oracle/types"
 
@@ -15,42 +14,6 @@ import (
 // from the mean without being considered faulty. This can be overridden
 // in the config.
 var defaultDeviationThreshold = sdk.MustNewDecFromStr("1.0")
-
-func FilterStaleTickers(
-	logger zerolog.Logger,
-	prices provider.AggregatedProviderPrices,
-	staleDuration float64, // in seconds
-	// excludes []string,
-) (provider.AggregatedProviderPrices, error) {
-	var filteredPrices = make(provider.AggregatedProviderPrices)
-
-	now := time.Now().UnixMilli()
-	staleTime := now - int64(staleDuration*1000)
-
-	for providerName, priceTickers := range prices {
-		_, ok := filteredPrices[providerName]
-
-		if !ok {
-			filteredPrices[providerName] = make(map[string]types.TickerPrice)
-		}
-
-		for base, tp := range priceTickers {
-			filteredPrices[providerName][base] = tp
-			if tp.Time >= staleTime {
-				// filteredPrices[providerName][base] = tp
-			} else {
-				diff := float64(now-tp.Time) / 1000
-				logger.Debug().
-					Str("provider", providerName.String()).
-					Str("asset", base).
-					Float64("age", diff).
-					Msg("stale price")
-			}
-		}
-	}
-
-	return filteredPrices, nil
-}
 
 // FilterTickerDeviations finds the standard deviations of the prices of
 // all assets, and filters out any providers that are not within 2𝜎 of the mean.

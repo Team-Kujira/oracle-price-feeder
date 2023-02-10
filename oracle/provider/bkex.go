@@ -11,38 +11,42 @@ import (
 )
 
 var (
-	_                        Provider = (*PoloniexProvider)(nil)
-	poloniexDefaultEndpoints          = Endpoint{
-		Name:         ProviderPoloniex,
-		Rest:         "https://api.poloniex.com",
+	_                    Provider = (*BkexProvider)(nil)
+	bkexDefaultEndpoints          = Endpoint{
+		Name:         ProviderBkex,
+		Rest:         "https://api.bkex.com",
 		PollInterval: 2 * time.Second,
 	}
 )
 
 type (
-	// PoloniexProvider defines an oracle provider implemented by the Poloniex
+	// BkexProvider defines an oracle provider implemented by the BKEX
 	// public API.
 	//
-	// REF: https://docs.poloniex.com
-	PoloniexProvider struct {
+	// REF: https://bkexapi.github.io/docs/api_en.htm
+	BkexProvider struct {
 		provider
 	}
 
-	PoloniexTicker struct {
-		Symbol string `json:"symbol"`    // ec.: "BTC_USDT"
-		Price  string `json:"close"`     // ex.: "23114.84"
-		Volume string `json:"quantity"`  // ex.: "118.065209"
-		Time   int64  `json:"closeTime"` // ex.: 1675862101027
+	BkexTickersResponse struct {
+		Data []BkexTicker `json:"data"`
+	}
+
+	BkexTicker struct {
+		Symbol string  `json:"symbol"` // ex.: "BTC_USDT"
+		Price  float64 `json:"close"`  // ex.: 23197.24
+		Volume float64 `json:"volume"` // ex.: 17603.2275
+		Time   int64   `json:"ts"`     // ex.: 1675858514163
 	}
 )
 
-func NewPoloniexProvider(
+func NewBkexProvider(
 	ctx context.Context,
 	logger zerolog.Logger,
 	endpoints Endpoint,
 	pairs ...types.CurrencyPair,
-) (*PoloniexProvider, error) {
-	provider := &PoloniexProvider{}
+) (*BkexProvider, error) {
+	provider := &BkexProvider{}
 	provider.Init(
 		ctx,
 		endpoints,
@@ -55,20 +59,20 @@ func NewPoloniexProvider(
 	return provider, nil
 }
 
-func (p *PoloniexProvider) Poll() error {
+func (p *BkexProvider) Poll() error {
 	symbols := make(map[string]string, len(p.pairs))
 	for _, pair := range p.pairs {
 		symbols[pair.Join("_")] = pair.String()
 	}
 
-	url := p.endpoints.Rest + "/markets/ticker24h"
+	url := p.endpoints.Rest + "/v2/q/tickers"
 
 	content, err := p.makeHttpRequest(url)
 	if err != nil {
 		return err
 	}
 
-	var tickers []PoloniexTicker
+	var tickers BkexTickersResponse
 	err = json.Unmarshal(content, &tickers)
 	if err != nil {
 		return err
@@ -77,16 +81,15 @@ func (p *PoloniexProvider) Poll() error {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 
-	for _, ticker := range tickers {
-
+	for _, ticker := range tickers.Data {
 		symbol, ok := symbols[ticker.Symbol]
 		if !ok {
 			continue
 		}
 
 		p.tickers[symbol] = types.TickerPrice{
-			Price:  strToDec(ticker.Price),
-			Volume: strToDec(ticker.Volume),
+			Price:  floatToDec(ticker.Price),
+			Volume: floatToDec(ticker.Volume),
 			Time:   time.UnixMilli(ticker.Time),
 		}
 	}

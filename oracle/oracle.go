@@ -18,6 +18,8 @@ import (
 
 	"price-feeder/config"
 	"price-feeder/oracle/client"
+	"price-feeder/oracle/derivative"
+	"price-feeder/oracle/history"
 	"price-feeder/oracle/provider"
 	"price-feeder/oracle/types"
 	pfsync "price-feeder/pkg/sync"
@@ -66,6 +68,10 @@ type Oracle struct {
 	oracleClient       client.OracleClient
 	deviations         map[string]sdk.Dec
 	endpoints          map[provider.Name]provider.Endpoint
+	history            history.PriceHistory
+	derivatives        map[string]derivative.Derivative
+	derivativePairs    map[string][]types.CurrencyPair
+	derivativeDenoms   map[string]struct{}
 
 	mtx             sync.RWMutex
 	lastPriceSyncTS time.Time
@@ -81,10 +87,13 @@ func New(
 	providerTimeout time.Duration,
 	deviations map[string]sdk.Dec,
 	endpoints map[provider.Name]provider.Endpoint,
+	derivatives map[string]derivative.Derivative,
+	derivativePairs map[string][]types.CurrencyPair,
+	derivativeDenoms map[string]struct{},
 	healthchecksConfig []config.Healthchecks,
+	history history.PriceHistory,
 ) *Oracle {
 	providerPairs := make(map[provider.Name][]types.CurrencyPair)
-
 	for _, pair := range currencyPairs {
 		for _, provider := range pair.Providers {
 			providerPairs[provider] = append(providerPairs[provider], types.CurrencyPair{
@@ -93,8 +102,7 @@ func New(
 			})
 		}
 	}
-
-	healthchecks := make(map[string]http.Client)
+	healthchecks := make(map[string]http.Client, len(healthchecksConfig))
 	for _, healthcheck := range healthchecksConfig {
 		timeout, err := time.ParseDuration(healthcheck.Timeout)
 		if err != nil {
@@ -107,19 +115,22 @@ func New(
 			}
 		}
 	}
-
 	return &Oracle{
-		logger:          logger.With().Str("module", "oracle").Logger(),
-		closer:          pfsync.NewCloser(),
-		oracleClient:    oc,
-		providerPairs:   providerPairs,
-		priceProviders:  make(map[provider.Name]provider.Provider),
-		previousPrevote: nil,
-		providerTimeout: providerTimeout,
-		deviations:      deviations,
-		paramCache:      ParamCache{},
-		endpoints:       endpoints,
-		healthchecks:    healthchecks,
+		logger:           logger.With().Str("module", "oracle").Logger(),
+		closer:           pfsync.NewCloser(),
+		oracleClient:     oc,
+		providerPairs:    providerPairs,
+		priceProviders:   make(map[provider.Name]provider.Provider),
+		previousPrevote:  nil,
+		providerTimeout:  providerTimeout,
+		deviations:       deviations,
+		paramCache:       ParamCache{},
+		endpoints:        endpoints,
+		healthchecks:     healthchecks,
+		derivatives:      derivatives,
+		derivativePairs:  derivativePairs,
+		derivativeDenoms: derivativeDenoms,
+		history:          history,
 	}
 }
 
@@ -188,8 +199,8 @@ func (o *Oracle) GetPrices() sdk.DecCoins {
 func (o *Oracle) SetPrices(ctx context.Context) error {
 	g := new(errgroup.Group)
 	mtx := new(sync.Mutex)
-	providerPrices := make(provider.AggregatedProviderPrices)
 	requiredRates := make(map[string]struct{})
+	providerPrices := provider.AggregatedProviderPrices{}
 
 	for providerName, currencyPairs := range o.providerPairs {
 		providerName := providerName
@@ -201,7 +212,9 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 		}
 
 		for _, pair := range currencyPairs {
-			if _, ok := requiredRates[pair.Base]; !ok {
+			_, isDerivative := o.derivativeDenoms[pair.Base]
+			_, ok := requiredRates[pair.Base]
+			if !ok && !isDerivative {
 				requiredRates[pair.Base] = struct{}{}
 			}
 		}
@@ -235,31 +248,32 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 			//
 			// e.g.: {ProviderKraken: {"ATOM": <price, volume>, ...}}
 			mtx.Lock()
+			defer mtx.Unlock()
 			for _, pair := range currencyPairs {
-				success := SetProviderTickerPrices(providerName, providerPrices, prices, pair)
-				if !success {
-					mtx.Unlock()
-					return fmt.Errorf("failed to find any exchange rates in provider responses for '%s'", pair)
+				ticker, ok := prices[pair.String()]
+				if (!ok || ticker == types.TickerPrice{}) {
+					return fmt.Errorf("no ticker price found for %s", pair)
+				}
+				_, isDerivative := o.derivativeDenoms[pair.Base]
+				if isDerivative {
+					err := o.history.AddTickerPrice(pair, providerName.String(), ticker)
+					if err != nil {
+						o.logger.Error().Err(err).Str("pair", pair.String()).Str("provider", providerName.String()).Msg("failed to add ticker price to history")
+					}
+				} else {
+					_, ok := providerPrices[providerName]
+					if !ok {
+						providerPrices[providerName] = map[string]types.TickerPrice{}
+					}
+					providerPrices[providerName][pair.Base] = ticker
 				}
 			}
-
-			mtx.Unlock()
 			return nil
 		})
 	}
 
 	if err := g.Wait(); err != nil {
 		o.logger.Debug().Err(err).Msg("failed to get ticker prices from provider")
-	}
-
-	providerPrices, err := FilterStaleTickers(
-		o.logger,
-		providerPrices,
-		30,
-	)
-
-	if err != nil {
-		return err
 	}
 
 	computedPrices, err := GetComputedPrices(
@@ -284,6 +298,29 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 			"unable to get prices for: %s",
 			strings.Join(missingPrices, ", "),
 		)
+	}
+
+	for name, pairs := range o.derivativePairs {
+		pairsMap := map[string]types.CurrencyPair{}
+		for _, pair := range pairs {
+			pairsMap[pair.String()] = pair
+		}
+		prices, err := o.derivatives[name].GetPrices(pairs...)
+		if err != nil {
+			return err
+		}
+		for symbol, price := range prices {
+			pair := pairsMap[symbol]
+			if pair.Quote != config.DenomUSD {
+				basePrice, ok := computedPrices[pair.Quote]
+				if !ok {
+					o.logger.Error().Str("pair", pair.String()).Msg("missing base price for derivative pair")
+					continue
+				}
+				price = price.Mul(basePrice)
+			}
+			computedPrices[pair.Base] = price
+		}
 	}
 
 	o.prices = computedPrices
@@ -338,59 +375,6 @@ func GetComputedPrices(
 	}
 
 	return vwapPrices, nil
-}
-
-// SetProviderTickerPricesAndCandles flattens and collects prices for
-// candles and tickers based on the base currency per provider.
-// Returns true if at least one of price or candle exists.
-func SetProviderTickerPricesAndCandles(
-	providerName provider.Name,
-	providerPrices provider.AggregatedProviderPrices,
-	providerCandles provider.AggregatedProviderCandles,
-	prices map[string]types.TickerPrice,
-	candles map[string][]types.CandlePrice,
-	pair types.CurrencyPair,
-) (success bool) {
-	if _, ok := providerPrices[providerName]; !ok {
-		providerPrices[providerName] = make(map[string]types.TickerPrice)
-	}
-	if _, ok := providerCandles[providerName]; !ok {
-		providerCandles[providerName] = make(map[string][]types.CandlePrice)
-	}
-
-	tp, pricesOk := prices[pair.String()]
-	cp, candlesOk := candles[pair.String()]
-
-	if pricesOk {
-		providerPrices[providerName][pair.Base] = tp
-	}
-	if candlesOk {
-		providerCandles[providerName][pair.Base] = cp
-	}
-
-	return pricesOk || candlesOk
-}
-
-// SetProviderTickerPrices flattens and collects prices for
-// tickers based on the base currency per provider.
-// Returns true if at least one of price or candle exists.
-func SetProviderTickerPrices(
-	providerName provider.Name,
-	providerPrices provider.AggregatedProviderPrices,
-	prices map[string]types.TickerPrice,
-	pair types.CurrencyPair,
-) (success bool) {
-	if _, ok := providerPrices[providerName]; !ok {
-		providerPrices[providerName] = make(map[string]types.TickerPrice)
-	}
-
-	tp, pricesOk := prices[pair.String()]
-
-	if pricesOk {
-		providerPrices[providerName][pair.Base] = tp
-	}
-
-	return pricesOk
 }
 
 // GetParamCache returns the last updated parameters of the x/oracle module
@@ -469,78 +453,59 @@ func NewProvider(
 	endpoint provider.Endpoint,
 	providerPairs ...types.CurrencyPair,
 ) (provider.Provider, error) {
+	endpoint.Name = providerName
+	providerLogger := logger.With().Str("provider", providerName.String()).Logger()
+	fmt.Println(providerName)
 	switch providerName {
-	case provider.ProviderBinance:
-		return provider.NewBinanceProvider(ctx, logger, endpoint, false, providerPairs...)
 
-	case provider.ProviderBinanceUS:
-		return provider.NewBinanceProvider(ctx, logger, endpoint, true, providerPairs...)
-
-	case provider.ProviderKraken:
-		return provider.NewKrakenProvider(ctx, logger, endpoint, providerPairs...)
-
-	case provider.ProviderOsmosis:
-		return provider.NewOsmosisProvider(endpoint), nil
-
-	// case provider.ProviderOsmosisV2:
-	// 	return provider.NewOsmosisV2Provider(ctx, logger, endpoint, providerPairs...)
-
-	case provider.ProviderHuobi:
-		return provider.NewHuobiProvider(ctx, logger, endpoint, providerPairs...)
-
-	case provider.ProviderBybit:
-		return provider.NewBybitProvider(ctx, logger, endpoint, providerPairs...)
-
-	case provider.ProviderCoinbase:
-		return provider.NewCoinbaseProvider(ctx, logger, endpoint, providerPairs...)
-
-	case provider.ProviderOkx:
-		return provider.NewOkxProvider(ctx, logger, endpoint, providerPairs...)
-
-	case provider.ProviderGate:
-		return provider.NewGateProvider(ctx, logger, endpoint, providerPairs...)
-
-	case provider.ProviderBitget:
-		return provider.NewBitgetProvider(ctx, logger, endpoint, providerPairs...)
-
-	case provider.ProviderMexc:
-		return provider.NewMexcProvider(ctx, logger, endpoint, providerPairs...)
-
-	case provider.ProviderCrypto:
-		return provider.NewCryptoProvider(ctx, logger, endpoint, providerPairs...)
-
+	case provider.ProviderBinance, provider.ProviderBinanceUS:
+		return provider.NewBinanceProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderBitfinex:
-		return provider.NewBitfinexProvider(ctx, logger, endpoint, providerPairs...)
-
-	case provider.ProviderHitbtc:
-		return provider.NewHitbtcProvider(ctx, logger, endpoint, providerPairs...)
-
-	case provider.ProviderKucoin:
-		return provider.NewKucoinProvider(ctx, logger, endpoint, providerPairs...)
-
-	case provider.ProviderBitforex:
-		return provider.NewBitforexProvider(ctx, logger, endpoint, providerPairs...)
-
-	case provider.ProviderPoloniex:
-		return provider.NewPoloniexProvider(ctx, logger, endpoint, providerPairs...)
-
-	case provider.ProviderPhemex:
-		return provider.NewPhemexProvider(ctx, logger, endpoint, providerPairs...)
-
-	case provider.ProviderLbank:
-		return provider.NewLbankProvider(ctx, logger, endpoint, providerPairs...)
-
-	case provider.ProviderMock:
-		return provider.NewMockProvider(), nil
-
+		return provider.NewBitfinexProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderBitget:
+		return provider.NewBitgetProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderBkex:
+		return provider.NewBkexProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderBitmart:
+		return provider.NewBitmartProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderBybit:
+		return provider.NewBybitProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderCoinbase:
+		return provider.NewCoinbaseProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderCrypto:
+		return provider.NewCryptoProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderFin:
-		return provider.NewFinProvider(endpoint), nil
-
-	case provider.ProviderStride:
-		return provider.NewStrideProvider(endpoint), nil
+		return provider.NewFinProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderGate:
+		return provider.NewGateProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderHitBtc:
+		return provider.NewHitBtcProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderHuobi:
+		return provider.NewHuobiProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderKraken:
+		return provider.NewKrakenProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderKucoin:
+		return provider.NewKucoinProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderLbank:
+		return provider.NewLbankProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderMexc:
+		return provider.NewMexcProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderMock:
+		return provider.NewMockProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderOkx:
+		return provider.NewOkxProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderOsmosis:
+		return provider.NewOsmosisProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderOsmosisV2:
+		return provider.NewOsmosisV2Provider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderPhemex:
+		return provider.NewPhemexProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderPoloniex:
+		return provider.NewPoloniexProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderXt:
+		return provider.NewXtProvider(ctx, providerLogger, endpoint, providerPairs...)
 
 	}
-
 	return nil, fmt.Errorf("provider %s not found", providerName)
 }
 
