@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"price-feeder/oracle/types"
@@ -26,6 +27,7 @@ type (
 	// REF: https://docs.bitfinex.com/docs
 	BitfinexProvider struct {
 		provider
+		symbols map[string]string
 	}
 )
 
@@ -44,6 +46,29 @@ func NewBitfinexProvider(
 		nil,
 		nil,
 	)
+
+	url := provider.endpoints.Rest + "/v2/conf/pub:list:pair:exchange"
+
+	content, err := provider.makeHttpRequest(url)
+	if err != nil {
+		return nil, err
+	}
+
+	var bitfinexPairs [1][]string
+	err = json.Unmarshal(content, &bitfinexPairs)
+	if err != nil {
+		return nil, err
+	}
+
+	provider.symbols = map[string]string{}
+	for _, pair := range bitfinexPairs[0] {
+		symbol := pair
+		symbol = strings.Replace(symbol, "LUNA:", "LUNC:", 1)
+		symbol = strings.Replace(symbol, "LUNA2:", "LUNA:", 1)
+		symbol = strings.Replace(symbol, ":", "", 1)
+		provider.symbols[symbol] = pair
+	}
+
 	go startPolling(provider, provider.endpoints.PollInterval, logger)
 	return provider, nil
 }
@@ -51,7 +76,8 @@ func NewBitfinexProvider(
 func (p *BitfinexProvider) Poll() error {
 	symbols := make(map[string]string, len(p.pairs))
 	for _, pair := range p.pairs {
-		symbols["t"+pair.String()] = pair.String()
+		bitfinexSymbol := p.symbols[pair.String()]
+		symbols["t"+bitfinexSymbol] = pair.String()
 	}
 
 	url := p.endpoints.Rest + "/v2/tickers?symbols=ALL"
