@@ -21,10 +21,10 @@ var (
 )
 
 type (
-	// KrakenProvider defines an oracle provider implemented by the FIN
+	// KrakenProvider defines an oracle provider implemented by the Kraken
 	// public API.
 	//
-	// REF: https://docs.kujira.app/dapps-and-infrastructure/fin/coingecko-api
+	// REF: https://docs.kraken.com/rest
 	KrakenProvider struct {
 		provider
 		symbols map[string]string
@@ -64,10 +64,6 @@ func NewKrakenProvider(
 		nil,
 	)
 
-	// TODO: get https://api.kraken.com/0/public/AssetPairs
-	// create a mapping for all the pairs
-	// mapping[string]string -> mapping["BTXUSD"] = "XBTCXUSD"
-
 	url := provider.endpoints.Rest + "/0/public/AssetPairs"
 
 	content, err := provider.makeHttpRequest(url)
@@ -96,6 +92,10 @@ func NewKrakenProvider(
 		switch base {
 		case "XBT":
 			base = "BTC"
+		case "LUNA":
+			base = "LUNC"
+		case "LUNA2":
+			base = "LUNA"
 		}
 
 		provider.symbols[base+quote] = symbol
