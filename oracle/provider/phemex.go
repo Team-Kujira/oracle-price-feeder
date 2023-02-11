@@ -118,8 +118,8 @@ func NewPhemexProvider(
 		provider.priceScales[symbol] = float64(product.PriceScale)
 	}
 
-	// rate limit 1000req/min ~16.66req/s
-	interval := time.Duration(len(pairs)/17+2) * time.Second
+	// rate limit 100req/min ~1.66req/s
+	interval := time.Duration(len(pairs)*1700+2000) * time.Millisecond
 
 	go startPolling(provider, interval, logger)
 	return provider, nil
@@ -133,12 +133,18 @@ func (p *PhemexProvider) Poll() error {
 
 			content, err := p.makeHttpRequest(url)
 			if err != nil {
+				p.logger.Error().
+					Str("symbol", symbol).
+					Err(err)
 				return
 			}
 
 			var ticker PhemexTickerResponse
 			err = json.Unmarshal(content, &ticker)
 			if err != nil {
+				p.logger.Error().
+					Str("symbol", symbol).
+					Err(err)
 				return
 			}
 
