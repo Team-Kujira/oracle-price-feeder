@@ -16,8 +16,8 @@ The list of current supported providers:
 - [Binance](https://www.binance.com/en)
 - [BinanceUS](https://www.binance.us)
 - [Bitfinex](https://www.bitfinex.com)
-- [BitForex](https://www.bitforex.com)
 - [Bitget](https://www.bitget.com/en/)
+- [BKEX](https://www.bkex.com/)
 - [Bybit](https://www.bybit.com/en-US/)
 - [Coinbase](https://www.coinbase.com/)
 - [Crypto.com](https://crypto.com/eea)
@@ -33,6 +33,7 @@ The list of current supported providers:
 - [Osmosis](https://app.osmosis.zone/)
 - [Phemex](https://phemex.com)
 - [Poloniex](https://poloniex.com)
+- [XT.COM](https://www.xt.com/en)
 
 ## Usage
 
