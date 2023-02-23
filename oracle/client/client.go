@@ -19,7 +19,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
-	"github.com/ignite-hq/cli/ignite/pkg/cosmoscmd"
+	"github.com/ignite/cli/ignite/pkg/cosmoscmd"
 	"github.com/rs/zerolog"
 	rpchttp "github.com/tendermint/tendermint/rpc/client/http"
 	tmjsonclient "github.com/tendermint/tendermint/rpc/jsonrpc/client"
@@ -215,7 +215,7 @@ func (oc OracleClient) CreateClientContext() (client.Context, error) {
 		keyringInput = os.Stdin
 	}
 
-	kr, err := keyring.New("kujira", oc.KeyringBackend, oc.KeyringDir, keyringInput)
+	kr, err := keyring.New("kujira", oc.KeyringBackend, oc.KeyringDir, keyringInput, oc.Encoding.Marshaler)
 	if err != nil {
 		return client.Context{}, err
 	}
@@ -239,7 +239,6 @@ func (oc OracleClient) CreateClientContext() (client.Context, error) {
 
 	clientCtx := client.Context{
 		ChainID:           oc.ChainID,
-		JSONCodec:         oc.Encoding.Marshaler,
 		InterfaceRegistry: oc.Encoding.InterfaceRegistry,
 		Output:            os.Stderr,
 		BroadcastMode:     flags.BroadcastSync,
@@ -252,8 +251,8 @@ func (oc OracleClient) CreateClientContext() (client.Context, error) {
 		Client:            tmRPC,
 		Keyring:           kr,
 		FromAddress:       oc.OracleAddr,
-		FromName:          keyInfo.GetName(),
-		From:              keyInfo.GetName(),
+		FromName:          keyInfo.Name,
+		From:              keyInfo.Name,
 		OutputFormat:      "json",
 		UseLedger:         false,
 		Simulate:          false,

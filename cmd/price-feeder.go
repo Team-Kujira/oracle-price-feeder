@@ -13,7 +13,7 @@ import (
 	"time"
 
 	input "github.com/cosmos/cosmos-sdk/client/input"
-	"github.com/ignite-hq/cli/ignite/pkg/cosmoscmd"
+	"github.com/ignite/cli/ignite/pkg/cosmoscmd"
 	"github.com/mitchellh/mapstructure"
 
 	"github.com/gorilla/mux"
