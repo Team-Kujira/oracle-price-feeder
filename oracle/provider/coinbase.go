@@ -76,9 +76,7 @@ func (p *CoinbaseProvider) Poll() error {
 				return
 			}
 
-			timestamp, err := time.Parse(
-				"2006-01-02T15:04:05.000000Z", ticker.Time,
-			)
+			timestamp, err := time.Parse(time.RFC3339, ticker.Time)
 			if err != nil {
 				p.logger.
 					Err(err).
