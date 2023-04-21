@@ -23,6 +23,7 @@ const (
 	providerCandlePeriod = 10 * time.Minute
 
 	ProviderFin       Name = "fin"
+	ProviderFinUsk    Name = "finusk"
 	ProviderKraken    Name = "kraken"
 	ProviderBinance   Name = "binance"
 	ProviderBinanceUS Name = "binanceus"
@@ -251,6 +252,8 @@ func (e *Endpoint) SetDefaults() {
 		defaults = cryptoDefaultEndpoints
 	case ProviderFin:
 		defaults = finDefaultEndpoints
+	case ProviderFinUsk:
+		defaults = finUskDefaultEndpoints
 	case ProviderGate:
 		defaults = gateDefaultEndpoints
 	case ProviderHitBtc:

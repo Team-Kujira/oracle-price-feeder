@@ -42,6 +42,7 @@ var (
 		provider.ProviderBkex:      {},
 		provider.ProviderBitmart:   {},
 		provider.ProviderFin:       {},
+		provider.ProviderFinUsk:    {},
 		provider.ProviderPoloniex:  {},
 		provider.ProviderPhemex:    {},
 		provider.ProviderLbank:     {},
@@ -216,7 +217,7 @@ func telemetryValidation(sl validator.StructLevel) {
 func endpointValidation(sl validator.StructLevel) {
 	endpoint := sl.Current().Interface().(ProviderEndpoints)
 
-	if len(endpoint.Name) < 1 || len(endpoint.Rest) < 1 || len(endpoint.Websocket) < 1 {
+	if len(endpoint.Name) < 1 || (len(endpoint.Rest) < 1 && len(endpoint.Websocket) < 1) {
 		sl.ReportError(endpoint, "endpoint", "Endpoint", "unsupportedEndpointType", "")
 	}
 	if _, ok := SupportedProviders[endpoint.Name]; !ok {

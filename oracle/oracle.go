@@ -476,6 +476,8 @@ func NewProvider(
 		return provider.NewCryptoProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderFin:
 		return provider.NewFinProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderFinUsk:
+		return provider.NewFinUskProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderGate:
 		return provider.NewGateProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderHitBtc:
