@@ -34,10 +34,11 @@ type (
 	}
 
 	FinTicker struct {
-		Price  string `json:"last_price"`      // ex.: "2.0690000418"
-		Volume string `json:"base_volume"`     // ex.: "4875.4890980000"
-		Base   string `json:"base_currency"`   // ex.: "LUNA"
-		Quote  string `json:"target_currency"` // ex.: "axlUSDC"
+		Price       string `json:"last_price"`      // ex.: "2.0690000418"
+		BaseVolume  string `json:"base_volume"`     // ex.: "4875.4890980000"
+		QuoteVolume string `json:"target_volume"`   // ex.: "4875.4890980000"
+		Base        string `json:"base_currency"`   // ex.: "LUNA"
+		Quote       string `json:"target_currency"` // ex.: "axlUSDC"
 	}
 )
 
@@ -81,16 +82,30 @@ func (p *FinProvider) Poll() error {
 	for _, ticker := range tickersResponse.Tickers {
 		base := finTranslateProviderSymbol(ticker.Base)
 		quote := finTranslateProviderSymbol(ticker.Quote)
+
 		symbol := base + quote
+		reciprocal := false
+		volume := ticker.BaseVolume
 
 		_, ok := p.pairs[symbol]
 		if !ok {
-			continue
+			symbol = quote + base
+			reciprocal = true
+			volume = ticker.QuoteVolume
+			_, ok = p.pairs[symbol]
+			if !ok {
+				continue
+			}
+		}
+
+		price := strToDec(ticker.Price)
+		if reciprocal {
+			price = strToDec("1").Quo(price)
 		}
 
 		p.tickers[symbol] = types.TickerPrice{
-			Price:  strToDec(ticker.Price),
-			Volume: strToDec(ticker.Volume),
+			Price:  price,
+			Volume: strToDec(volume),
 			Time:   timestamp,
 		}
 	}
