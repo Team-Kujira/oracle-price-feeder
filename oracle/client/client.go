@@ -15,6 +15,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/client/flags"
 	"github.com/cosmos/cosmos-sdk/client/tx"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
+	"github.com/cosmos/cosmos-sdk/crypto/hd"
 	"github.com/cosmos/cosmos-sdk/telemetry"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
@@ -130,7 +131,6 @@ func (r *passReader) Read(p []byte) (n int, err error) {
 
 		n, err = r.buf.Read(p)
 	}
-
 	return n, err
 }
 
@@ -208,12 +208,7 @@ func (oc OracleClient) BroadcastTx(nextBlockHeight, timeoutHeight int64, msgs ..
 // CreateClientContext creates an SDK client Context instance used for transaction
 // generation, signing and broadcasting.
 func (oc OracleClient) CreateClientContext() (client.Context, error) {
-	var keyringInput io.Reader
-	if len(oc.KeyringPass) > 0 {
-		keyringInput = newPassReader(oc.KeyringPass)
-	} else {
-		keyringInput = os.Stdin
-	}
+	keyringInput := newPassReader(oc.KeyringPass)
 
 	kr, err := keyring.New("kujira", oc.KeyringBackend, oc.KeyringDir, keyringInput, oc.Encoding.Marshaler)
 	if err != nil {
@@ -234,7 +229,26 @@ func (oc OracleClient) CreateClientContext() (client.Context, error) {
 
 	keyInfo, err := kr.KeyByAddress(oc.OracleAddr)
 	if err != nil {
-		return client.Context{}, err
+		mnemonic := os.Getenv("PRICE_FEEDER_MNEMONIC")
+		if mnemonic == "" {
+			return client.Context{}, err
+		}
+		algos, _ := kr.SupportedAlgorithms()
+		algo, err := keyring.NewSigningAlgoFromString(string(hd.Secp256k1Type), algos)
+		if err != nil {
+			return client.Context{}, err
+		}
+		keyInfo, err = kr.NewAccount("oracle", mnemonic, "", "m/44'/118'/0'/0/0", algo)
+		if err != nil {
+			return client.Context{}, err
+		}
+		addr, err := keyInfo.GetAddress()
+		if err != nil {
+			return client.Context{}, err
+		}
+		if !addr.Equals(oc.OracleAddr) {
+			return client.Context{}, fmt.Errorf("addr from mnemonic does not match oracle addr: %s", addr.String())
+		}
 	}
 
 	clientCtx := client.Context{
