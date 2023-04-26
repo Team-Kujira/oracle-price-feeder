@@ -24,10 +24,10 @@ import (
 	"price-feeder/config"
 	"price-feeder/oracle"
 	"price-feeder/oracle/client"
-	"price-feeder/oracle/provider"
-	"price-feeder/oracle/history"
-	"price-feeder/oracle/types"
 	"price-feeder/oracle/derivative"
+	"price-feeder/oracle/history"
+	"price-feeder/oracle/provider"
+	"price-feeder/oracle/types"
 	v1 "price-feeder/router/v1"
 
 	"github.com/cosmos/cosmos-sdk/telemetry"
@@ -62,6 +62,7 @@ func init() {
 	rootCmd.PersistentFlags().String(flagLogFormat, logLevelText, "logging format; must be either json or text")
 
 	rootCmd.AddCommand(getVersionCmd())
+	rootCmd.AddCommand(getBacktestCmd())
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.

@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	tvwapMaxTimeDeltaSeconds = int64(120)
+	tvwapMaxTimeDeltaSeconds      = int64(120)
 	tvwapMinHistoryPeriodFraction = 0.8
 )
 
@@ -30,9 +30,9 @@ func NewTvwapDerivative(
 ) (*TvwapDerivative, error) {
 	d := &TvwapDerivative{
 		derivative: derivative{
-			pairs: pairs,
+			pairs:   pairs,
 			history: history,
-			logger: logger,
+			logger:  logger,
 			periods: periods,
 		},
 	}
@@ -110,4 +110,12 @@ func tvwap(
 		return sdk.Dec{}, fmt.Errorf("no volume for pair or not enough history")
 	}
 	return priceTotal.Quo(volumeTotal), nil
+}
+
+func Tvwap(
+	tickers map[string][]types.TickerPrice,
+	start time.Time,
+	end time.Time,
+) (sdk.Dec, error) {
+	return tvwap(tickers, start, end)
 }

@@ -9,9 +9,9 @@ import (
 
 // TickerPrice defines price and volume information for a symbol or ticker exchange rate.
 type TickerPrice struct {
-	Price  sdk.Dec // last trade price
-	Volume sdk.Dec // 24h volume
-	Time   time.Time
+	Price  sdk.Dec   `json:"price"`  // last trade price
+	Volume sdk.Dec   `json:"volume"` // 24h volume
+	Time   time.Time `json:"time"`
 }
 
 func NewTickerPrice(price string, volume string, timestamp time.Time) (TickerPrice, error) {
@@ -24,9 +24,9 @@ func NewTickerPrice(price string, volume string, timestamp time.Time) (TickerPri
 		return TickerPrice{}, fmt.Errorf("failed to convert ticker volume: %v", err)
 	}
 	ticker := TickerPrice{
-		Price: priceDec,
+		Price:  priceDec,
 		Volume: volumeDec,
-		Time: timestamp,
+		Time:   timestamp,
 	}
 	return ticker, nil
 }
