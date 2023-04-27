@@ -76,9 +76,9 @@ func getBacktestCmd() *cobra.Command {
 				start := tick.Add(time.Second * -1 * time.Duration(period))
 				tvwap, err := derivative.Tvwap(tickerMap, start, tick)
 				if err != nil {
-					fmt.Println(tick.UTC(), err)
+					fmt.Printf("%s;\n", tick.UTC())
 				} else {
-					fmt.Println(tick.UTC(), tvwap)
+					fmt.Printf("%s;%s\n", tick.UTC(), tvwap)
 				}
 			}
 
