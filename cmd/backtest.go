@@ -26,6 +26,11 @@ func getBacktestCmd() *cobra.Command {
 				return err
 			}
 
+			interval, err := cmd.Flags().GetInt64("interval")
+			if err != nil {
+				return err
+			}
+
 			file, err := os.Open(args[0])
 			if err != nil {
 				return err
@@ -61,27 +66,28 @@ func getBacktestCmd() *cobra.Command {
 				}
 			}
 
-			first = time.Unix(first.Unix()/period*period, 0)
-			last = time.Unix(last.Unix()/period*period+period, 0)
+			first = first.Round(time.Second * time.Duration(interval))
+			last = last.Round(time.Second * time.Duration(interval))
 
-			start := first
+			tick := first
 
-			for start.Before(last) {
-				end := start.Add(time.Second * time.Duration(period))
-				tvwap, err := derivative.Tvwap(tickerMap, start, end)
+			for tick.Before(last) {
+				tick = tick.Add(time.Second * time.Duration(interval))
+				start := tick.Add(time.Second * -1 * time.Duration(period))
+				tvwap, err := derivative.Tvwap(tickerMap, start, tick)
 				if err != nil {
-					fmt.Println(start.UTC(), err)
+					fmt.Println(tick.UTC(), err)
 				} else {
-					fmt.Println(start.UTC(), tvwap)
+					fmt.Println(tick.UTC(), tvwap)
 				}
-				start = end
 			}
 
 			return nil
 		},
 	}
 
-	backtestCmd.PersistentFlags().Int64("period", 1800, "Time period for the TVWAP in seconds")
+	backtestCmd.PersistentFlags().Int64("period", 1800, "Time period of the TVWAP calculation in seconds")
+	backtestCmd.PersistentFlags().Int64("interval", 60, "Interval in which new TVWAP prices are calculated in seconds")
 
 	return backtestCmd
 }
