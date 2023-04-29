@@ -14,7 +14,7 @@ var (
 	_                     Provider = (*BybitProvider)(nil)
 	bybitDefaultEndpoints          = Endpoint{
 		Name:         ProviderBybit,
-		Http:         []string{"https://api.bybit.com", "https://api.bytick/com"},
+		Http:         []string{"https://api.bybit.com", "https://api.bytick.com"},
 		PollInterval: 2 * time.Second,
 	}
 )
