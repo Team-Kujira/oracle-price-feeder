@@ -15,7 +15,7 @@ var (
 	_                        Provider = (*BitfinexProvider)(nil)
 	bitfinexDefaultEndpoints          = Endpoint{
 		Name:         ProviderBitfinex,
-		Rest:         "https://api-pub.bitfinex.com",
+		Http:         []string{"https://api-pub.bitfinex.com"},
 		PollInterval: 2500 * time.Millisecond,
 	}
 )
@@ -47,9 +47,7 @@ func NewBitfinexProvider(
 		nil,
 	)
 
-	url := provider.endpoints.Rest + "/v2/conf/pub:list:pair:exchange"
-
-	content, err := provider.makeHttpRequest(url)
+	content, err := provider.httpGet("/v2/conf/pub:list:pair:exchange")
 	if err != nil {
 		return nil, err
 	}
@@ -80,9 +78,7 @@ func (p *BitfinexProvider) Poll() error {
 		symbols["t"+bitfinexSymbol] = pair.String()
 	}
 
-	url := p.endpoints.Rest + "/v2/tickers?symbols=ALL"
-
-	content, err := p.makeHttpRequest(url)
+	content, err := p.httpGet("/v2/tickers?symbols=ALL")
 	if err != nil {
 		return err
 	}

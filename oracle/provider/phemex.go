@@ -15,7 +15,7 @@ var (
 	_                      Provider = (*PhemexProvider)(nil)
 	phemexDefaultEndpoints          = Endpoint{
 		Name:         ProviderPhemex,
-		Rest:         "https://api.phemex.com",
+		Http:         []string{"https://api.phemex.com"},
 		PollInterval: 3 * time.Second,
 	}
 )
@@ -83,9 +83,7 @@ func NewPhemexProvider(
 	provider.priceScales = map[string]float64{}
 	provider.valueScales = map[string]float64{}
 
-	url := provider.endpoints.Rest + "/public/products"
-
-	content, err := provider.makeHttpRequest(url)
+	content, err := provider.httpGet("/public/products")
 	if err != nil {
 		return nil, err
 	}
@@ -129,9 +127,8 @@ func (p *PhemexProvider) Poll() error {
 	for _, pair := range p.pairs {
 		go func(p *PhemexProvider, pair types.CurrencyPair) {
 			symbol := pair.String()
-			url := p.endpoints.Rest + "/md/spot/ticker/24hr?symbol=s" + symbol
 
-			content, err := p.makeHttpRequest(url)
+			content, err := p.httpGet("/md/spot/ticker/24hr?symbol=s" + symbol)
 			if err != nil {
 				p.logger.Error().
 					Str("symbol", symbol).

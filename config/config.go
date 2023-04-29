@@ -197,6 +197,7 @@ type (
 
 	ProviderEndpoints struct {
 		Name          provider.Name `toml:"name" validate:"required"`
+		Http		  []string      `toml:"http"`
 		Rest          string        `toml:"rest"`
 		Websocket     string        `toml:"websocket"`
 		WebsocketPath string        `toml:"websocket_path"`
@@ -241,9 +242,12 @@ func (p ProviderEndpoints) ToEndpoint() (provider.Endpoint, error) {
 		}
 		pollInterval = interval
 	}
+	if p.Rest != "" {
+		p.Http = append([]string{p.Rest}, p.Http...)
+	}
 	e := provider.Endpoint{
 		Name:          p.Name,
-		Rest:          p.Rest,
+		Http:          p.Http,
 		Websocket:     p.Websocket,
 		WebsocketPath: p.WebsocketPath,
 		PollInterval:  pollInterval,

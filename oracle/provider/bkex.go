@@ -14,7 +14,7 @@ var (
 	_                    Provider = (*BkexProvider)(nil)
 	bkexDefaultEndpoints          = Endpoint{
 		Name:         ProviderBkex,
-		Rest:         "https://api.bkex.com",
+		Http:         []string{"https://api.bkex.com"},
 		PollInterval: 2 * time.Second,
 	}
 )
@@ -65,9 +65,7 @@ func (p *BkexProvider) Poll() error {
 		symbols[pair.Join("_")] = pair.String()
 	}
 
-	url := p.endpoints.Rest + "/v2/q/tickers"
-
-	content, err := p.makeHttpRequest(url)
+	content, err := p.httpGet("/v2/q/tickers")
 	if err != nil {
 		return err
 	}

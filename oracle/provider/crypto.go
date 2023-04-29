@@ -14,7 +14,7 @@ var (
 	_                      Provider = (*CryptoProvider)(nil)
 	cryptoDefaultEndpoints          = Endpoint{
 		Name:         ProviderCrypto,
-		Rest:         "https://api.crypto.com",
+		Http:         []string{"https://api.crypto.com"},
 		PollInterval: 2 * time.Second,
 	}
 )
@@ -70,9 +70,7 @@ func (p *CryptoProvider) Poll() error {
 		symbols[pair.Join("_")] = pair.String()
 	}
 
-	url := p.endpoints.Rest + "/v2/public/get-ticker"
-
-	content, err := p.makeHttpRequest(url)
+	content, err := p.httpGet("/v2/public/get-ticker")
 	if err != nil {
 		return err
 	}

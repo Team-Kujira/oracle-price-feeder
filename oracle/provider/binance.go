@@ -12,18 +12,21 @@ import (
 	"github.com/rs/zerolog"
 )
 
-const binanceTickersPath = "/api/v3/ticker"
-
 var (
 	_                       Provider = (*BinanceProvider)(nil)
 	binanceDefaultEndpoints          = Endpoint{
-		Name:         ProviderBinance,
-		Rest:         "https://api1.binance.com",
+		Name: ProviderBinance,
+		Http: []string{
+			"https://api1.binance.com",
+			"https://api2.binance.com",
+			"https://api3.binance.com",
+			"https://api.binance.com",
+		},
 		PollInterval: 6 * time.Second,
 	}
 	binanceUSDefaultEndpoints = Endpoint{
 		Name:         ProviderBinanceUS,
-		Rest:         "https://api.binance.us",
+		Http:         []string{"https://api.binance.us"},
 		PollInterval: 6 * time.Second,
 	}
 )
@@ -71,14 +74,11 @@ func (p *BinanceProvider) Poll() error {
 		symbols[i] = symbol
 		i++
 	}
-	url := fmt.Sprintf(
-		"%s%s?type=MINI&symbols=[\"%s\"]",
-		p.endpoints.Rest,
-		binanceTickersPath,
+	path := fmt.Sprintf(
+		"/api/v3/ticker?type=MINI&symbols=[\"%s\"]",
 		strings.Join(symbols, "\",\""),
 	)
-
-	content, err := p.makeHttpRequest(url)
+	content, err := p.httpGet(path)
 	if err != nil {
 		return err
 	}

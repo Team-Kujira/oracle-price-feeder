@@ -15,7 +15,7 @@ var (
 	_                      Provider = (*KrakenProvider)(nil)
 	krakenDefaultEndpoints          = Endpoint{
 		Name:         ProviderKraken,
-		Rest:         "https://api.kraken.com",
+		Http:         []string{"https://api.kraken.com"},
 		PollInterval: 2 * time.Second,
 	}
 )
@@ -64,9 +64,7 @@ func NewKrakenProvider(
 		nil,
 	)
 
-	url := provider.endpoints.Rest + "/0/public/AssetPairs"
-
-	content, err := provider.makeHttpRequest(url)
+	content, err := provider.httpGet("/0/public/AssetPairs")
 	if err != nil {
 		return nil, err
 	}
@@ -112,9 +110,7 @@ func (p *KrakenProvider) Poll() error {
 		symbols[krakenSymbol] = pair.String()
 	}
 
-	url := p.endpoints.Rest + "/0/public/Ticker"
-
-	content, err := p.makeHttpRequest(url)
+	content, err := p.httpGet("/0/public/Ticker")
 	if err != nil {
 		return err
 	}

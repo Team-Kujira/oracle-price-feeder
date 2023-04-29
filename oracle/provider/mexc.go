@@ -14,7 +14,7 @@ var (
 	_                    Provider = (*MexcProvider)(nil)
 	mexcDefaultEndpoints          = Endpoint{
 		Name:         ProviderMexc,
-		Rest:         "https://api.mexc.com",
+		Http:         []string{"https://api.mexc.com"},
 		PollInterval: 2 * time.Second,
 	}
 )
@@ -55,9 +55,7 @@ func NewMexcProvider(
 }
 
 func (p *MexcProvider) Poll() error {
-	url := p.endpoints.Rest + "/api/v3/ticker/24hr"
-
-	content, err := p.makeHttpRequest(url)
+	content, err := p.httpGet("/api/v3/ticker/24hr")
 	if err != nil {
 		return err
 	}

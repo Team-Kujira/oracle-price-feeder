@@ -15,7 +15,7 @@ var (
 	_                   Provider = (*FinProvider)(nil)
 	finDefaultEndpoints          = Endpoint{
 		Name:         ProviderFin,
-		Rest:         "https://api.kujira.app",
+		Http: 	      []string{"https://api.kujira.app", "https://api-kujira.mintthemoon.xyz"},
 		PollInterval: 3 * time.Second,
 	}
 )
@@ -62,8 +62,7 @@ func NewFinProvider(
 }
 
 func (p *FinProvider) Poll() error {
-	url := p.endpoints.Rest + "/api/coingecko/tickers"
-	content, err := p.makeHttpRequest(url)
+	content, err := p.httpGet("/api/coingecko/tickers")
 	if err != nil {
 		return err
 	}

@@ -14,7 +14,7 @@ var (
 	_                        Provider = (*PoloniexProvider)(nil)
 	poloniexDefaultEndpoints          = Endpoint{
 		Name:         ProviderPoloniex,
-		Rest:         "https://api.poloniex.com",
+		Http:         []string{"https://api.poloniex.com"},
 		PollInterval: 2 * time.Second,
 	}
 )
@@ -61,9 +61,7 @@ func (p *PoloniexProvider) Poll() error {
 		symbols[pair.Join("_")] = pair.String()
 	}
 
-	url := p.endpoints.Rest + "/markets/ticker24h"
-
-	content, err := p.makeHttpRequest(url)
+	content, err := p.httpGet("/markets/ticker24h")
 	if err != nil {
 		return err
 	}

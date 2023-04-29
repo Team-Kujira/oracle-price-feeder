@@ -14,7 +14,7 @@ var (
 	_                         Provider = (*OsmosisV2Provider)(nil)
 	osmosisv2DefaultEndpoints          = Endpoint{
 		Name:         ProviderOsmosisV2,
-		Rest:         "https://api-osmosis.imperator.co",
+		Http:         []string{"https://api-osmosis.imperator.co"},
 		PollInterval: 6 * time.Second,
 	}
 )
@@ -64,9 +64,7 @@ func NewOsmosisV2Provider(
 }
 
 func (p *OsmosisV2Provider) Poll() error {
-	url := p.endpoints.Rest + "/stream/pool/v1/all?min_liquidity=10000&limit=160"
-
-	content, err := p.makeHttpRequest(url)
+	content, err := p.httpGet("/stream/pool/v1/all?min_liquidity=10000&limit=160")
 	if err != nil {
 		return err
 	}

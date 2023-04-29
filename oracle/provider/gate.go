@@ -14,7 +14,7 @@ var (
 	_                    Provider = (*GateProvider)(nil)
 	gateDefaultEndpoints          = Endpoint{
 		Name:         ProviderGate,
-		Rest:         "https://api.gateio.ws",
+		Http:         []string{"https://api.gateio.ws"},
 		PollInterval: 2 * time.Second,
 	}
 )
@@ -60,9 +60,7 @@ func (p *GateProvider) Poll() error {
 		symbols[pair.Join("_")] = pair.String()
 	}
 
-	url := p.endpoints.Rest + "/api/v4/spot/tickers"
-
-	content, err := p.makeHttpRequest(url)
+	content, err := p.httpGet("/api/v4/spot/tickers")
 	if err != nil {
 		return err
 	}

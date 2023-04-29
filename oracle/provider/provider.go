@@ -66,6 +66,7 @@ type (
 	provider struct {
 		ctx       context.Context
 		endpoints Endpoint
+		httpBase  string
 		http      *http.Client
 		logger    zerolog.Logger
 		mtx       sync.RWMutex
@@ -91,7 +92,7 @@ type (
 	// hardcoded rest and websocket api endpoints.
 	Endpoint struct {
 		Name          Name   // ex. "binance"
-		Rest          string // ex. "https://api1.binance.com"
+		Http		  []string
 		Websocket     string // ex. "stream.binance.com:9443"
 		WebsocketPath string
 		PollInterval  time.Duration
@@ -119,6 +120,7 @@ func (p *provider) Init(
 	}
 	p.tickers = make(map[string]types.TickerPrice, len(pairs))
 	p.http = newDefaultHTTPClient()
+	p.httpBase = p.endpoints.Http[0]
 	if p.endpoints.Websocket != "" {
 		websocketUrl := url.URL{
 			Scheme: "wss",
@@ -198,18 +200,40 @@ func (p *provider) ProviderPairToCurrencyPair(pair string) types.CurrencyPair {
 	}
 }
 
+func (p *provider) httpGet(path string) ([]byte, error) {
+	res, err := p.makeHttpRequest(p.httpBase + path)
+	if err != nil {
+		p.logger.Warn().
+			Str("endpoint", p.httpBase).
+			Str("path", path).
+			Msg("trying alternate http endpoints")
+		for _, endpoint := range p.endpoints.Http {
+			if endpoint == p.httpBase {
+				continue
+			}
+			res, err = p.makeHttpRequest(endpoint + path)
+			if err == nil {
+				p.logger.Info().Str("endpoint", endpoint).Msg("selected alternate http endpoint")
+				p.httpBase = endpoint
+				break
+			}
+		}
+	}
+	return res, err
+}
+
 func (p *provider) makeHttpRequest(url string) ([]byte, error) {
 	resp, err := p.http.Get(url)
 	if err != nil {
 		p.logger.Warn().
 			Err(err).
-			Msg("failed requesting tickers")
+			Msg("http request failed")
 		return nil, err
 	}
 	if resp.StatusCode != 200 {
 		p.logger.Warn().
 			Int("code", resp.StatusCode).
-			Msg("request returned invalid status")
+			Msg("http request returned invalid status")
 		if resp.StatusCode == 429 || resp.StatusCode == 418 {
 			backoffSeconds, err := strconv.Atoi(resp.Header.Get("Retry-After"))
 			if err != nil {
@@ -217,7 +241,7 @@ func (p *provider) makeHttpRequest(url string) ([]byte, error) {
 			}
 			p.logger.Warn().
 				Int("seconds", backoffSeconds).
-				Msg("ratelimit backoff")
+				Msg("http ratelimit backoff")
 			time.Sleep(time.Duration(backoffSeconds) * time.Second)
 			return nil, nil
 		}
@@ -285,8 +309,8 @@ func (e *Endpoint) SetDefaults() {
 	default:
 		return
 	}
-	if e.Rest == "" {
-		e.Rest = defaults.Rest
+	if e.Http == nil {
+		e.Http = defaults.Http
 	}
 	if e.Websocket == "" && defaults.Websocket != "" { // don't enable websockets for providers that don't support them
 		e.Websocket = defaults.Websocket

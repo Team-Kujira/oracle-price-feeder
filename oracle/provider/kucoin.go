@@ -14,7 +14,7 @@ var (
 	_                      Provider = (*KucoinProvider)(nil)
 	kucoinDefaultEndpoints          = Endpoint{
 		Name:         ProviderKucoin,
-		Rest:         "https://api.kucoin.com",
+		Http:         []string{"https://api.kucoin.com"},
 		PollInterval: 2 * time.Second,
 	}
 )
@@ -69,9 +69,7 @@ func (p *KucoinProvider) Poll() error {
 		symbols[pair.Join("-")] = pair.String()
 	}
 
-	url := p.endpoints.Rest + "/api/v1/market/allTickers"
-
-	content, err := p.makeHttpRequest(url)
+	content, err := p.httpGet("/api/v1/market/allTickers")
 	if err != nil {
 		return err
 	}

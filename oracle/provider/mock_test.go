@@ -27,7 +27,7 @@ ATOM,USDC,21.84,1827884.77
 		defer server.Close()
 
 		mp.http = server.Client()
-		mp.endpoints.Rest = server.URL
+		mp.endpoints.Http = []string{server.URL}
 
 		prices, err := mp.GetTickerPrices(types.CurrencyPair{Base: "UMEE", Quote: "USDT"})
 		require.NoError(t, err)
@@ -48,7 +48,7 @@ ATOM,USDC,21.84,1827884.77
 		defer server.Close()
 
 		mp.http = server.Client()
-		mp.endpoints.Rest = server.URL
+		mp.endpoints.Http = []string{server.URL}
 
 		prices, err := mp.GetTickerPrices(
 			types.CurrencyPair{Base: "UMEE", Quote: "USDT"},
@@ -70,7 +70,7 @@ ATOM,USDC,21.84,1827884.77
 		defer server.Close()
 
 		mp.http = server.Client()
-		mp.endpoints.Rest = server.URL
+		mp.endpoints.Http = []string{server.URL}
 
 		prices, err := mp.GetTickerPrices(types.CurrencyPair{Base: "UMEE", Quote: "USDT"})
 		require.Error(t, err)

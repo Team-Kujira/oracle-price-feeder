@@ -14,7 +14,7 @@ var (
 	_                     Provider = (*BybitProvider)(nil)
 	bybitDefaultEndpoints          = Endpoint{
 		Name:         ProviderBybit,
-		Rest:         "https://api.bybit.com",
+		Http:         []string{"https://api.bybit.com", "https://api.bytick/com"},
 		PollInterval: 2 * time.Second,
 	}
 )
@@ -63,9 +63,7 @@ func NewBybitProvider(
 }
 
 func (p *BybitProvider) Poll() error {
-	url := p.endpoints.Rest + "/v5/market/tickers?category=spot"
-
-	content, err := p.makeHttpRequest(url)
+	content, err := p.httpGet("/v5/market/tickers?category=spot")
 	if err != nil {
 		return err
 	}

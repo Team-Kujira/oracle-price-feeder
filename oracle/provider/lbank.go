@@ -15,7 +15,7 @@ var (
 	_                     Provider = (*LbankProvider)(nil)
 	lbankDefaultEndpoints          = Endpoint{
 		Name:         ProviderLbank,
-		Rest:         "https://api.lbkex.com",
+		Http:         []string{"https://api.lbkex.com", "https://api.lbank.info", "https://www.lbkex.net"},
 		PollInterval: 3 * time.Second,
 	}
 )
@@ -70,9 +70,7 @@ func (p *LbankProvider) Poll() error {
 		symbols[strings.ToLower(pair.Join("_"))] = pair.String()
 	}
 
-	url := p.endpoints.Rest + "/v2/ticker.do?symbol=all"
-
-	content, err := p.makeHttpRequest(url)
+	content, err := p.httpGet("/v2/ticker.do?symbol=all")
 	if err != nil {
 		return err
 	}

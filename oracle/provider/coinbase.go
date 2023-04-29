@@ -15,7 +15,7 @@ var (
 	_                        Provider = (*CoinbaseProvider)(nil)
 	coinbaseDefaultEndpoints          = Endpoint{
 		Name: ProviderCoinbase,
-		Rest: "https://api.exchange.coinbase.com",
+		Http: []string{"https://api.exchange.coinbase.com"},
 	}
 )
 
@@ -61,11 +61,8 @@ func (p *CoinbaseProvider) Poll() error {
 	i := 0
 	for _, pair := range p.pairs {
 		go func(p *CoinbaseProvider, pair types.CurrencyPair) {
-			url := fmt.Sprintf(
-				"%s/products/%s/ticker", p.endpoints.Rest, pair.Join("-"),
-			)
-
-			content, err := p.makeHttpRequest(url)
+			path := fmt.Sprintf("/products/%s/ticker", pair.Join("-"))
+			content, err := p.httpGet(path)
 			if err != nil {
 				return
 			}
