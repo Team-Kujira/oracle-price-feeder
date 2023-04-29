@@ -223,30 +223,26 @@ func (p *provider) httpGet(path string) ([]byte, error) {
 }
 
 func (p *provider) makeHttpRequest(url string) ([]byte, error) {
-	resp, err := p.http.Get(url)
+	res, err := p.http.Get(url)
 	if err != nil {
 		p.logger.Warn().
 			Err(err).
 			Msg("http request failed")
 		return nil, err
 	}
-	if resp.StatusCode != 200 {
+	if res.StatusCode != 200 {
 		p.logger.Warn().
-			Int("code", resp.StatusCode).
+			Int("code", res.StatusCode).
 			Msg("http request returned invalid status")
-		if resp.StatusCode == 429 || resp.StatusCode == 418 {
-			backoffSeconds, err := strconv.Atoi(resp.Header.Get("Retry-After"))
-			if err != nil {
-				return nil, err
-			}
+		if res.StatusCode == 429 || res.StatusCode == 418 {
 			p.logger.Warn().
-				Int("seconds", backoffSeconds).
-				Msg("http ratelimit backoff")
-			time.Sleep(time.Duration(backoffSeconds) * time.Second)
-			return nil, nil
+				Str("url", url).
+				Str("retry_after", res.Header.Get("Retry-After")).
+				Msg("http ratelimited")
+			return nil, fmt.Errorf("http ratelimited")
 		}
 	}
-	content, err := ioutil.ReadAll(resp.Body)
+	content, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		return nil, err
 	}
