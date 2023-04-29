@@ -82,7 +82,7 @@ func TestValidate(t *testing.T) {
 	invalidEndpointsProvider.ProviderEndpoints = []config.ProviderEndpoints{
 		{
 			Name:      "foo",
-			Rest:      "bar",
+			Http:      []string{"bar"},
 			Websocket: "baz",
 		},
 	}
