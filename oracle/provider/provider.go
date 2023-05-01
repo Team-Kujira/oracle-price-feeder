@@ -239,8 +239,8 @@ func (p *provider) makeHttpRequest(url string) ([]byte, error) {
 				Str("url", url).
 				Str("retry_after", res.Header.Get("Retry-After")).
 				Msg("http ratelimited")
-			return nil, fmt.Errorf("http ratelimited")
 		}
+		return nil, fmt.Errorf("http request returned invalid status")
 	}
 	content, err := ioutil.ReadAll(res.Body)
 	if err != nil {
