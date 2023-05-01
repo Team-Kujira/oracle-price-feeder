@@ -197,7 +197,7 @@ type (
 
 	ProviderEndpoints struct {
 		Name          provider.Name `toml:"name" validate:"required"`
-		Urls          []string      `toml:"http"`
+		Urls          []string      `toml:"urls"`
 		Websocket     string        `toml:"websocket"`
 		WebsocketPath string        `toml:"websocket_path"`
 		PollInterval  string        `toml:"poll_interval"`
