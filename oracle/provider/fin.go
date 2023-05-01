@@ -15,7 +15,7 @@ var (
 	_                   Provider = (*FinProvider)(nil)
 	finDefaultEndpoints          = Endpoint{
 		Name:         ProviderFin,
-		Http: 	      []string{"https://api.kujira.app", "https://api-kujira.mintthemoon.xyz"},
+		Urls:         []string{"https://api.kujira.app", "https://api-kujira.mintthemoon.xyz"},
 		PollInterval: 3 * time.Second,
 	}
 )

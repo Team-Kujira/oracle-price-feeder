@@ -15,7 +15,7 @@ var (
 	_                      Provider = (*KrakenProvider)(nil)
 	krakenDefaultEndpoints          = Endpoint{
 		Name:         ProviderKraken,
-		Http:         []string{"https://api.kraken.com"},
+		Urls:         []string{"https://api.kraken.com"},
 		PollInterval: 2 * time.Second,
 	}
 )

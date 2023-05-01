@@ -26,7 +26,7 @@ func TestValidate(t *testing.T) {
 				Address:   "fromaddr",
 				Validator: "valaddr",
 				ChainID:   "chain-id",
-				Prefix: "chain",
+				Prefix:    "chain",
 			},
 			Keyring: config.Keyring{
 				Backend: "test",
@@ -47,7 +47,7 @@ func TestValidate(t *testing.T) {
 				PrometheusRetentionTime: 120,
 			},
 			GasAdjustment: 1.5,
-			GasPrices: "0.00125ukuji",
+			GasPrices:     "0.00125ukuji",
 			Healthchecks: []config.Healthchecks{
 				{URL: "https://hc-ping.com/HEALTHCHECK-UUID", Timeout: "200ms"},
 			},
@@ -82,7 +82,7 @@ func TestValidate(t *testing.T) {
 	invalidEndpointsProvider.ProviderEndpoints = []config.ProviderEndpoints{
 		{
 			Name:      "foo",
-			Http:      []string{"bar"},
+			Urls:      []string{"bar"},
 			Websocket: "baz",
 		},
 	}

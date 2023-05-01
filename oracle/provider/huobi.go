@@ -15,7 +15,7 @@ var (
 	_                     Provider = (*HuobiProvider)(nil)
 	huobiDefaultEndpoints          = Endpoint{
 		Name:         ProviderHuobi,
-		Http:         []string{"https://api.huobi.pro", "https://api-aws.huobi.pro"},
+		Urls:         []string{"https://api.huobi.pro", "https://api-aws.huobi.pro"},
 		PollInterval: 2 * time.Second,
 	}
 )

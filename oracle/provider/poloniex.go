@@ -14,7 +14,7 @@ var (
 	_                        Provider = (*PoloniexProvider)(nil)
 	poloniexDefaultEndpoints          = Endpoint{
 		Name:         ProviderPoloniex,
-		Http:         []string{"https://api.poloniex.com"},
+		Urls:         []string{"https://api.poloniex.com"},
 		PollInterval: 2 * time.Second,
 	}
 )

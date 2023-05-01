@@ -6,10 +6,11 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/stretchr/testify/require"
 	"price-feeder/oracle/types"
+
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/rs/zerolog"
+	"github.com/stretchr/testify/require"
 )
 
 func TestMockProvider_GetTickerPrices(t *testing.T) {
@@ -27,7 +28,7 @@ ATOM,USDC,21.84,1827884.77
 		defer server.Close()
 
 		mp.http = server.Client()
-		mp.endpoints.Http = []string{server.URL}
+		mp.endpoints.Urls = []string{server.URL}
 
 		prices, err := mp.GetTickerPrices(types.CurrencyPair{Base: "UMEE", Quote: "USDT"})
 		require.NoError(t, err)
@@ -48,7 +49,7 @@ ATOM,USDC,21.84,1827884.77
 		defer server.Close()
 
 		mp.http = server.Client()
-		mp.endpoints.Http = []string{server.URL}
+		mp.endpoints.Urls = []string{server.URL}
 
 		prices, err := mp.GetTickerPrices(
 			types.CurrencyPair{Base: "UMEE", Quote: "USDT"},
@@ -70,7 +71,7 @@ ATOM,USDC,21.84,1827884.77
 		defer server.Close()
 
 		mp.http = server.Client()
-		mp.endpoints.Http = []string{server.URL}
+		mp.endpoints.Urls = []string{server.URL}
 
 		prices, err := mp.GetTickerPrices(types.CurrencyPair{Base: "UMEE", Quote: "USDT"})
 		require.Error(t, err)

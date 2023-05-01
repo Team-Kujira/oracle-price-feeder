@@ -15,7 +15,7 @@ var (
 	_                        Provider = (*CoinbaseProvider)(nil)
 	coinbaseDefaultEndpoints          = Endpoint{
 		Name: ProviderCoinbase,
-		Http: []string{"https://api.exchange.coinbase.com"},
+		Urls: []string{"https://api.exchange.coinbase.com"},
 	}
 )
 

@@ -14,7 +14,7 @@ var (
 	_                    Provider = (*GateProvider)(nil)
 	gateDefaultEndpoints          = Endpoint{
 		Name:         ProviderGate,
-		Http:         []string{"https://api.gateio.ws"},
+		Urls:         []string{"https://api.gateio.ws"},
 		PollInterval: 2 * time.Second,
 	}
 )

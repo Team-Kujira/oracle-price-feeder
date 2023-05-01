@@ -14,7 +14,7 @@ var (
 	_                      Provider = (*CryptoProvider)(nil)
 	cryptoDefaultEndpoints          = Endpoint{
 		Name:         ProviderCrypto,
-		Http:         []string{"https://api.crypto.com"},
+		Urls:         []string{"https://api.crypto.com"},
 		PollInterval: 2 * time.Second,
 	}
 )

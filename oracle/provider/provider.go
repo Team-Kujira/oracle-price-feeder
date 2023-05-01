@@ -91,8 +91,8 @@ type (
 	// Endpoint defines an override setting in our config for the
 	// hardcoded rest and websocket api endpoints.
 	Endpoint struct {
-		Name          Name   // ex. "binance"
-		Http		  []string
+		Name          Name // ex. "binance"
+		Urls          []string
 		Websocket     string // ex. "stream.binance.com:9443"
 		WebsocketPath string
 		PollInterval  time.Duration
@@ -120,7 +120,7 @@ func (p *provider) Init(
 	}
 	p.tickers = make(map[string]types.TickerPrice, len(pairs))
 	p.http = newDefaultHTTPClient()
-	p.httpBase = p.endpoints.Http[0]
+	p.httpBase = p.endpoints.Urls[0]
 	if p.endpoints.Websocket != "" {
 		websocketUrl := url.URL{
 			Scheme: "wss",
@@ -207,7 +207,7 @@ func (p *provider) httpGet(path string) ([]byte, error) {
 			Str("endpoint", p.httpBase).
 			Str("path", path).
 			Msg("trying alternate http endpoints")
-		for _, endpoint := range p.endpoints.Http {
+		for _, endpoint := range p.endpoints.Urls {
 			if endpoint == p.httpBase {
 				continue
 			}
@@ -305,8 +305,8 @@ func (e *Endpoint) SetDefaults() {
 	default:
 		return
 	}
-	if e.Http == nil {
-		e.Http = defaults.Http
+	if e.Urls == nil {
+		e.Urls = defaults.Urls
 	}
 	if e.Websocket == "" && defaults.Websocket != "" { // don't enable websockets for providers that don't support them
 		e.Websocket = defaults.Websocket

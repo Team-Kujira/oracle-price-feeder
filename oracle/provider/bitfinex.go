@@ -15,7 +15,7 @@ var (
 	_                        Provider = (*BitfinexProvider)(nil)
 	bitfinexDefaultEndpoints          = Endpoint{
 		Name:         ProviderBitfinex,
-		Http:         []string{"https://api-pub.bitfinex.com"},
+		Urls:         []string{"https://api-pub.bitfinex.com"},
 		PollInterval: 2500 * time.Millisecond,
 	}
 )

@@ -15,7 +15,7 @@ var (
 	_                         Provider = (*OsmosisV2Provider)(nil)
 	osmosisv2DefaultEndpoints          = Endpoint{
 		Name:         ProviderOsmosisV2,
-		Http:         []string{"https://rest.cosmos.directory/osmosis"},
+		Urls:         []string{"https://rest.cosmos.directory/osmosis"},
 		PollInterval: 6 * time.Second,
 	}
 )

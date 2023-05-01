@@ -14,7 +14,7 @@ var (
 	_                      Provider = (*HitBtcProvider)(nil)
 	hitbtcDefaultEndpoints          = Endpoint{
 		Name:         ProviderHitBtc,
-		Http:         []string{"https://api.hitbtc.com"},
+		Urls:         []string{"https://api.hitbtc.com"},
 		PollInterval: 2 * time.Second,
 	}
 )

@@ -15,7 +15,7 @@ var (
 	_                  Provider = (*XtProvider)(nil)
 	xtDefaultEndpoints          = Endpoint{
 		Name:         ProviderXt,
-		Http:         []string{"https://sapi.xt.com"},
+		Urls:         []string{"https://sapi.xt.com"},
 		PollInterval: 2 * time.Second,
 	}
 )

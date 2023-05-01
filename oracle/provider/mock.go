@@ -22,9 +22,9 @@ const (
 )
 
 var (
-	_ Provider = (*MockProvider)(nil)
-	mockDefaultEndpoints = Endpoint{
-		Http: []string{mockBaseURL},
+	_                    Provider = (*MockProvider)(nil)
+	mockDefaultEndpoints          = Endpoint{
+		Urls: []string{mockBaseURL},
 	}
 )
 

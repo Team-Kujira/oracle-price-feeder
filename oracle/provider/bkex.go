@@ -14,7 +14,7 @@ var (
 	_                    Provider = (*BkexProvider)(nil)
 	bkexDefaultEndpoints          = Endpoint{
 		Name:         ProviderBkex,
-		Http:         []string{"https://api.bkex.com"},
+		Urls:         []string{"https://api.bkex.com"},
 		PollInterval: 2 * time.Second,
 	}
 )

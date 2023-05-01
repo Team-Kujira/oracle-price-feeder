@@ -15,7 +15,7 @@ var (
 	_                   Provider = (*OkxProvider)(nil)
 	okxDefaultEndpoints          = Endpoint{
 		Name:         ProviderOkx,
-		Http:         []string{"https://www.okx.com", "https://aws.okx.com"},
+		Urls:         []string{"https://www.okx.com", "https://aws.okx.com"},
 		PollInterval: 2 * time.Second,
 	}
 )

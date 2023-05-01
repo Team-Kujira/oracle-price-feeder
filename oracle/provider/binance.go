@@ -16,7 +16,7 @@ var (
 	_                       Provider = (*BinanceProvider)(nil)
 	binanceDefaultEndpoints          = Endpoint{
 		Name: ProviderBinance,
-		Http: []string{
+		Urls: []string{
 			"https://api1.binance.com",
 			"https://api2.binance.com",
 			"https://api3.binance.com",
@@ -27,7 +27,7 @@ var (
 	}
 	binanceUSDefaultEndpoints = Endpoint{
 		Name:         ProviderBinanceUS,
-		Http:         []string{"https://api.binance.us"},
+		Urls:         []string{"https://api.binance.us"},
 		PollInterval: 6 * time.Second,
 	}
 )

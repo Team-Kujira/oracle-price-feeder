@@ -14,7 +14,7 @@ var (
 	_                    Provider = (*MexcProvider)(nil)
 	mexcDefaultEndpoints          = Endpoint{
 		Name:         ProviderMexc,
-		Http:         []string{"https://api.mexc.com"},
+		Urls:         []string{"https://api.mexc.com"},
 		PollInterval: 2 * time.Second,
 	}
 )

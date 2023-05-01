@@ -15,7 +15,7 @@ var (
 	_                      Provider = (*PhemexProvider)(nil)
 	phemexDefaultEndpoints          = Endpoint{
 		Name:         ProviderPhemex,
-		Http:         []string{"https://api.phemex.com"},
+		Urls:         []string{"https://api.phemex.com"},
 		PollInterval: 3 * time.Second,
 	}
 )

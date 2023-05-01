@@ -15,7 +15,7 @@ var (
 	_                      Provider = (*FinUskProvider)(nil)
 	finUskDefaultEndpoints          = Endpoint{
 		Name: ProviderFinUsk,
-		Http: []string{
+		Urls: []string{
 			"https://cosmos.directory/kujira",
 			"https://lcd.kaiyo.kujira.setten.io",
 			"https://lcd-kujira.mintthemoon.xyz",

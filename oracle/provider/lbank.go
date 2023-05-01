@@ -15,7 +15,7 @@ var (
 	_                     Provider = (*LbankProvider)(nil)
 	lbankDefaultEndpoints          = Endpoint{
 		Name:         ProviderLbank,
-		Http:         []string{"https://api.lbkex.com", "https://api.lbank.info", "https://www.lbkex.net"},
+		Urls:         []string{"https://api.lbkex.com", "https://api.lbank.info", "https://www.lbkex.net"},
 		PollInterval: 3 * time.Second,
 	}
 )

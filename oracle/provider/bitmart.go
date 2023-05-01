@@ -14,7 +14,7 @@ var (
 	_                       Provider = (*BitmartProvider)(nil)
 	bitmartDefaultEndpoints          = Endpoint{
 		Name:         ProviderBitmart,
-		Http:         []string{"https://api-cloud.bitmart.com"},
+		Urls:         []string{"https://api-cloud.bitmart.com"},
 		PollInterval: 6 * time.Second,
 	}
 )

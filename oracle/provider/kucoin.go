@@ -14,7 +14,7 @@ var (
 	_                      Provider = (*KucoinProvider)(nil)
 	kucoinDefaultEndpoints          = Endpoint{
 		Name:         ProviderKucoin,
-		Http:         []string{"https://api.kucoin.com"},
+		Urls:         []string{"https://api.kucoin.com"},
 		PollInterval: 2 * time.Second,
 	}
 )

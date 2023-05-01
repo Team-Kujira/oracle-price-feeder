@@ -15,7 +15,7 @@ var (
 	_                       Provider = (*OsmosisProvider)(nil)
 	osmosisDefaultEndpoints          = Endpoint{
 		Name:         ProviderOsmosis,
-		Http:         []string{"https://api-osmosis.imperator.co"},
+		Urls:         []string{"https://api-osmosis.imperator.co"},
 		PollInterval: 6 * time.Second,
 	}
 )

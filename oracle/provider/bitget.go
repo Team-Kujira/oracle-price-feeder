@@ -15,7 +15,7 @@ var (
 	_                      Provider = (*BitgetProvider)(nil)
 	bitgetDefaultEndpoints          = Endpoint{
 		Name:         ProviderBitget,
-		Http:         []string{"https://api.bitget.com"},
+		Urls:         []string{"https://api.bitget.com"},
 		PollInterval: 2 * time.Second,
 	}
 )
