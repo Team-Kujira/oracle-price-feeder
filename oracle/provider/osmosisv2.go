@@ -97,12 +97,13 @@ func (p *OsmosisV2Provider) Poll() error {
 			continue
 		}
 
+		// api seems to flipped base and quote
 		path := strings.Join([]string{
 			"/osmosis/gamm/v1beta1/pools/", poolId,
 			"/prices?base_asset_denom=",
-			strings.Replace(baseDenom, "/", "%2F", 1),
-			"&quote_asset_denom=",
 			strings.Replace(quoteDenom, "/", "%2F", 1),
+			"&quote_asset_denom=",
+			strings.Replace(baseDenom, "/", "%2F", 1),
 		}, "")
 
 		content, err := p.httpGet(path)
