@@ -15,7 +15,7 @@ var (
 	_                     Provider = (*HuobiProvider)(nil)
 	huobiDefaultEndpoints          = Endpoint{
 		Name:         ProviderHuobi,
-		Rest:         "https://api.huobi.pro",
+		Urls:         []string{"https://api.huobi.pro", "https://api-aws.huobi.pro"},
 		PollInterval: 2 * time.Second,
 	}
 )
@@ -65,9 +65,7 @@ func (p *HuobiProvider) Poll() error {
 		symbols[strings.ToLower(pair.String())] = pair.String()
 	}
 
-	url := p.endpoints.Rest + "/market/tickers"
-
-	content, err := p.makeHttpRequest(url)
+	content, err := p.httpGet("/market/tickers")
 	if err != nil {
 		return err
 	}

@@ -22,9 +22,9 @@ const (
 )
 
 var (
-	_ Provider = (*MockProvider)(nil)
-	mockDefaultEndpoints = Endpoint{
-		Rest: mockBaseURL,
+	_                    Provider = (*MockProvider)(nil)
+	mockDefaultEndpoints          = Endpoint{
+		Urls: []string{mockBaseURL},
 	}
 )
 
@@ -62,7 +62,7 @@ func NewMockProvider(
 func (p MockProvider) GetTickerPrices(pairs ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
 	tickerPrices := make(map[string]types.TickerPrice, len(pairs))
 
-	resp, err := p.http.Get(p.endpoints.Rest)
+	resp, err := p.http.Get(p.httpBase)
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +135,7 @@ func (p MockProvider) GetCandlePrices(pairs ...types.CurrencyPair) (map[string][
 
 // GetAvailablePairs return all available pairs symbol to susbscribe.
 func (p MockProvider) GetAvailablePairs() (map[string]struct{}, error) {
-	resp, err := p.http.Get(p.endpoints.Rest)
+	resp, err := p.http.Get(p.httpBase)
 	if err != nil {
 		return nil, err
 	}

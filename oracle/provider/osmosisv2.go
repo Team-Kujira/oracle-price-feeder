@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"price-feeder/oracle/types"
@@ -14,34 +15,31 @@ var (
 	_                         Provider = (*OsmosisV2Provider)(nil)
 	osmosisv2DefaultEndpoints          = Endpoint{
 		Name:         ProviderOsmosisV2,
-		Rest:         "https://api-osmosis.imperator.co",
+		Urls:         []string{"https://rest.cosmos.directory/osmosis"},
 		PollInterval: 6 * time.Second,
 	}
 )
 
 type (
-	// OsmosisV2Provider defines an oracle provider implemented by the Gate.io
-	// public API.
+	// OsmosisV2ProviderV2 defines an oracle provider using on chain data from
+	// osmosis nodes
 	//
-	// REF: https://www.gate.io/docs/developers/apiv4/en/
+	// REF: -
 	OsmosisV2Provider struct {
 		provider
+		pools  map[string]string
+		denoms map[string]string
 	}
 
-	OsmosisV2PoolsResponse struct {
-		Pools []OsmosisV2Pool `json:"pools"`
+	OsmosisV2SpotPrice struct {
+		Price string `json:"spot_price"`
 	}
 
-	OsmosisV2Pool struct {
-		Volume float64               `json:"volume_24h"` // Total traded base asset volume ex.: 167107.988
-		Tokens [2]OsmosisV2PoolToken `json:"pool_tokens"`
-	}
-
-	OsmosisV2PoolToken struct {
-		Symbol string  `json:"symbol"`
-		Amount float64 `json:"amount"`
-		Weight float64 `json:"weight_or_scaling"`
-	}
+	// OsmosisTicker struct {
+	// 	Symbol string  `json:"symbol"`     // ex.: "ATOM"
+	// 	Price  float64 `json:"price"`      // ex.: 14.8830587017
+	// 	Volume float64 `json:"volume_24h"` // ex.: 6428474.562418117
+	// }
 )
 
 func NewOsmosisV2Provider(
@@ -59,56 +57,73 @@ func NewOsmosisV2Provider(
 		nil,
 		nil,
 	)
+
+	provider.denoms = map[string]string{}
+	provider.denoms["OSMO"] = "uosmo"
+	provider.denoms["STOSMO"] = "ibc/D176154B0C63D1F9C6DCFB4F70349EBF2E2B5A87A05902F57A6AE92B863E9AEC"
+	provider.denoms["ATOM"] = "ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2"
+	provider.denoms["STATOM"] = "ibc/C140AFD542AE77BD7DCC83F13FDD8C5E5BB8C4929785E6EC2F4C636F98F17901"
+
+	provider.pools = map[string]string{}
+	provider.pools["STATOMATOM"] = "803"
+	provider.pools["STOSMOOSMO"] = "833"
+
 	go startPolling(provider, provider.endpoints.PollInterval, logger)
 	return provider, nil
 }
 
 func (p *OsmosisV2Provider) Poll() error {
-	url := p.endpoints.Rest + "/stream/pool/v1/all?min_liquidity=10000&limit=160"
-
-	content, err := p.makeHttpRequest(url)
-	if err != nil {
-		return err
-	}
-
-	var poolsResponse OsmosisV2PoolsResponse
-	err = json.Unmarshal(content, &poolsResponse)
-	if err != nil {
-		return err
-	}
-
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 
 	timestamp := time.Now()
-	processed := map[string]bool{}
 
-	for _, pool := range poolsResponse.Pools {
-		base := pool.Tokens[0]
-		quote := pool.Tokens[1]
-		symbol := base.Symbol + quote.Symbol
+	for _, pair := range p.pairs {
+		poolId, found := p.pools[pair.Base+pair.Quote]
+		if !found {
+			poolId, found = p.pools[pair.Quote+pair.Base]
+			if !found {
+				continue
+			}
+		}
 
-		_, ok := p.pairs[symbol]
-		if !ok {
+		baseDenom, found := p.denoms[pair.Base]
+		if !found {
 			continue
 		}
 
-		// skip, if a pool with the same base/quote pair has been processed
-		// because the pools are sorted by liquidity, the previous pool had
-		// more liquidity and should be counted
-		_, ok = processed[symbol]
-		if ok {
+		quoteDenom, found := p.denoms[pair.Quote]
+		if !found {
 			continue
 		}
 
-		rate := (quote.Amount / quote.Weight) / (base.Amount / base.Weight)
+		// api seems to flipped base and quote
+		path := strings.Join([]string{
+			"/osmosis/gamm/v1beta1/pools/", poolId,
+			"/prices?base_asset_denom=",
+			strings.Replace(quoteDenom, "/", "%2F", 1),
+			"&quote_asset_denom=",
+			strings.Replace(baseDenom, "/", "%2F", 1),
+		}, "")
 
-		p.tickers[symbol] = types.TickerPrice{
-			Price:  floatToDec(rate),
-			Volume: floatToDec(pool.Volume),
+		content, err := p.httpGet(path)
+		if err != nil {
+			return err
+		}
+
+		var spotPrice OsmosisV2SpotPrice
+		err = json.Unmarshal(content, &spotPrice)
+		if err != nil {
+			return err
+		}
+
+		p.tickers[pair.String()] = types.TickerPrice{
+			Price:  strToDec(spotPrice.Price),
+			Volume: strToDec("1"),
 			Time:   timestamp,
 		}
 	}
+
 	p.logger.Debug().Msg("updated tickers")
 	return nil
 }

@@ -15,7 +15,7 @@ var (
 	_                   Provider = (*OkxProvider)(nil)
 	okxDefaultEndpoints          = Endpoint{
 		Name:         ProviderOkx,
-		Rest:         "https://www.okx.com", // or https://aws.okx.com
+		Urls:         []string{"https://www.okx.com", "https://aws.okx.com"},
 		PollInterval: 2 * time.Second,
 	}
 )
@@ -68,9 +68,7 @@ func (p *OkxProvider) Poll() error {
 		symbols[pair.Join("-")] = pair.String()
 	}
 
-	url := p.endpoints.Rest + "/api/v5/market/tickers?instType=SPOT"
-
-	content, err := p.makeHttpRequest(url)
+	content, err := p.httpGet("/api/v5/market/tickers?instType=SPOT")
 	if err != nil {
 		return err
 	}

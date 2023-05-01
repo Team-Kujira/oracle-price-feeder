@@ -15,7 +15,7 @@ var (
 	_                       Provider = (*OsmosisProvider)(nil)
 	osmosisDefaultEndpoints          = Endpoint{
 		Name:         ProviderOsmosis,
-		Rest:         "https://api-osmosis.imperator.co",
+		Urls:         []string{"https://api-osmosis.imperator.co"},
 		PollInterval: 6 * time.Second,
 	}
 )
@@ -63,9 +63,7 @@ func (p *OsmosisProvider) Poll() error {
 		}
 	}
 
-	url := p.endpoints.Rest + "/tokens/v2/all"
-
-	content, err := p.makeHttpRequest(url)
+	content, err := p.httpGet("/tokens/v2/all")
 	if err != nil {
 		return err
 	}

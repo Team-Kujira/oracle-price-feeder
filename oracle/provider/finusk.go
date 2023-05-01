@@ -14,8 +14,12 @@ import (
 var (
 	_                      Provider = (*FinUskProvider)(nil)
 	finUskDefaultEndpoints          = Endpoint{
-		Name:         ProviderFinUsk,
-		Rest:         "https://cosmos.directory/kujira",
+		Name: ProviderFinUsk,
+		Urls: []string{
+			"https://cosmos.directory/kujira",
+			"https://lcd.kaiyo.kujira.setten.io",
+			"https://lcd-kujira.mintthemoon.xyz",
+		},
 		PollInterval: 3 * time.Second,
 	}
 )
@@ -68,9 +72,7 @@ func (p *FinUskProvider) Poll() error {
 		return nil
 	}
 
-	url := p.endpoints.Rest + "/cosmwasm/wasm/v1/contract/kujira1rwx6w02alc4kaz7xpyg3rlxpjl4g63x5jq292mkxgg65zqpn5llq202vh5/smart/eyJib29rIjp7ImxpbWl0IjoxfX0K"
-
-	content, err := p.makeHttpRequest(url)
+	content, err := p.httpGet("/cosmwasm/wasm/v1/contract/kujira1rwx6w02alc4kaz7xpyg3rlxpjl4g63x5jq292mkxgg65zqpn5llq202vh5/smart/eyJib29rIjp7ImxpbWl0IjoxfX0K")
 	if err != nil {
 		return err
 	}

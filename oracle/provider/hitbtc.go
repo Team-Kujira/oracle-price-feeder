@@ -14,7 +14,7 @@ var (
 	_                      Provider = (*HitBtcProvider)(nil)
 	hitbtcDefaultEndpoints          = Endpoint{
 		Name:         ProviderHitBtc,
-		Rest:         "https://api.hitbtc.com",
+		Urls:         []string{"https://api.hitbtc.com"},
 		PollInterval: 2 * time.Second,
 	}
 )
@@ -55,9 +55,7 @@ func NewHitBtcProvider(
 }
 
 func (p *HitBtcProvider) Poll() error {
-	url := p.endpoints.Rest + "/api/3/public/ticker"
-
-	content, err := p.makeHttpRequest(url)
+	content, err := p.httpGet("/api/3/public/ticker")
 	if err != nil {
 		return err
 	}

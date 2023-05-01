@@ -14,7 +14,7 @@ var (
 	_                       Provider = (*BitmartProvider)(nil)
 	bitmartDefaultEndpoints          = Endpoint{
 		Name:         ProviderBitmart,
-		Rest:         "https://api-cloud.bitmart.com",
+		Urls:         []string{"https://api-cloud.bitmart.com"},
 		PollInterval: 6 * time.Second,
 	}
 )
@@ -69,9 +69,7 @@ func (p *BitmartProvider) Poll() error {
 		symbols[pair.Join("_")] = pair.String()
 	}
 
-	url := p.endpoints.Rest + "/spot/v2/ticker"
-
-	content, err := p.makeHttpRequest(url)
+	content, err := p.httpGet("/spot/v2/ticker")
 	if err != nil {
 		return err
 	}

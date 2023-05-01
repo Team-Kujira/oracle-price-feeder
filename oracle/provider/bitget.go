@@ -15,7 +15,7 @@ var (
 	_                      Provider = (*BitgetProvider)(nil)
 	bitgetDefaultEndpoints          = Endpoint{
 		Name:         ProviderBitget,
-		Rest:         "https://api.bitget.com",
+		Urls:         []string{"https://api.bitget.com"},
 		PollInterval: 2 * time.Second,
 	}
 )
@@ -63,9 +63,7 @@ func NewBitgetProvider(
 }
 
 func (p *BitgetProvider) Poll() error {
-	url := p.endpoints.Rest + "/api/spot/v1/market/tickers"
-
-	content, err := p.makeHttpRequest(url)
+	content, err := p.httpGet("/api/spot/v1/market/tickers")
 	if err != nil {
 		return err
 	}

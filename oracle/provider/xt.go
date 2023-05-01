@@ -15,7 +15,7 @@ var (
 	_                  Provider = (*XtProvider)(nil)
 	xtDefaultEndpoints          = Endpoint{
 		Name:         ProviderXt,
-		Rest:         "https://sapi.xt.com",
+		Urls:         []string{"https://sapi.xt.com"},
 		PollInterval: 2 * time.Second,
 	}
 )
@@ -68,9 +68,7 @@ func (p *XtProvider) Poll() error {
 		symbols[strings.ToLower(pair.Join("_"))] = pair.String()
 	}
 
-	url := p.endpoints.Rest + "/v4/public/ticker"
-
-	content, err := p.makeHttpRequest(url)
+	content, err := p.httpGet("/v4/public/ticker")
 	if err != nil {
 		return err
 	}
