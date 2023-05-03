@@ -134,35 +134,47 @@ func convertTickersToUSD(
 		unresolved := []Vwap{}
 
 		sort.Slice(vwaps, func(i, j int) bool {
-			return vwaps[i].Volume.GT(vwaps[j].Volume)
+			volume1 := vwaps[i].Volume.Mul(vwaps[i].Value)
+			volume2 := vwaps[j].Volume.Mul(vwaps[j].Value)
+			return volume1.GT(volume2)
 		})
 
 		for _, vwap := range vwaps {
-			rate := Rate{Value: sdk.ZeroDec(), Volume: sdk.ZeroDec()}
-
+			rate := Rate{}
+			found := false
 			if vwap.Quote == "USD" {
 				rate.Value = vwap.Value
-				rate.Volume = vwap.Volume
+				rate.Volume = vwap.Volume.Mul(vwap.Value)
+				found = true
 			} else {
 				quoteRate, found := rates[vwap.Quote]
 				if found {
 					rate.Value = vwap.Value.Mul(quoteRate.Value)
-					rate.Volume = vwap.Volume
+					rate.Volume = vwap.Volume.Mul(vwap.Value)
 				} else {
 					unresolved = append(unresolved, vwap)
 				}
 			}
 
-			if !rate.Value.IsZero() {
+			if found {
 				// VWAP
 				existing, found := rates[vwap.Base]
 				if found {
-					total := existing.Value.Mul(existing.Volume)
-					total = total.Add(rate.Value.Mul(rate.Volume))
-					volume := existing.Volume.Add(rate.Volume)
+					difference := existing.Value.Sub(rate.Value).Abs()
+					if !difference.IsZero() {
+						difference = difference.Quo(existing.Value)
+					}
 
-					rate.Value = total.Quo(volume)
-					rate.Volume = volume
+					if difference.LT(sdk.MustNewDecFromStr("0.02")) {
+
+						total := existing.Value.Mul(existing.Volume)
+						total = total.Add(rate.Value.Mul(rate.Volume))
+						volume := existing.Volume.Add(rate.Volume)
+
+						rate.Value = total.Quo(volume)
+						rate.Volume = volume
+					}
+
 				}
 
 				rates[vwap.Base] = rate
@@ -173,7 +185,8 @@ func convertTickersToUSD(
 			break
 		}
 
-		copy(vwaps, unresolved)
+		vwaps = []Vwap{}
+		vwaps = append(vwaps, unresolved...)
 	}
 
 	ratesDec := map[string]sdk.Dec{}
