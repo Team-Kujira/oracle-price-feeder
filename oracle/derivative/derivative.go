@@ -7,24 +7,23 @@ import (
 	"price-feeder/oracle/history"
 	"price-feeder/oracle/types"
 
-	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/rs/zerolog"
 )
 
 const (
-	DerivativeTvwap = "tvwap"
+	DerivativeTvwap  = "tvwap"
 	DerivativeStride = "stride"
 )
 
 type (
 	Derivative interface {
-		GetPrices(...types.CurrencyPair) (map[string]sdk.Dec, error)
+		GetPrice(types.CurrencyPair) (types.TickerPrice, error)
 	}
 
 	derivative struct {
-		pairs []types.CurrencyPair
+		pairs   []types.CurrencyPair
 		history *history.PriceHistory
-		logger zerolog.Logger
+		logger  zerolog.Logger
 		periods map[string]time.Duration
 	}
 )

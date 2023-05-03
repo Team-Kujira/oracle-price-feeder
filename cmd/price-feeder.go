@@ -188,7 +188,7 @@ func priceFeederCmdHandler(cmd *cobra.Command, args []string) error {
 
 	derivativePairs := map[string][]types.CurrencyPair{}
 	derivativePeriods := map[string]map[string]time.Duration{}
-	derivativeDenoms := map[string]struct{}{}
+	derivativeSymbols := map[string]struct{}{}
 	providerPairs := []config.CurrencyPair{}
 	for _, pair := range cfg.CurrencyPairs {
 		if pair.Derivative != "" {
@@ -204,7 +204,7 @@ func priceFeederCmdHandler(cmd *cobra.Command, args []string) error {
 			currencyPair := types.CurrencyPair{Base: pair.Base, Quote: pair.Quote}
 			derivativePairs[pair.Derivative] = append(pairs, currencyPair)
 			derivativePeriods[pair.Derivative][currencyPair.String()] = period
-			derivativeDenoms[pair.Base] = struct{}{}
+			derivativeSymbols[pair.Base+pair.Quote] = struct{}{}
 		}
 		providerPairs = append(providerPairs, pair)
 	}
@@ -227,7 +227,7 @@ func priceFeederCmdHandler(cmd *cobra.Command, args []string) error {
 		endpoints,
 		derivatives,
 		derivativePairs,
-		derivativeDenoms,
+		derivativeSymbols,
 		cfg.Healthchecks,
 		history,
 	)

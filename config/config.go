@@ -72,20 +72,6 @@ var (
 	// maxDeviationThreshold is the maxmimum allowed amount of standard
 	// deviations which validators are able to set for a given asset.
 	maxDeviationThreshold = sdk.MustNewDecFromStr("3.0")
-
-	// SupportedQuotes defines a lookup table for which assets we support
-	// using as quotes.
-	SupportedQuotes = map[string]struct{}{
-		DenomUSD:  {},
-		"AXLUSDC": {},
-		"USDC":    {},
-		"USDT":    {},
-		"DAI":     {},
-		"BTC":     {},
-		"ETH":     {},
-		"ATOM":    {},
-		"OSMO":    {},
-	}
 )
 
 type (
@@ -299,7 +285,7 @@ func ParseConfig(configPath string) (Config, error) {
 			coinQuotes[cp.Quote] = struct{}{}
 		}
 		if cp.Derivative != "" {
-			derivativeDenoms[cp.Base] = struct{}{}
+			derivativeDenoms[cp.Base+cp.Quote] = struct{}{}
 			_, ok := SupportedDerivatives[cp.Derivative]
 			if !ok {
 				return cfg, fmt.Errorf("unsupported derivative: %s", cp.Derivative)
@@ -317,28 +303,12 @@ func ParseConfig(configPath string) (Config, error) {
 			if ok {
 				return cfg, fmt.Errorf("cannot combine derivative and nonderivative pairs for %s", cp.Base)
 			}
-			_, ok = SupportedQuotes[cp.Quote]
-			if !ok {
-				return cfg, fmt.Errorf("unsupported quote: %s", cp.Quote)
-			}
 		}
 		for _, provider := range cp.Providers {
 			if _, ok := SupportedProviders[provider]; !ok {
 				return cfg, fmt.Errorf("unsupported provider: %s", provider)
 			}
 			pairs[cp.Base][provider] = struct{}{}
-		}
-	}
-
-	// Use coinQuotes to ensure that any quotes can be converted to USD.
-	for quote := range coinQuotes {
-		for index, pair := range cfg.CurrencyPairs {
-			if pair.Base == quote && pair.Quote == DenomUSD {
-				break
-			}
-			if index == len(cfg.CurrencyPairs)-1 {
-				return cfg, fmt.Errorf("all non-usd quotes require a conversion rate feed")
-			}
 		}
 	}
 

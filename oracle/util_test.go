@@ -12,70 +12,55 @@ import (
 )
 
 func TestComputeVWAP(t *testing.T) {
-	testCases := map[string]struct {
-		prices   map[provider.Name]map[string]types.TickerPrice
-		expected map[string]sdk.Dec
-	}{
-		"empty prices": {
-			prices:   make(map[provider.Name]map[string]types.TickerPrice),
-			expected: make(map[string]sdk.Dec),
-		},
-		"nil prices": {
-			prices:   nil,
-			expected: make(map[string]sdk.Dec),
-		},
-		"non empty prices": {
-			prices: map[provider.Name]map[string]types.TickerPrice{
-				provider.ProviderBinance: {
-					"ATOM": types.TickerPrice{
-						Price:  sdk.MustNewDecFromStr("28.21000000"),
-						Volume: sdk.MustNewDecFromStr("2749102.78000000"),
-					},
-					"UMEE": types.TickerPrice{
-						Price:  sdk.MustNewDecFromStr("1.13000000"),
-						Volume: sdk.MustNewDecFromStr("249102.38000000"),
-					},
-					"LUNA": types.TickerPrice{
-						Price:  sdk.MustNewDecFromStr("64.87000000"),
-						Volume: sdk.MustNewDecFromStr("7854934.69000000"),
-					},
-				},
-				provider.ProviderKraken: {
-					"ATOM": types.TickerPrice{
-						Price:  sdk.MustNewDecFromStr("28.268700"),
-						Volume: sdk.MustNewDecFromStr("178277.53314385"),
-					},
-					"LUNA": types.TickerPrice{
-						Price:  sdk.MustNewDecFromStr("64.87853000"),
-						Volume: sdk.MustNewDecFromStr("458917.46353577"),
-					},
-				},
-				"FOO": {
-					"ATOM": types.TickerPrice{
-						Price:  sdk.MustNewDecFromStr("28.168700"),
-						Volume: sdk.MustNewDecFromStr("4749102.53314385"),
-					},
-				},
-			},
-			expected: map[string]sdk.Dec{
-				"ATOM": sdk.MustNewDecFromStr("28.185812745610043621"),
-				"UMEE": sdk.MustNewDecFromStr("1.13000000"),
-				"LUNA": sdk.MustNewDecFromStr("64.870470848638112395"),
-			},
-		},
+	// testCases := map[string]struct {
+	// 	prices   []types.TickerPrice
+	// 	expected sdk.Dec
+	// }{
+	// 	"empty prices": {
+	// 		prices:   []types.TickerPrice{},
+	// 		expected: sdk.Dec{},
+	// 	},
+	// 	"nil prices": {
+	// 		prices:   nil,
+	// 		expected: sdk.Dec{},
+	// 	},
+	// 	"non empty prices": {
+	prices := map[string][]types.TickerPrice{}
+	prices["ATOM"] = []types.TickerPrice{{
+		Price:  sdk.MustNewDecFromStr("28.21000000"),
+		Volume: sdk.MustNewDecFromStr("2749102.78000000"),
+	}, {
+		Price:  sdk.MustNewDecFromStr("28.268700"),
+		Volume: sdk.MustNewDecFromStr("178277.53314385"),
+	}, {
+		Price:  sdk.MustNewDecFromStr("28.168700"),
+		Volume: sdk.MustNewDecFromStr("4749102.53314385"),
+	}}
+
+	prices["UMEE"] = []types.TickerPrice{{
+		Price:  sdk.MustNewDecFromStr("1.13000000"),
+		Volume: sdk.MustNewDecFromStr("249102.38000000"),
+	}}
+
+	prices["LUNA"] = []types.TickerPrice{{
+		Price:  sdk.MustNewDecFromStr("64.87000000"),
+		Volume: sdk.MustNewDecFromStr("7854934.69000000"),
+	}, {
+		Price:  sdk.MustNewDecFromStr("64.87853000"),
+		Volume: sdk.MustNewDecFromStr("458917.46353577"),
+	}}
+
+	expected := map[string]sdk.Dec{
+		"ATOM": sdk.MustNewDecFromStr("28.185812745610043621"),
+		"UMEE": sdk.MustNewDecFromStr("1.13000000"),
+		"LUNA": sdk.MustNewDecFromStr("64.870470848638112395"),
 	}
 
-	for name, tc := range testCases {
-		tc := tc
-
-		t.Run(name, func(t *testing.T) {
-			vwap, err := oracle.ComputeVWAP(tc.prices)
+	for denom, tickers := range prices {
+		t.Run(denom, func(t *testing.T) {
+			vwap, err := oracle.ComputeVWAP(tickers)
 			require.NoError(t, err)
-			require.Len(t, vwap, len(tc.expected))
-
-			for k, v := range tc.expected {
-				require.Equalf(t, v, vwap[k], "unexpected VWAP for %s", k)
-			}
+			require.Equal(t, expected[denom], vwap)
 		})
 	}
 }

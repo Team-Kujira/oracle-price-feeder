@@ -2,51 +2,31 @@ package oracle
 
 import (
 	"price-feeder/oracle/provider"
+	"price-feeder/oracle/types"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
-// ComputeVWAP computes the volume weighted average price for all price points
-// for each ticker/exchange pair. The provided prices argument reflects a mapping
-// of provider => {<base> => <TickerPrice>, ...}.
-//
+// ComputeVWAP computes the volume weighted average price for all tickers
+// of all pairs of the same symbol.
 // Ref: https://en.wikipedia.org/wiki/Volume-weighted_average_price
-func ComputeVWAP(prices provider.AggregatedProviderPrices) (map[string]sdk.Dec, error) {
-	var (
-		weightedPrices = make(map[string]sdk.Dec)
-		volumeSum      = make(map[string]sdk.Dec)
-	)
+func ComputeVWAP(tickers []types.TickerPrice) (sdk.Dec, error) {
+	weightedPrice := sdk.ZeroDec()
+	volumeSum := sdk.ZeroDec()
 
-	for _, providerPrices := range prices {
-		for base, tp := range providerPrices {
-			if _, ok := weightedPrices[base]; !ok {
-				weightedPrices[base] = sdk.ZeroDec()
-			}
-			if _, ok := volumeSum[base]; !ok {
-				volumeSum[base] = sdk.ZeroDec()
-			}
+	for _, tp := range tickers {
+		// weightedPrice = Σ {P * V} for all TickerPrice
+		weightedPrice = weightedPrice.Add(tp.Price.Mul(tp.Volume))
 
-			// weightedPrices[base] = Σ {P * V} for all TickerPrice
-			weightedPrices[base] = weightedPrices[base].Add(tp.Price.Mul(tp.Volume))
-
-			// track total volume for each base
-			volumeSum[base] = volumeSum[base].Add(tp.Volume)
-		}
+		// track total volume for each base
+		volumeSum = volumeSum.Add(tp.Volume)
 	}
 
-	vwap := make(map[string]sdk.Dec)
-
-	for base, price := range weightedPrices {
-		if !volumeSum[base].Equal(sdk.ZeroDec()) {
-			if _, ok := vwap[base]; !ok {
-				vwap[base] = sdk.ZeroDec()
-			}
-
-			vwap[base] = price.Quo(volumeSum[base])
-		}
+	if volumeSum.Equal(sdk.ZeroDec()) {
+		return sdk.ZeroDec(), nil
 	}
 
-	return vwap, nil
+	return weightedPrice.Quo(volumeSum), nil
 }
 
 // StandardDeviation returns maps of the standard deviations and means of assets.

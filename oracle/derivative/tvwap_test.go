@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-
 var (
 	testHistoricalTickers1 = map[string][]types.TickerPrice{
 		"osmosis": {
@@ -20,7 +19,7 @@ var (
 		},
 	}
 	testTvwapStart1 = time.Unix(0, 0)
-	testTvwapEnd1 = time.Unix(3, 0)
+	testTvwapEnd1   = time.Unix(3, 0)
 	testTvwapPrice1 = sdk.NewDec(5)
 
 	testHistoricalTickers2 = map[string][]types.TickerPrice{
@@ -32,7 +31,7 @@ var (
 		},
 	}
 	testTvwapStart2 = time.Unix(0, 0)
-	testTvwapEnd2 = time.Unix(3, 0)
+	testTvwapEnd2   = time.Unix(3, 0)
 	testTvwapPrice2 = sdk.NewDec(10)
 
 	testHistoricalTickers3 = map[string][]types.TickerPrice{
@@ -49,7 +48,7 @@ var (
 		},
 	}
 	testTvwapStart3 = time.Unix(0, 0)
-	testTvwapEnd3 = time.Unix(12, 0)
+	testTvwapEnd3   = time.Unix(12, 0)
 	testTvwapPrice3 = sdk.MustNewDecFromStr("10.891089108910891089")
 
 	testHistoricalTickers4 = map[string][]types.TickerPrice{
@@ -60,7 +59,7 @@ var (
 		},
 	}
 	testTvwapStart4 = time.Unix(0, 0)
-	testTvwapEnd4 = time.Unix(200, 0)
+	testTvwapEnd4   = time.Unix(200, 0)
 
 	testHistoricalTickers5 = map[string][]types.TickerPrice{
 		"binanceus": {
@@ -93,23 +92,23 @@ var (
 		},
 	}
 	testTvwapStart5 = time.Unix(1675374700, 0)
-	testTvwapEnd5 = time.Unix(1675375150, 0)
+	testTvwapEnd5   = time.Unix(1675375150, 0)
 	testTvwapPrice5 = sdk.MustNewDecFromStr("1657.772658823529411764")
 )
 
 func TestTvwapDerivative_tvwap(t *testing.T) {
-	result1, err := tvwap(testHistoricalTickers1, testTvwapStart1, testTvwapEnd1)
+	result1, err := Tvwap(testHistoricalTickers1, testTvwapStart1, testTvwapEnd1)
 	require.NoError(t, err)
 	require.Equal(t, testTvwapPrice1, result1)
-	result2, err := tvwap(testHistoricalTickers2, testTvwapStart2, testTvwapEnd2)
+	result2, err := Tvwap(testHistoricalTickers2, testTvwapStart2, testTvwapEnd2)
 	require.NoError(t, err)
 	require.Equal(t, testTvwapPrice2, result2)
-	result3, err := tvwap(testHistoricalTickers3, testTvwapStart3, testTvwapEnd3)
+	result3, err := Tvwap(testHistoricalTickers3, testTvwapStart3, testTvwapEnd3)
 	require.NoError(t, err)
 	require.Equal(t, testTvwapPrice3, result3)
-	_, err = tvwap(testHistoricalTickers4, testTvwapStart4, testTvwapEnd4)
+	_, err = Tvwap(testHistoricalTickers4, testTvwapStart4, testTvwapEnd4)
 	require.Error(t, err)
-	result5, err := tvwap(testHistoricalTickers5, testTvwapStart5, testTvwapEnd5)
+	result5, err := Tvwap(testHistoricalTickers5, testTvwapStart5, testTvwapEnd5)
 	require.NoError(t, err)
 	require.Equal(t, testTvwapPrice5, result5)
 }
