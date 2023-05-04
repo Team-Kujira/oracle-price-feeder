@@ -129,8 +129,11 @@ func convertTickersToUSD(
 
 	// calculate USD values
 
+	// more than 6 conversions for the USD price is probably not very accurate
+	maxConversions := 6
 	rates := map[string]Rate{}
-	for {
+
+	for i := 0; i < maxConversions; i++ {
 		unresolved := []Vwap{}
 
 		sort.Slice(vwaps, func(i, j int) bool {
