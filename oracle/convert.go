@@ -141,13 +141,14 @@ func convertTickersToUSD(
 
 		for _, vwap := range vwaps {
 			rate := Rate{}
-			found := false
+			add := false
 			if vwap.Quote == "USD" {
 				rate.Value = vwap.Value
 				rate.Volume = vwap.Volume.Mul(vwap.Value)
-				found = true
+				add = true
 			} else {
 				quoteRate, found := rates[vwap.Quote]
+				add = found
 				if found {
 					rate.Value = vwap.Value.Mul(quoteRate.Value)
 					rate.Volume = vwap.Volume.Mul(vwap.Value)
@@ -156,7 +157,7 @@ func convertTickersToUSD(
 				}
 			}
 
-			if found {
+			if add {
 				// VWAP
 				existing, found := rates[vwap.Base]
 				if found {
