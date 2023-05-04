@@ -60,6 +60,7 @@ var (
 		provider.ProviderBitget:    {},
 		provider.ProviderMexc:      {},
 		provider.ProviderCrypto:    {},
+		provider.ProviderCurve:     {},
 		provider.ProviderMock:      {},
 		provider.ProviderStride:    {},
 		provider.ProviderXt:        {},
