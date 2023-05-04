@@ -147,14 +147,14 @@ func convertTickersToUSD(
 			add := false
 			if vwap.Quote == "USD" {
 				rate.Value = vwap.Value
-				rate.Volume = vwap.Volume.Mul(vwap.Value)
+				rate.Volume = vwap.Volume
 				add = true
 			} else {
 				quoteRate, found := rates[vwap.Quote]
 				add = found
 				if found {
 					rate.Value = vwap.Value.Mul(quoteRate.Value)
-					rate.Volume = vwap.Volume.Mul(vwap.Value)
+					rate.Volume = vwap.Volume
 				} else {
 					unresolved = append(unresolved, vwap)
 				}

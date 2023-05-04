@@ -209,7 +209,7 @@ func TestConvertTickersToUsdVwap(t *testing.T) {
 	require.NoError(t, err)
 
 	// VWAP( BTCUSDT * USDTUSD, BTCUSD )
-	// ((30000*0.999*55+30050*45) / 100 = 30006.0
+	// ((30000*0.999*55*+30050*45) / 100 = 30006.0
 
 	require.Equal(
 		t,
@@ -217,12 +217,50 @@ func TestConvertTickersToUsdVwap(t *testing.T) {
 		rates["BTC"],
 	)
 
-	// VWAP( BTCUSDT * USDTUSD, BTCUSD ) * ETHBTC
-	// ((30000*0.999*55+30050*45) / 100 * 0.066 = 1980.396
+	// BTCUSD * ETHBTC
+	// 30050 * 0.066 = 1983.3
 
 	require.Equal(
 		t,
-		sdk.MustNewDecFromStr("1980.396"),
+		sdk.MustNewDecFromStr("1983.3"),
 		rates["ETH"],
 	)
+}
+
+func TestConvertTickersToUsdEmptyProvider(t *testing.T) {
+	providerPrices := provider.AggregatedProviderPrices{}
+
+	providerPrices[provider.ProviderBinance] = map[string]types.TickerPrice{}
+
+	providerPairs := map[provider.Name][]types.CurrencyPair{
+		provider.ProviderBinance: {
+			types.CurrencyPair{Base: "BTC", Quote: "USD"},
+		},
+	}
+
+	rates, err := convertTickersToUSD(
+		zerolog.Nop(),
+		providerPrices,
+		providerPairs,
+		make(map[string]sdk.Dec),
+	)
+	require.NoError(t, err)
+
+	require.Equal(t, 0, len(rates))
+}
+
+func TestConvertTickersToUsdEmptyPrices(t *testing.T) {
+	providerPrices := provider.AggregatedProviderPrices{}
+
+	providerPairs := map[provider.Name][]types.CurrencyPair{}
+
+	rates, err := convertTickersToUSD(
+		zerolog.Nop(),
+		providerPrices,
+		providerPairs,
+		make(map[string]sdk.Dec),
+	)
+	require.NoError(t, err)
+
+	require.Equal(t, 0, len(rates))
 }
