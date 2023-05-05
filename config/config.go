@@ -276,6 +276,7 @@ func ParseConfig(configPath string) (Config, error) {
 	}
 
 	derivativeDenoms := map[string]struct{}{}
+	derivativeBases := map[string]struct{}{}
 	pairs := make(map[string]map[provider.Name]struct{})
 	coinQuotes := make(map[string]struct{})
 	for i, cp := range cfg.CurrencyPairs {
@@ -286,6 +287,7 @@ func ParseConfig(configPath string) (Config, error) {
 			coinQuotes[cp.Quote] = struct{}{}
 		}
 		if cp.Derivative != "" {
+			derivativeBases[cp.Base] = struct{}{}
 			derivativeDenoms[cp.Base+cp.Quote] = struct{}{}
 			_, ok := SupportedDerivatives[cp.Derivative]
 			if !ok {
@@ -316,7 +318,7 @@ func ParseConfig(configPath string) (Config, error) {
 	if !cfg.ProviderMinOverride {
 		for base, providers := range pairs {
 			_, isMock := pairs[base]["mock"]
-			_, isDerivative := derivativeDenoms[base]
+			_, isDerivative := derivativeBases[base]
 			if !isDerivative && !isMock && len(providers) < 3 {
 				return cfg, fmt.Errorf("must have at least three providers for %s", base)
 			}
