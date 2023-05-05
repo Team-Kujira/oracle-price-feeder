@@ -71,7 +71,7 @@ type Oracle struct {
 	history            history.PriceHistory
 	derivatives        map[string]derivative.Derivative
 	derivativePairs    map[string][]types.CurrencyPair
-	derivativeDenoms   map[string]struct{}
+	derivativeSymbols  map[string]struct{}
 
 	mtx             sync.RWMutex
 	lastPriceSyncTS time.Time
@@ -116,21 +116,21 @@ func New(
 		}
 	}
 	return &Oracle{
-		logger:           logger.With().Str("module", "oracle").Logger(),
-		closer:           pfsync.NewCloser(),
-		oracleClient:     oc,
-		providerPairs:    providerPairs,
-		priceProviders:   make(map[provider.Name]provider.Provider),
-		previousPrevote:  nil,
-		providerTimeout:  providerTimeout,
-		deviations:       deviations,
-		paramCache:       ParamCache{},
-		endpoints:        endpoints,
-		healthchecks:     healthchecks,
-		derivatives:      derivatives,
-		derivativePairs:  derivativePairs,
-		derivativeDenoms: derivativeDenoms,
-		history:          history,
+		logger:            logger.With().Str("module", "oracle").Logger(),
+		closer:            pfsync.NewCloser(),
+		oracleClient:      oc,
+		providerPairs:     providerPairs,
+		priceProviders:    make(map[provider.Name]provider.Provider),
+		previousPrevote:   nil,
+		providerTimeout:   providerTimeout,
+		deviations:        deviations,
+		paramCache:        ParamCache{},
+		endpoints:         endpoints,
+		healthchecks:      healthchecks,
+		derivatives:       derivatives,
+		derivativePairs:   derivativePairs,
+		derivativeSymbols: derivativeDenoms,
+		history:           history,
 	}
 }
 
@@ -212,9 +212,8 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 		}
 
 		for _, pair := range currencyPairs {
-			_, isDerivative := o.derivativeDenoms[pair.Base]
 			_, ok := requiredRates[pair.Base]
-			if !ok && !isDerivative {
+			if !ok {
 				requiredRates[pair.Base] = struct{}{}
 			}
 		}
@@ -254,7 +253,7 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 				if (!ok || ticker == types.TickerPrice{}) {
 					return fmt.Errorf("no ticker price found for %s", pair)
 				}
-				_, isDerivative := o.derivativeDenoms[pair.Base]
+				_, isDerivative := o.derivativeSymbols[pair.String()]
 				if isDerivative {
 					err := o.history.AddTickerPrice(pair, providerName.String(), ticker)
 					if err != nil {
@@ -265,7 +264,7 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 					if !ok {
 						providerPrices[providerName] = map[string]types.TickerPrice{}
 					}
-					providerPrices[providerName][pair.Base] = ticker
+					providerPrices[providerName][pair.String()] = ticker
 				}
 			}
 			return nil
@@ -274,6 +273,20 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 
 	if err := g.Wait(); err != nil {
 		o.logger.Debug().Err(err).Msg("failed to get ticker prices from provider")
+	}
+
+	for name, pairs := range o.derivativePairs {
+		pairsMap := map[string]types.TickerPrice{}
+		for _, pair := range pairs {
+			tickerPrice, err := o.derivatives[name].GetPrice(pair)
+			if err != nil {
+				// o.logger.Err(err).Msg("failed to get derivative price")
+				continue
+			}
+			pairsMap[pair.String()] = tickerPrice
+		}
+
+		providerPrices["_derivative"] = pairsMap
 	}
 
 	computedPrices, err := GetComputedPrices(
@@ -294,33 +307,9 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 			}
 		}
 
-		return fmt.Errorf(
-			"unable to get prices for: %s",
-			strings.Join(missingPrices, ", "),
+		o.logger.Error().Msg(
+			"unable to get prices for: " + strings.Join(missingPrices, ", "),
 		)
-	}
-
-	for name, pairs := range o.derivativePairs {
-		pairsMap := map[string]types.CurrencyPair{}
-		for _, pair := range pairs {
-			pairsMap[pair.String()] = pair
-		}
-		prices, err := o.derivatives[name].GetPrices(pairs...)
-		if err != nil {
-			return err
-		}
-		for symbol, price := range prices {
-			pair := pairsMap[symbol]
-			if pair.Quote != config.DenomUSD {
-				basePrice, ok := computedPrices[pair.Quote]
-				if !ok {
-					o.logger.Error().Str("pair", pair.String()).Msg("missing base price for derivative pair")
-					continue
-				}
-				price = price.Mul(basePrice)
-			}
-			computedPrices[pair.Base] = price
-		}
 	}
 
 	o.prices = computedPrices
@@ -338,8 +327,7 @@ func GetComputedPrices(
 	providerPairs map[provider.Name][]types.CurrencyPair,
 	deviations map[string]sdk.Dec,
 ) (prices map[string]sdk.Dec, err error) {
-
-	convertedTickers, err := convertTickersToUSD(
+	rates, err := convertTickersToUSD(
 		logger,
 		providerPrices,
 		providerPairs,
@@ -349,32 +337,7 @@ func GetComputedPrices(
 		return nil, err
 	}
 
-	for providerName, tickerPrices := range convertedTickers {
-		for denom, tickerPrice := range tickerPrices {
-			provider.TelemetryProviderPrice(
-				providerName,
-				denom,
-				float32(tickerPrice.Price.MustFloat64()),
-				float32(tickerPrice.Volume.MustFloat64()),
-			)
-		}
-	}
-
-	filteredProviderPrices, err := FilterTickerDeviations(
-		logger,
-		convertedTickers,
-		deviations,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	vwapPrices, err := ComputeVWAP(filteredProviderPrices)
-	if err != nil {
-		return nil, err
-	}
-
-	return vwapPrices, nil
+	return rates, nil
 }
 
 // GetParamCache returns the last updated parameters of the x/oracle module
@@ -455,7 +418,6 @@ func NewProvider(
 ) (provider.Provider, error) {
 	endpoint.Name = providerName
 	providerLogger := logger.With().Str("provider", providerName.String()).Logger()
-	fmt.Println(providerName)
 	switch providerName {
 
 	case provider.ProviderBinance, provider.ProviderBinanceUS:
@@ -474,6 +436,8 @@ func NewProvider(
 		return provider.NewCoinbaseProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderCrypto:
 		return provider.NewCryptoProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderCurve:
+		return provider.NewCurveProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderFin:
 		return provider.NewFinProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderFinUsk:

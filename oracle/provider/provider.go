@@ -46,6 +46,7 @@ const (
 	ProviderBybit     Name = "bybit"
 	ProviderMexc      Name = "mexc"
 	ProviderCrypto    Name = "crypto"
+	ProviderCurve     Name = "curve"
 	ProviderMock      Name = "mock"
 	ProviderStride    Name = "stride"
 	ProviderXt        Name = "xt"
@@ -270,6 +271,8 @@ func (e *Endpoint) SetDefaults() {
 		defaults = coinbaseDefaultEndpoints
 	case ProviderCrypto:
 		defaults = cryptoDefaultEndpoints
+	case ProviderCurve:
+		defaults = curveDefaultEndpoints
 	case ProviderFin:
 		defaults = finDefaultEndpoints
 	case ProviderFinUsk:
