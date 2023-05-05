@@ -178,6 +178,13 @@ providers = [
 	"huobi"
 ]
 
+[[currency_pairs]]
+base = "STATOM"
+quote = "USDT"
+providers = ["osmosis"]
+derivative = "tvwap"
+derivative_period = "30m"
+
 [account]
 address = "kujira15nejfgcaanqpw25ru4arvfd0fwy6j8clccvwx4"
 validator = "kujiravalcons14rjlkfzp56733j5l5nfk6fphjxymgf8mj04d5p"
@@ -217,12 +224,13 @@ timeout = "200ms"
 	require.Equal(t, "20s", cfg.Server.WriteTimeout)
 	require.Equal(t, "20s", cfg.Server.ReadTimeout)
 	require.True(t, cfg.Server.VerboseCORS)
-	require.Len(t, cfg.CurrencyPairs, 3)
+	require.Len(t, cfg.CurrencyPairs, 4)
 	require.Equal(t, "ATOM", cfg.CurrencyPairs[0].Base)
 	require.Equal(t, "USDT", cfg.CurrencyPairs[0].Quote)
 	require.Len(t, cfg.CurrencyPairs[0].Providers, 3)
 	require.Equal(t, provider.ProviderKraken, cfg.CurrencyPairs[0].Providers[0])
 	require.Equal(t, provider.ProviderBinance, cfg.CurrencyPairs[0].Providers[1])
+	require.Equal(t, "tvwap", cfg.CurrencyPairs[3].Derivative)
 }
 
 func TestParseConfig_Valid_NoTelemetry(t *testing.T) {
