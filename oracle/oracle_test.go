@@ -13,10 +13,10 @@ import (
 
 	"price-feeder/config"
 	"price-feeder/oracle/client"
+	"price-feeder/oracle/derivative"
 	"price-feeder/oracle/history"
 	"price-feeder/oracle/provider"
 	"price-feeder/oracle/types"
-	"price-feeder/oracle/derivative"
 )
 
 type mockProvider struct {
@@ -35,13 +35,17 @@ func (m mockProvider) GetAvailablePairs() (map[string]struct{}, error) {
 	return map[string]struct{}{}, nil
 }
 
+func (m mockProvider) SetPairs([]types.CurrencyPair) error {
+	return nil
+}
+
 func (m mockProvider) CurrencyPairToProviderPair(pair types.CurrencyPair) string {
 	return ""
 }
 
-func (m mockProvider) ProviderPairToCurrencyPair(pair string) types.CurrencyPair {
-	return types.CurrencyPair{}
-}
+// func (m mockProvider) ProviderPairToCurrencyPair(pair string) types.CurrencyPair {
+// 	return types.CurrencyPair{}
+// }
 
 type failingProvider struct {
 	mockProvider

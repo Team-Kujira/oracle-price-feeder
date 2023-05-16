@@ -62,16 +62,14 @@ func NewFinUskProvider(
 		nil,
 	)
 
+	availablePairs, _ := provider.GetAvailablePairs()
+	provider.setPairs(pairs, availablePairs, nil)
+
 	go startPolling(provider, provider.endpoints.PollInterval, logger)
 	return provider, nil
 }
 
 func (p *FinUskProvider) Poll() error {
-	_, found := p.pairs["USKUSDC"]
-	if !found {
-		return nil
-	}
-
 	content, err := p.httpGet("/cosmwasm/wasm/v1/contract/kujira1rwx6w02alc4kaz7xpyg3rlxpjl4g63x5jq292mkxgg65zqpn5llq202vh5/smart/eyJib29rIjp7ImxpbWl0IjoxfX0K")
 	if err != nil {
 		return err
@@ -97,15 +95,19 @@ func (p *FinUskProvider) Poll() error {
 
 	price := base.Add(quote).QuoInt64(2)
 
-	// contract has axlUSDC as base and USK as quote, so switch that
-	price = strToDec("1").Quo(price)
-
-	p.tickers["USKUSDC"] = types.TickerPrice{
-		Price:  price,
-		Volume: strToDec("1"),
-		Time:   timestamp,
-	}
+	p.setTickerPrice(
+		"USDCUSK",
+		price,
+		strToDec("1"),
+		timestamp,
+	)
 
 	p.logger.Debug().Msg("updated USK")
 	return nil
+}
+
+func (p *FinUskProvider) GetAvailablePairs() (map[string]struct{}, error) {
+	symbols := map[string]struct{}{}
+	symbols["USDCUSK"] = struct{}{}
+	return symbols, nil
 }

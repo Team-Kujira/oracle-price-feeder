@@ -55,23 +55,31 @@ func NewHuobiProvider(
 		nil,
 		nil,
 	)
+
+	availablePairs, _ := provider.GetAvailablePairs()
+	provider.setPairs(pairs, availablePairs, currencyPairToHuobiSymbol)
+
 	go startPolling(provider, provider.endpoints.PollInterval, logger)
 	return provider, nil
 }
 
-func (p *HuobiProvider) Poll() error {
-	symbols := make(map[string]string, len(p.pairs))
-	for _, pair := range p.pairs {
-		symbols[strings.ToLower(pair.String())] = pair.String()
-	}
-
+func (p *HuobiProvider) getTickers() (HuobiTickersResponse, error) {
 	content, err := p.httpGet("/market/tickers")
 	if err != nil {
-		return err
+		return HuobiTickersResponse{}, err
 	}
 
 	var tickers HuobiTickersResponse
 	err = json.Unmarshal(content, &tickers)
+	if err != nil {
+		return HuobiTickersResponse{}, err
+	}
+
+	return tickers, nil
+}
+
+func (p *HuobiProvider) Poll() error {
+	tickers, err := p.getTickers()
 	if err != nil {
 		return err
 	}
@@ -79,18 +87,37 @@ func (p *HuobiProvider) Poll() error {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 	now := time.Now()
+
 	for _, ticker := range tickers.Data {
-		symbol, ok := symbols[ticker.Symbol]
-		if !ok {
+		if !p.isPair(ticker.Symbol) {
 			continue
 		}
 
-		p.tickers[symbol] = types.TickerPrice{
-			Price:  floatToDec(ticker.Price),
-			Volume: floatToDec(ticker.Volume),
-			Time:   now,
-		}
+		p.setTickerPrice(
+			ticker.Symbol,
+			floatToDec(ticker.Price),
+			floatToDec(ticker.Volume),
+			now,
+		)
 	}
 	p.logger.Debug().Msg("updated tickers")
 	return nil
+}
+
+func (p *HuobiProvider) GetAvailablePairs() (map[string]struct{}, error) {
+	tickers, err := p.getTickers()
+	if err != nil {
+		return nil, nil
+	}
+
+	symbols := map[string]struct{}{}
+	for _, ticker := range tickers.Data {
+		symbols[ticker.Symbol] = struct{}{}
+	}
+
+	return symbols, nil
+}
+
+func currencyPairToHuobiSymbol(pair types.CurrencyPair) string {
+	return strings.ToLower(pair.String())
 }

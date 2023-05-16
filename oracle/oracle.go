@@ -327,6 +327,18 @@ func GetComputedPrices(
 	providerPairs map[provider.Name][]types.CurrencyPair,
 	deviations map[string]sdk.Dec,
 ) (prices map[string]sdk.Dec, err error) {
+
+	for providerName, tickerPrices := range providerPrices {
+		for denom, tickerPrice := range tickerPrices {
+			provider.TelemetryProviderPrice(
+				providerName,
+				denom,
+				float32(tickerPrice.Price.MustFloat64()),
+				float32(tickerPrice.Volume.MustFloat64()),
+			)
+		}
+	}
+
 	rates, err := convertTickersToUSD(
 		logger,
 		providerPrices,

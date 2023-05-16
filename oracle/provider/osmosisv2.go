@@ -68,6 +68,9 @@ func NewOsmosisV2Provider(
 	provider.pools["STATOMATOM"] = "803"
 	provider.pools["STOSMOOSMO"] = "833"
 
+	availablePairs, _ := provider.GetAvailablePairs()
+	provider.setPairs(pairs, availablePairs, nil)
+
 	go startPolling(provider, provider.endpoints.PollInterval, logger)
 	return provider, nil
 }
@@ -78,13 +81,18 @@ func (p *OsmosisV2Provider) Poll() error {
 
 	timestamp := time.Now()
 
-	for _, pair := range p.pairs {
-		poolId, found := p.pools[pair.Base+pair.Quote]
+	for symbol, pair := range p.getAllPairs() {
+		poolId, found := p.pools[symbol]
 		if !found {
-			poolId, found = p.pools[pair.Quote+pair.Base]
+			poolId, found = p.pools[symbol]
 			if !found {
 				continue
 			}
+		}
+
+		_, found = p.inverse[symbol]
+		if found {
+			pair = pair.Swap()
 		}
 
 		baseDenom, found := p.denoms[pair.Base]
@@ -117,13 +125,22 @@ func (p *OsmosisV2Provider) Poll() error {
 			return err
 		}
 
-		p.tickers[pair.String()] = types.TickerPrice{
-			Price:  strToDec(spotPrice.Price),
-			Volume: strToDec("1"),
-			Time:   timestamp,
-		}
+		p.setTickerPrice(
+			symbol,
+			strToDec(spotPrice.Price),
+			strToDec("1"),
+			timestamp,
+		)
 	}
 
 	p.logger.Debug().Msg("updated tickers")
 	return nil
+}
+
+func (p *OsmosisV2Provider) GetAvailablePairs() (map[string]struct{}, error) {
+	pairs := map[string]struct{}{
+		"STOSMOOSMO": {},
+		"STATOMATOM": {},
+	}
+	return pairs, nil
 }

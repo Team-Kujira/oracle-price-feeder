@@ -58,23 +58,31 @@ func NewOkxProvider(
 		nil,
 		nil,
 	)
+
+	availablePairs, _ := provider.GetAvailablePairs()
+	provider.setPairs(pairs, availablePairs, currencyPairToOkxSymbol)
+
 	go startPolling(provider, provider.endpoints.PollInterval, logger)
 	return provider, nil
 }
 
-func (p *OkxProvider) Poll() error {
-	symbols := make(map[string]string, len(p.pairs))
-	for _, pair := range p.pairs {
-		symbols[pair.Join("-")] = pair.String()
-	}
-
+func (p *OkxProvider) getTickers() (OkxTickersResponse, error) {
 	content, err := p.httpGet("/api/v5/market/tickers?instType=SPOT")
 	if err != nil {
-		return err
+		return OkxTickersResponse{}, err
 	}
 
 	var tickers OkxTickersResponse
 	err = json.Unmarshal(content, &tickers)
+	if err != nil {
+		return OkxTickersResponse{}, err
+	}
+
+	return tickers, nil
+}
+
+func (p *OkxProvider) Poll() error {
+	tickers, err := p.getTickers()
 	if err != nil {
 		return err
 	}
@@ -82,8 +90,7 @@ func (p *OkxProvider) Poll() error {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 	for _, ticker := range tickers.Data {
-		symbol, ok := symbols[ticker.Symbol]
-		if !ok {
+		if !p.isPair(ticker.Symbol) {
 			continue
 		}
 
@@ -95,12 +102,31 @@ func (p *OkxProvider) Poll() error {
 			continue
 		}
 
-		p.tickers[symbol] = types.TickerPrice{
-			Price:  strToDec(ticker.Price),
-			Volume: strToDec(ticker.Volume),
-			Time:   time.UnixMilli(timestamp),
-		}
+		p.setTickerPrice(
+			ticker.Symbol,
+			strToDec(ticker.Price),
+			strToDec(ticker.Volume),
+			time.UnixMilli(timestamp),
+		)
 	}
 	p.logger.Debug().Msg("updated tickers")
 	return nil
+}
+
+func (p *OkxProvider) GetAvailablePairs() (map[string]struct{}, error) {
+	tickers, err := p.getTickers()
+	if err != nil {
+		return nil, err
+	}
+
+	symbols := map[string]struct{}{}
+	for _, ticker := range tickers.Data {
+		symbols[ticker.Symbol] = struct{}{}
+	}
+
+	return symbols, nil
+}
+
+func currencyPairToOkxSymbol(pair types.CurrencyPair) string {
+	return pair.Join("-")
 }

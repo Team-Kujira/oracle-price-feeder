@@ -58,41 +58,68 @@ func NewXtProvider(
 		nil,
 		nil,
 	)
+
+	availablePairs, _ := provider.GetAvailablePairs()
+	provider.setPairs(pairs, availablePairs, currencyPairToXtSymbol)
+
 	go startPolling(provider, provider.endpoints.PollInterval, logger)
 	return provider, nil
 }
 
-func (p *XtProvider) Poll() error {
-	symbols := make(map[string]string, len(p.pairs))
-	for _, pair := range p.pairs {
-		symbols[strings.ToLower(pair.Join("_"))] = pair.String()
-	}
-
+func (p *XtProvider) getTickers() (XtTickersResponse, error) {
 	content, err := p.httpGet("/v4/public/ticker")
 	if err != nil {
-		return err
+		return XtTickersResponse{}, err
 	}
 
 	var tickers XtTickersResponse
 	err = json.Unmarshal(content, &tickers)
+	if err != nil {
+		return XtTickersResponse{}, err
+	}
+
+	return tickers, nil
+}
+
+func (p *XtProvider) Poll() error {
+	tickers, err := p.getTickers()
 	if err != nil {
 		return err
 	}
 
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
+
 	for _, ticker := range tickers.Result {
-		symbol, ok := symbols[ticker.Symbol]
-		if !ok {
+		if !p.isPair(ticker.Symbol) {
 			continue
 		}
 
-		p.tickers[symbol] = types.TickerPrice{
-			Price:  strToDec(ticker.Price),
-			Volume: strToDec(ticker.Volume),
-			Time:   time.UnixMilli(ticker.Time),
-		}
+		p.setTickerPrice(
+			ticker.Symbol,
+			strToDec(ticker.Price),
+			strToDec(ticker.Volume),
+			time.UnixMilli(ticker.Time),
+		)
 	}
 	p.logger.Debug().Msg("updated tickers")
 	return nil
+}
+
+func (p *XtProvider) GetAvailablePairs() (map[string]struct{}, error) {
+	tickers, err := p.getTickers()
+	if err != nil {
+		return nil, err
+	}
+
+	symbols := map[string]struct{}{}
+	for _, ticker := range tickers.Result {
+		symbols[ticker.Symbol] = struct{}{}
+	}
+
+	return symbols, nil
+}
+
+func currencyPairToXtSymbol(pair types.CurrencyPair) string {
+	return strings.ToLower(pair.Join("_"))
 }

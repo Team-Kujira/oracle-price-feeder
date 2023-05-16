@@ -57,12 +57,17 @@ type (
 	Provider interface {
 		// GetTickerPrices returns the tickerPrices based on the provided pairs.
 		GetTickerPrices(...types.CurrencyPair) (map[string]types.TickerPrice, error)
+		// GetAvailablePairs returns the list of all supported pairs.
+		GetAvailablePairs() (map[string]struct{}, error)
+
 		// SubscribeCurrencyPairs sends subscription messages for the new currency
 		// pairs and adds them to the providers subscribed pairs
 		SubscribeCurrencyPairs(...types.CurrencyPair) error
 		CurrencyPairToProviderPair(types.CurrencyPair) string
-		ProviderPairToCurrencyPair(string) types.CurrencyPair
+		// ProviderPairToCurrencyPair(string) types.CurrencyPair
 	}
+
+	CurrencyPairToProviderSymbol func(types.CurrencyPair) string
 
 	provider struct {
 		ctx       context.Context
@@ -72,6 +77,7 @@ type (
 		logger    zerolog.Logger
 		mtx       sync.RWMutex
 		pairs     map[string]types.CurrencyPair
+		inverse   map[string]types.CurrencyPair
 		tickers   map[string]types.TickerPrice
 		websocket *WebsocketController
 	}
@@ -115,11 +121,7 @@ func (p *provider) Init(
 	p.endpoints = endpoints
 	p.endpoints.SetDefaults()
 	p.logger = logger.With().Str("provider", p.endpoints.Name.String()).Logger()
-	p.pairs = make(map[string]types.CurrencyPair, len(pairs))
-	for _, pair := range pairs {
-		p.pairs[pair.String()] = pair
-	}
-	p.tickers = make(map[string]types.TickerPrice, len(pairs))
+	p.tickers = map[string]types.TickerPrice{}
 	p.http = newDefaultHTTPClient()
 	p.httpBase = p.endpoints.Urls[0]
 	if p.endpoints.Websocket != "" {
@@ -186,19 +188,7 @@ func (p *provider) addPairs(pairs ...types.CurrencyPair) []types.CurrencyPair {
 }
 
 func (p *provider) CurrencyPairToProviderPair(pair types.CurrencyPair) string {
-	return pair.Base + "_" + pair.Quote
-}
-
-func (p *provider) ProviderPairToCurrencyPair(pair string) types.CurrencyPair {
-	tokens := strings.Split(pair, "_")
-	if len(tokens) != 2 {
-		p.logger.Warn().Str("pair", pair).Msg("failed to convert to currency pair")
-		return types.CurrencyPair{}
-	}
-	return types.CurrencyPair{
-		Base:  tokens[0],
-		Quote: tokens[1],
-	}
+	return pair.String()
 }
 
 func (p *provider) httpGet(path string) ([]byte, error) {
@@ -346,9 +336,110 @@ func startPolling(p PollingProvider, interval time.Duration, logger zerolog.Logg
 	}
 }
 
-func (p *provider) GetAvailablePairs() (map[string]struct{}, error) {
-	p.logger.Warn().Msg("available pairs query not implemented")
-	return map[string]struct{}{}, nil
+func (p *provider) setPairs(
+	pairs []types.CurrencyPair,
+	availablePairs map[string]struct{},
+	toProviderSymbol CurrencyPairToProviderSymbol,
+) error {
+	p.pairs = map[string]types.CurrencyPair{}
+	p.inverse = map[string]types.CurrencyPair{}
+
+	if toProviderSymbol == nil {
+		toProviderSymbol = func(pair types.CurrencyPair) string {
+			return pair.String()
+		}
+	}
+
+	if availablePairs == nil {
+		p.logger.Warn().Msg("available pairs not provided")
+
+		for _, pair := range pairs {
+			// If availablePairs is nil, GetAvailablePairs() is probably
+			// not implemented for this provider
+			inverted := pair.Swap()
+
+			p.pairs[toProviderSymbol(pair)] = pair
+			p.inverse[toProviderSymbol(inverted)] = pair
+		}
+		return nil
+	}
+
+	for _, pair := range pairs {
+		inverted := pair.Swap()
+
+		providerSymbol := toProviderSymbol(inverted)
+		_, found := availablePairs[providerSymbol]
+		if found {
+			p.inverse[providerSymbol] = pair
+			continue
+		}
+
+		symbol := pair.String()
+		providerSymbol = toProviderSymbol(pair)
+		_, found = availablePairs[providerSymbol]
+		if found {
+			p.pairs[providerSymbol] = pair
+			continue
+		}
+
+		p.logger.Error().
+			Msgf("%s is not supported by this provider", symbol)
+	}
+
+	return nil
+}
+
+func (p *provider) setTickerPrice(symbol string, price sdk.Dec, volume sdk.Dec, timestamp time.Time) {
+
+	// check if price needs to be inverted
+	pair, inverse := p.inverse[symbol]
+	if inverse {
+		p.tickers[pair.String()] = types.TickerPrice{
+			Price:  invertDec(price),
+			Volume: volume.Mul(price),
+			Time:   timestamp,
+		}
+		return
+	}
+
+	pair, found := p.pairs[symbol]
+	if !found {
+		p.logger.Error().
+			Str("symbol", symbol).
+			Msg("symbol not found")
+		return
+	}
+	p.tickers[pair.String()] = types.TickerPrice{
+		Price:  price,
+		Volume: volume,
+		Time:   timestamp,
+	}
+}
+
+func (p *provider) isPair(symbol string) bool {
+	if _, found := p.pairs[symbol]; found {
+		return true
+	}
+
+	if _, found := p.inverse[symbol]; found {
+		return true
+	}
+
+	return false
+}
+
+func (p *provider) getAllPairs() map[string]types.CurrencyPair {
+	pairs := map[string]types.CurrencyPair{}
+
+	for symbol, pair := range p.pairs {
+		pairs[symbol] = pair
+	}
+
+	for symbol, pair := range p.inverse {
+		pairs[symbol] = pair
+	}
+
+	return pairs
 }
 
 // String cast provider name to string.
@@ -404,4 +495,11 @@ func strToDec(str string) sdk.Dec {
 
 func floatToDec(f float64) sdk.Dec {
 	return sdk.MustNewDecFromStr(strconv.FormatFloat(f, 'f', -1, 64))
+}
+
+func invertDec(d sdk.Dec) sdk.Dec {
+	if d.IsZero() || d.IsNil() {
+		return sdk.ZeroDec()
+	}
+	return sdk.NewDec(1).Quo(d)
 }

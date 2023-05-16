@@ -3,7 +3,6 @@ package provider
 import (
 	"context"
 	"encoding/json"
-	"strings"
 	"time"
 
 	"price-feeder/oracle/types"
@@ -27,7 +26,6 @@ type (
 	// REF: https://docs.kraken.com/rest
 	KrakenProvider struct {
 		provider
-		symbols map[string]string
 	}
 
 	KrakenTickerResponse struct {
@@ -64,59 +62,30 @@ func NewKrakenProvider(
 		nil,
 	)
 
-	content, err := provider.httpGet("/0/public/AssetPairs")
-	if err != nil {
-		return nil, err
-	}
-
-	var krakenPairs KrakenPairsResponse
-	err = json.Unmarshal(content, &krakenPairs)
-	if err != nil {
-		return nil, err
-	}
-
-	provider.symbols = map[string]string{}
-	for symbol, pair := range krakenPairs.Result {
-		values := strings.Split(pair.WsName, "/")
-		base := values[0]
-		quote := values[1]
-		switch quote {
-		case "XBT":
-			quote = "BTC"
-		case "ZUSD":
-			quote = "USD"
-		}
-
-		switch base {
-		case "XBT":
-			base = "BTC"
-		case "LUNA":
-			base = "LUNC"
-		case "LUNA2":
-			base = "LUNA"
-		}
-
-		provider.symbols[base+quote] = symbol
-	}
+	availablePairs, _ := provider.GetAvailablePairs()
+	provider.setPairs(pairs, availablePairs, currencyPairToHitKrakenSymbol)
 
 	go startPolling(provider, provider.endpoints.PollInterval, logger)
 	return provider, nil
 }
 
-func (p *KrakenProvider) Poll() error {
-	symbols := make(map[string]string, len(p.pairs))
-	for _, pair := range p.pairs {
-		krakenSymbol := p.symbols[pair.String()]
-		symbols[krakenSymbol] = pair.String()
-	}
-
+func (p *KrakenProvider) getTickers() (KrakenTickerResponse, error) {
 	content, err := p.httpGet("/0/public/Ticker")
 	if err != nil {
-		return err
+		return KrakenTickerResponse{}, err
 	}
 
 	var tickers KrakenTickerResponse
 	err = json.Unmarshal(content, &tickers)
+	if err != nil {
+		return KrakenTickerResponse{}, err
+	}
+
+	return tickers, nil
+}
+
+func (p *KrakenProvider) Poll() error {
+	tickers, err := p.getTickers()
 	if err != nil {
 		return err
 	}
@@ -127,17 +96,105 @@ func (p *KrakenProvider) Poll() error {
 	timestamp := time.Now()
 
 	for tickerSymbol, ticker := range tickers.Result {
-		symbol, ok := symbols[tickerSymbol]
-		if !ok {
+		if !p.isPair(tickerSymbol) {
 			continue
 		}
 
-		p.tickers[symbol] = types.TickerPrice{
-			Price:  strToDec(ticker.Price[0]),
-			Volume: strToDec(ticker.Volume[1]),
-			Time:   timestamp,
-		}
+		p.setTickerPrice(
+			tickerSymbol,
+			strToDec(ticker.Price[0]),
+			strToDec(ticker.Volume[1]),
+			timestamp,
+		)
 	}
 	p.logger.Debug().Msg("updated tickers")
 	return nil
+}
+
+func (p *KrakenProvider) GetAvailablePairs() (map[string]struct{}, error) {
+	tickers, err := p.getTickers()
+	if err != nil {
+		return nil, err
+	}
+
+	symbols := map[string]struct{}{}
+	for symbol := range tickers.Result {
+		symbols[symbol] = struct{}{}
+	}
+
+	return symbols, nil
+}
+
+func currencyPairToHitKrakenSymbol(pair types.CurrencyPair) string {
+	symbols := map[string]string{
+		"USDTUSD": "USDTZUSD",
+		"ETCETH":  "XETCXETH",
+		"ETCXBT":  "XETCXXBT",
+		"ETCEUR":  "XETCZEUR",
+		"ETCUSD":  "XETCZUSD",
+		"ETHXBT":  "XETHXXBT",
+		"ETHCAD":  "XETHZCAD",
+		"ETHEUR":  "XETHZEUR",
+		"ETHGBP":  "XETHZGBP",
+		"ETHJPY":  "XETHZJPY",
+		"ETHUSD":  "XETHZUSD",
+		"LTCXBT":  "XLTCXXBT",
+		"LTCEUR":  "XLTCZEUR",
+		"LTCJPY":  "XLTCZJPY",
+		"LTCUSD":  "XLTCZUSD",
+		"MLNETH":  "XMLNXETH",
+		"MLNXBT":  "XMLNXXBT",
+		"MLNEUR":  "XMLNZEUR",
+		"MLNUSD":  "XMLNZUSD",
+		"REPXBT":  "XREPXXBT",
+		"REPEUR":  "XREPZEUR",
+		"REPUSD":  "XREPZUSD",
+		"XBTCAD":  "XXBTZCAD",
+		"XBTEUR":  "XXBTZEUR",
+		"XBTGBP":  "XXBTZGBP",
+		"XBTJPY":  "XXBTZJPY",
+		"XBTUSD":  "XXBTZUSD",
+		"XDGXBT":  "XXDGXXBT",
+		"XLMXBT":  "XXLMXXBT",
+		"XLMEUR":  "XXLMZEUR",
+		"XLMGBP":  "XXLMZGBP",
+		"XLMUSD":  "XXLMZUSD",
+		"XMRXBT":  "XXMRXXBT",
+		"XMREUR":  "XXMRZEUR",
+		"XMRUSD":  "XXMRZUSD",
+		"XRPXBT":  "XXRPXXBT",
+		"XRPCAD":  "XXRPZCAD",
+		"XRPEUR":  "XXRPZEUR",
+		"XRPJPY":  "XXRPZJPY",
+		"XRPUSD":  "XXRPZUSD",
+		"ZECXBT":  "XZECXXBT",
+		"ZECEUR":  "XZECZEUR",
+		"ZECUSD":  "XZECZUSD",
+		"EURUSD":  "ZEURZUSD",
+		"GBPUSD":  "ZGBPZUSD",
+		"USDCAD":  "ZUSDZCAD",
+		"USDJPY":  "ZUSDZJPY",
+	}
+	mapping := map[string]string{
+		"BTC":  "XBT",
+		"LUNC": "LUNA",
+		"LUNA": "LUNA2",
+	}
+
+	base, found := mapping[pair.Base]
+	if !found {
+		base = pair.Base
+	}
+
+	quote, found := mapping[pair.Quote]
+	if !found {
+		quote = pair.Quote
+	}
+
+	symbol, found := symbols[base+quote]
+	if !found {
+		symbol = base + quote
+	}
+
+	return symbol
 }

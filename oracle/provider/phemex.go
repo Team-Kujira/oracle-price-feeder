@@ -80,26 +80,26 @@ func NewPhemexProvider(
 		nil,
 	)
 
+	availablePairs, _ := provider.GetAvailablePairs()
+	provider.setPairs(pairs, availablePairs, currencyPairToPhemexSymbol)
+
 	provider.priceScales = map[string]float64{}
 	provider.valueScales = map[string]float64{}
 
-	content, err := provider.httpGet("/public/products")
+	products, err := provider.getProducts()
 	if err != nil {
 		return nil, err
 	}
 
-	var info PhemexProductsResponse
-	err = json.Unmarshal(content, &info)
-	if err != nil {
-		return nil, err
+	baseCurrencies := map[string]struct{}{}
+	for _, pair := range provider.pairs {
+		baseCurrencies[pair.Base] = struct{}{}
+	}
+	for _, pair := range provider.inverse {
+		baseCurrencies[pair.Quote] = struct{}{}
 	}
 
-	baseCurrencies := map[string]bool{}
-	for _, pair := range pairs {
-		baseCurrencies[pair.Base] = true
-	}
-
-	for _, currency := range info.Data.Currencies {
+	for _, currency := range products.Data.Currencies {
 		_, ok := baseCurrencies[currency.Denom]
 		if !ok {
 			continue
@@ -107,28 +107,41 @@ func NewPhemexProvider(
 		provider.valueScales[currency.Denom] = float64(currency.ValueScale)
 	}
 
-	for _, product := range info.Data.Products {
-		symbol := product.Base + product.Quote
-		_, ok := provider.pairs[symbol]
-		if !ok {
+	for _, product := range products.Data.Products {
+		if !provider.isPair(product.Symbol) {
 			continue
 		}
-		provider.priceScales[symbol] = float64(product.PriceScale)
+		provider.priceScales[product.Symbol] = float64(product.PriceScale)
 	}
 
 	// rate limit 100req/min ~1.66req/s
-	interval := time.Duration(len(pairs)*1700+2000) * time.Millisecond
+	interval := time.Duration(
+		len(provider.getAllPairs())*1700+2000,
+	) * time.Millisecond
 
 	go startPolling(provider, interval, logger)
 	return provider, nil
 }
 
-func (p *PhemexProvider) Poll() error {
-	for _, pair := range p.pairs {
-		go func(p *PhemexProvider, pair types.CurrencyPair) {
-			symbol := pair.String()
+func (p *PhemexProvider) getProducts() (PhemexProductsResponse, error) {
+	content, err := p.httpGet("/public/products")
+	if err != nil {
+		return PhemexProductsResponse{}, err
+	}
 
-			content, err := p.httpGet("/md/spot/ticker/24hr?symbol=s" + symbol)
+	var products PhemexProductsResponse
+	err = json.Unmarshal(content, &products)
+	if err != nil {
+		return PhemexProductsResponse{}, err
+	}
+
+	return products, nil
+}
+
+func (p *PhemexProvider) Poll() error {
+	for symbol, pair := range p.getAllPairs() {
+		go func(p *PhemexProvider, symbol string, pair types.CurrencyPair) {
+			content, err := p.httpGet("/md/spot/ticker/24hr?symbol=" + symbol)
 			if err != nil {
 				p.logger.Error().
 					Str("symbol", symbol).
@@ -153,6 +166,10 @@ func (p *PhemexProvider) Poll() error {
 				return
 			}
 
+			if _, found := p.inverse[symbol]; found {
+				pair = pair.Swap()
+			}
+
 			valueScale, ok := p.valueScales[pair.Base]
 			if !ok {
 				p.logger.Error().
@@ -161,21 +178,41 @@ func (p *PhemexProvider) Poll() error {
 				return
 			}
 
-			price := float64(ticker.Result.Price) / math.Pow(10, valueScale)
-			volume := float64(ticker.Result.Volume) / math.Pow(10, priceScale)
+			price := float64(ticker.Result.Price) / math.Pow(10, priceScale)
+			volume := float64(ticker.Result.Volume) / math.Pow(10, valueScale)
 
 			p.mtx.Lock()
 			defer p.mtx.Unlock()
 
-			p.tickers[pair.String()] = types.TickerPrice{
-				Price:  floatToDec(price),
-				Volume: floatToDec(volume),
-				Time:   time.UnixMicro(int64(ticker.Result.Time)),
-			}
-
-		}(p, pair)
+			p.setTickerPrice(
+				symbol,
+				floatToDec(price),
+				floatToDec(volume),
+				time.UnixMicro(int64(ticker.Result.Time)),
+			)
+		}(p, symbol, pair)
 	}
 
 	p.logger.Debug().Msg("updated tickers")
 	return nil
+}
+
+func (p *PhemexProvider) GetAvailablePairs() (map[string]struct{}, error) {
+	products, err := p.getProducts()
+	if err != nil {
+		return nil, err
+	}
+
+	symbols := map[string]struct{}{}
+	for _, product := range products.Data.Products {
+		if product.Symbol[0:1] == "s" {
+			symbols[product.Symbol] = struct{}{}
+		}
+	}
+
+	return symbols, nil
+}
+
+func currencyPairToPhemexSymbol(pair types.CurrencyPair) string {
+	return "s" + pair.String()
 }
