@@ -482,6 +482,8 @@ func NewProvider(
 		return provider.NewPhemexProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderPoloniex:
 		return provider.NewPoloniexProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderPyth:
+		return provider.NewPythProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderXt:
 		return provider.NewXtProvider(ctx, providerLogger, endpoint, providerPairs...)
 

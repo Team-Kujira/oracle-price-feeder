@@ -65,6 +65,7 @@ var (
 		provider.ProviderStride:     {},
 		provider.ProviderXt:         {},
 		provider.ProviderIdxOsmosis: {},
+		provider.ProviderPyth:       {},
 	}
 
 	SupportedDerivatives = map[string]struct{}{
