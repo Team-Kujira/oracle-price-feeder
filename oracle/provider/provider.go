@@ -22,34 +22,35 @@ const (
 	staleTickersCutoff   = 1 * time.Minute
 	providerCandlePeriod = 10 * time.Minute
 
-	ProviderFin       Name = "fin"
-	ProviderFinUsk    Name = "finusk"
-	ProviderKraken    Name = "kraken"
-	ProviderBinance   Name = "binance"
-	ProviderBinanceUS Name = "binanceus"
-	ProviderOsmosis   Name = "osmosis"
-	ProviderOsmosisV2 Name = "osmosisv2"
-	ProviderHuobi     Name = "huobi"
-	ProviderOkx       Name = "okx"
-	ProviderGate      Name = "gate"
-	ProviderCoinbase  Name = "coinbase"
-	ProviderBitget    Name = "bitget"
-	ProviderBitmart   Name = "bitmart"
-	ProviderBkex      Name = "bkex"
-	ProviderBitfinex  Name = "bitfinex"
-	ProviderBitforex  Name = "bitforex"
-	ProviderHitBtc    Name = "hitbtc"
-	ProviderPoloniex  Name = "poloniex"
-	ProviderPhemex    Name = "phemex"
-	ProviderLbank     Name = "lbank"
-	ProviderKucoin    Name = "kucoin"
-	ProviderBybit     Name = "bybit"
-	ProviderMexc      Name = "mexc"
-	ProviderCrypto    Name = "crypto"
-	ProviderCurve     Name = "curve"
-	ProviderMock      Name = "mock"
-	ProviderStride    Name = "stride"
-	ProviderXt        Name = "xt"
+	ProviderFin        Name = "fin"
+	ProviderFinUsk     Name = "finusk"
+	ProviderKraken     Name = "kraken"
+	ProviderBinance    Name = "binance"
+	ProviderBinanceUS  Name = "binanceus"
+	ProviderOsmosis    Name = "osmosis"
+	ProviderOsmosisV2  Name = "osmosisv2"
+	ProviderHuobi      Name = "huobi"
+	ProviderOkx        Name = "okx"
+	ProviderGate       Name = "gate"
+	ProviderCoinbase   Name = "coinbase"
+	ProviderBitget     Name = "bitget"
+	ProviderBitmart    Name = "bitmart"
+	ProviderBkex       Name = "bkex"
+	ProviderBitfinex   Name = "bitfinex"
+	ProviderBitforex   Name = "bitforex"
+	ProviderHitBtc     Name = "hitbtc"
+	ProviderPoloniex   Name = "poloniex"
+	ProviderPhemex     Name = "phemex"
+	ProviderLbank      Name = "lbank"
+	ProviderKucoin     Name = "kucoin"
+	ProviderBybit      Name = "bybit"
+	ProviderMexc       Name = "mexc"
+	ProviderCrypto     Name = "crypto"
+	ProviderCurve      Name = "curve"
+	ProviderMock       Name = "mock"
+	ProviderStride     Name = "stride"
+	ProviderXt         Name = "xt"
+	ProviderIdxOsmosis Name = "idxosmosis"
 )
 
 type (
@@ -271,6 +272,8 @@ func (e *Endpoint) SetDefaults() {
 		defaults = gateDefaultEndpoints
 	case ProviderHitBtc:
 		defaults = hitbtcDefaultEndpoints
+	case ProviderIdxOsmosis:
+		defaults = idxOsmosisDefaultEndpoints
 	case ProviderHuobi:
 		defaults = huobiDefaultEndpoints
 	case ProviderKraken:

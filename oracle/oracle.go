@@ -460,6 +460,8 @@ func NewProvider(
 		return provider.NewHitBtcProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderHuobi:
 		return provider.NewHuobiProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderIdxOsmosis:
+		return provider.NewIdxProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderKraken:
 		return provider.NewKrakenProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderKucoin:
