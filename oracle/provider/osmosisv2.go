@@ -63,10 +63,12 @@ func NewOsmosisV2Provider(
 	provider.denoms["STOSMO"] = "ibc/D176154B0C63D1F9C6DCFB4F70349EBF2E2B5A87A05902F57A6AE92B863E9AEC"
 	provider.denoms["ATOM"] = "ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2"
 	provider.denoms["STATOM"] = "ibc/C140AFD542AE77BD7DCC83F13FDD8C5E5BB8C4929785E6EC2F4C636F98F17901"
+	provider.denoms["KUJI"] = "ibc/BB6BCDB515050BAE97516111873CCD7BCF1FD0CCB723CC12F3C4F704D6C646CE"
 
 	provider.pools = map[string]string{}
 	provider.pools["STATOMATOM"] = "803"
 	provider.pools["STOSMOOSMO"] = "833"
+	provider.pools["KUJIOSMO"] = "744"
 
 	availablePairs, _ := provider.GetAvailablePairs()
 	provider.setPairs(pairs, availablePairs, nil)
@@ -141,6 +143,7 @@ func (p *OsmosisV2Provider) GetAvailablePairs() (map[string]struct{}, error) {
 	pairs := map[string]struct{}{
 		"STOSMOOSMO": {},
 		"STATOMATOM": {},
+		"KUJIOSMO":   {},
 	}
 	return pairs, nil
 }
