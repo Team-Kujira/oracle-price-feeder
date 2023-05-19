@@ -64,6 +64,7 @@ var (
 		provider.ProviderMock:      {},
 		provider.ProviderStride:    {},
 		provider.ProviderXt:        {},
+		provider.ProviderZero:      {},
 	}
 
 	SupportedDerivatives = map[string]struct{}{

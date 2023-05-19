@@ -470,6 +470,8 @@ func NewProvider(
 		return provider.NewPoloniexProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderXt:
 		return provider.NewXtProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderZero:
+		return provider.NewZeroProvider(ctx, providerLogger, endpoint, providerPairs...)
 
 	}
 	return nil, fmt.Errorf("provider %s not found", providerName)

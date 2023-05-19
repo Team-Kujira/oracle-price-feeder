@@ -50,6 +50,7 @@ const (
 	ProviderMock      Name = "mock"
 	ProviderStride    Name = "stride"
 	ProviderXt        Name = "xt"
+	ProviderZero      Name = "zero"
 )
 
 type (
@@ -154,6 +155,12 @@ func (p *provider) GetTickerPrices(pairs ...types.CurrencyPair) (map[string]type
 		if !ok {
 			p.logger.Warn().Str("pair", symbol).Msg("missing ticker price for pair")
 		} else {
+			if price.Price.IsZero() {
+				p.logger.Warn().
+					Str("pair", symbol).
+					Msg("ticker price is '0'")
+				continue
+			}
 			if time.Since(price.Time) > staleTickersCutoff {
 				p.logger.Warn().Str("pair", symbol).Time("time", price.Time).Msg("tickers data is stale")
 			} else {
@@ -305,6 +312,8 @@ func (e *Endpoint) SetDefaults() {
 		defaults = poloniexDefaultEndpoints
 	case ProviderXt:
 		defaults = xtDefaultEndpoints
+	case ProviderZero:
+		defaults = zeroDefaultEndpoints
 	default:
 		return
 	}
