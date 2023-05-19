@@ -1,6 +1,6 @@
 # Oracle Price Feeder
 
-This is a standalone version of [Umee's fantastic work](https://github.com/umee-network/umee/tree/main/price-feeder) migrating [Terra's oracle-feeder](https://github.com/terra-money/oracle-feeder) app to Go, and integrating it more closely with the Cosmos SDK.
+This is a standalone version of [Ojo's fantastic work](https://github.com/ojo-network/price-feeder) migrating [Terra's oracle-feeder](https://github.com/terra-money/oracle-feeder) app to Go, and integrating it more closely with the Cosmos SDK.
 
 ## Changes
 
