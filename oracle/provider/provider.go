@@ -52,6 +52,7 @@ const (
 	ProviderStride     Name = "stride"
 	ProviderXt         Name = "xt"
 	ProviderIdxOsmosis Name = "idxosmosis"
+	ProviderZero       Name = "zero"
 )
 
 type (
@@ -158,6 +159,12 @@ func (p *provider) GetTickerPrices(pairs ...types.CurrencyPair) (map[string]type
 		if !ok {
 			p.logger.Warn().Str("pair", symbol).Msg("missing ticker price for pair")
 		} else {
+			if price.Price.IsZero() {
+				p.logger.Warn().
+					Str("pair", symbol).
+					Msg("ticker price is '0'")
+				continue
+			}
 			if time.Since(price.Time) > staleTickersCutoff {
 				p.logger.Warn().Str("pair", symbol).Time("time", price.Time).Msg("tickers data is stale")
 			} else {
@@ -301,6 +308,8 @@ func (e *Endpoint) SetDefaults() {
 		defaults = pythDefaultEndpoints
 	case ProviderXt:
 		defaults = xtDefaultEndpoints
+	case ProviderZero:
+		defaults = zeroDefaultEndpoints
 	default:
 		return
 	}
@@ -400,11 +409,22 @@ func (p *provider) setTickerPrice(symbol string, price sdk.Dec, volume sdk.Dec, 
 	// check if price needs to be inverted
 	pair, inverse := p.inverse[symbol]
 	if inverse {
+		price = invertDec(price)
+		volume = volume.Mul(price)
+
 		p.tickers[pair.String()] = types.TickerPrice{
-			Price:  invertDec(price),
-			Volume: volume.Mul(price),
+			Price:  price,
+			Volume: volume,
 			Time:   timestamp,
 		}
+
+		TelemetryProviderPrice(
+			p.endpoints.Name,
+			pair.String(),
+			float32(price.MustFloat64()),
+			float32(volume.MustFloat64()),
+		)
+
 		return
 	}
 
@@ -415,11 +435,19 @@ func (p *provider) setTickerPrice(symbol string, price sdk.Dec, volume sdk.Dec, 
 			Msg("symbol not found")
 		return
 	}
+
 	p.tickers[pair.String()] = types.TickerPrice{
 		Price:  price,
 		Volume: volume,
 		Time:   timestamp,
 	}
+
+	TelemetryProviderPrice(
+		p.endpoints.Name,
+		pair.String(),
+		float32(price.MustFloat64()),
+		float32(volume.MustFloat64()),
+	)
 }
 
 func (p *provider) isPair(symbol string) bool {

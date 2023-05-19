@@ -279,11 +279,20 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 		pairsMap := map[string]types.TickerPrice{}
 		for _, pair := range pairs {
 			tickerPrice, err := o.derivatives[name].GetPrice(pair)
+
 			if err != nil {
 				// o.logger.Err(err).Msg("failed to get derivative price")
 				continue
 			}
+
 			pairsMap[pair.String()] = tickerPrice
+
+			provider.TelemetryProviderPrice(
+				"_twap",
+				pair.String(),
+				float32(tickerPrice.Price.MustFloat64()),
+				float32(tickerPrice.Volume.MustFloat64()),
+			)
 		}
 
 		providerPrices["_derivative"] = pairsMap
@@ -327,17 +336,6 @@ func GetComputedPrices(
 	providerPairs map[provider.Name][]types.CurrencyPair,
 	deviations map[string]sdk.Dec,
 ) (prices map[string]sdk.Dec, err error) {
-
-	for providerName, tickerPrices := range providerPrices {
-		for denom, tickerPrice := range tickerPrices {
-			provider.TelemetryProviderPrice(
-				providerName,
-				denom,
-				float32(tickerPrice.Price.MustFloat64()),
-				float32(tickerPrice.Volume.MustFloat64()),
-			)
-		}
-	}
 
 	rates, err := convertTickersToUSD(
 		logger,
@@ -486,6 +484,8 @@ func NewProvider(
 		return provider.NewPythProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderXt:
 		return provider.NewXtProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderZero:
+		return provider.NewZeroProvider(ctx, providerLogger, endpoint, providerPairs...)
 
 	}
 	return nil, fmt.Errorf("provider %s not found", providerName)

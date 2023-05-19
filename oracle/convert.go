@@ -196,6 +196,13 @@ func convertTickersToUSD(
 	ratesDec := map[string]sdk.Dec{}
 	for denom, rate := range rates {
 		ratesDec[denom] = rate.Value
+
+		provider.TelemetryProviderPrice(
+			"_final",
+			denom+"USD",
+			float32(rate.Value.MustFloat64()),
+			float32(1),
+		)
 	}
 
 	return ratesDec, nil
