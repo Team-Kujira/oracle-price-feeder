@@ -65,3 +65,49 @@ func TestSuccessFilterTickerDeviations(t *testing.T) {
 	require.NoError(t, err, "It should successfully not filter out coinbase")
 	require.True(t, ok, "The filtered candle deviation price of coinbase should remain")
 }
+
+func TestSuccessFilterTickerDeviations2(t *testing.T) {
+	pair := types.CurrencyPair{
+		Base:  "ATOM",
+		Quote: "USDT",
+	}
+
+	atomPrice := sdk.MustNewDecFromStr("29.93")
+	atomVolume := sdk.MustNewDecFromStr("1994674.34000000")
+
+	atomTickerPrice := types.TickerPrice{
+		Price:  atomPrice,
+		Volume: atomVolume,
+	}
+
+	tickerPrices := map[provider.Name]types.TickerPrice{
+		provider.ProviderBinance: atomTickerPrice,
+		provider.ProviderHuobi:   atomTickerPrice,
+		provider.ProviderKraken:  atomTickerPrice,
+		provider.ProviderCoinbase: {
+			Price:  sdk.MustNewDecFromStr("27.1"),
+			Volume: atomVolume,
+		},
+	}
+
+	filteredPrices, err := FilterTickerDeviations2(
+		zerolog.Nop(),
+		pair.String(),
+		tickerPrices,
+		sdk.NewDec(1),
+	)
+
+	require.NoError(t, err)
+	require.Len(t, filteredPrices, 3)
+
+	for providerName, tickerPrice := range tickerPrices {
+		filteredPrice, found := filteredPrices[providerName]
+		if providerName == provider.ProviderCoinbase {
+			require.False(t, found)
+			continue
+		}
+		require.True(t, found)
+		require.Equal(t, tickerPrice, filteredPrice)
+	}
+
+}

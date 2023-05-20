@@ -81,23 +81,24 @@ var (
 type (
 	// Config defines all necessary price-feeder configuration parameters.
 	Config struct {
-		Server              Server              `toml:"server"`
-		CurrencyPairs       []CurrencyPair      `toml:"currency_pairs" validate:"required,gt=0,dive,required"`
-		Deviations          []Deviation         `toml:"deviation_thresholds"`
-		Account             Account             `toml:"account" validate:"required,gt=0,dive,required"`
-		Keyring             Keyring             `toml:"keyring" validate:"required,gt=0,dive,required"`
-		RPC                 RPC                 `toml:"rpc" validate:"required,gt=0,dive,required"`
-		Telemetry           Telemetry           `toml:"telemetry"`
-		GasAdjustment       float64             `toml:"gas_adjustment" validate:"required"`
-		GasPrices           string              `toml:"gas_prices" validate:"required"`
-		ProviderTimeout     string              `toml:"provider_timeout"`
-		ProviderEndpoints   []ProviderEndpoints `toml:"provider_endpoints" validate:"dive"`
-		ProviderMinOverride bool                `toml:"provider_min_override"`
-		EnableServer        bool                `toml:"enable_server"`
-		EnableVoter         bool                `toml:"enable_voter"`
-		Healthchecks        []Healthchecks      `toml:"healthchecks" validate:"dive"`
-		HeightPollInterval  string              `toml:"height_poll_interval"`
-		HistoryDb           string              `toml:"history_db"`
+		Server               Server                 `toml:"server"`
+		CurrencyPairs        []CurrencyPair         `toml:"currency_pairs" validate:"required,gt=0,dive,required"`
+		Deviations           []Deviation            `toml:"deviation_thresholds"`
+		ProviderMinOverrides []ProviderMinOverrides `toml:"provider_min_overrides"`
+		Account              Account                `toml:"account" validate:"required,gt=0,dive,required"`
+		Keyring              Keyring                `toml:"keyring" validate:"required,gt=0,dive,required"`
+		RPC                  RPC                    `toml:"rpc" validate:"required,gt=0,dive,required"`
+		Telemetry            Telemetry              `toml:"telemetry"`
+		GasAdjustment        float64                `toml:"gas_adjustment" validate:"required"`
+		GasPrices            string                 `toml:"gas_prices" validate:"required"`
+		ProviderTimeout      string                 `toml:"provider_timeout"`
+		ProviderEndpoints    []ProviderEndpoints    `toml:"provider_endpoints" validate:"dive"`
+		ProviderMinOverride  bool                   `toml:"provider_min_override"`
+		EnableServer         bool                   `toml:"enable_server"`
+		EnableVoter          bool                   `toml:"enable_voter"`
+		Healthchecks         []Healthchecks         `toml:"healthchecks" validate:"dive"`
+		HeightPollInterval   string                 `toml:"height_poll_interval"`
+		HistoryDb            string                 `toml:"history_db"`
 	}
 
 	// Server defines the API server configuration.
@@ -124,6 +125,13 @@ type (
 	Deviation struct {
 		Base      string `toml:"base" validate:"required"`
 		Threshold string `toml:"threshold" validate:"required"`
+	}
+
+	// ProviderMinOverrides defines the minimum amount of sources that need
+	// to *sucessfully* provide price data for a certain asset
+	ProviderMinOverrides struct {
+		Base      string `toml:"base" validate:"required"`
+		Providers int64  `toml:"providers" validate:"required"`
 	}
 
 	// Account defines account related configuration that is related to the
@@ -336,6 +344,12 @@ func ParseConfig(configPath string) (Config, error) {
 
 		if threshold.GT(maxDeviationThreshold) {
 			return cfg, fmt.Errorf("deviation thresholds must not exceed 3.0")
+		}
+	}
+
+	for _, override := range cfg.ProviderMinOverrides {
+		if override.Providers < 1 {
+			return cfg, fmt.Errorf("minimum providers must be greater than 0")
 		}
 	}
 

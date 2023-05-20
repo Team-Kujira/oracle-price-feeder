@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -60,18 +61,19 @@ type Oracle struct {
 	logger zerolog.Logger
 	closer *pfsync.Closer
 
-	providerTimeout    time.Duration
-	providerPairs      map[provider.Name][]types.CurrencyPair
-	previousPrevote    *PreviousPrevote
-	previousVotePeriod float64
-	priceProviders     map[provider.Name]provider.Provider
-	oracleClient       client.OracleClient
-	deviations         map[string]sdk.Dec
-	endpoints          map[provider.Name]provider.Endpoint
-	history            history.PriceHistory
-	derivatives        map[string]derivative.Derivative
-	derivativePairs    map[string][]types.CurrencyPair
-	derivativeSymbols  map[string]struct{}
+	providerTimeout      time.Duration
+	providerPairs        map[provider.Name][]types.CurrencyPair
+	previousPrevote      *PreviousPrevote
+	previousVotePeriod   float64
+	priceProviders       map[provider.Name]provider.Provider
+	oracleClient         client.OracleClient
+	deviations           map[string]sdk.Dec
+	providerMinOverrides map[string]int64
+	endpoints            map[provider.Name]provider.Endpoint
+	history              history.PriceHistory
+	derivatives          map[string]derivative.Derivative
+	derivativePairs      map[string][]types.CurrencyPair
+	derivativeSymbols    map[string]struct{}
 
 	mtx             sync.RWMutex
 	lastPriceSyncTS time.Time
@@ -86,6 +88,7 @@ func New(
 	currencyPairs []config.CurrencyPair,
 	providerTimeout time.Duration,
 	deviations map[string]sdk.Dec,
+	providerMinOverrides map[string]int64,
 	endpoints map[provider.Name]provider.Endpoint,
 	derivatives map[string]derivative.Derivative,
 	derivativePairs map[string][]types.CurrencyPair,
@@ -116,21 +119,22 @@ func New(
 		}
 	}
 	return &Oracle{
-		logger:            logger.With().Str("module", "oracle").Logger(),
-		closer:            pfsync.NewCloser(),
-		oracleClient:      oc,
-		providerPairs:     providerPairs,
-		priceProviders:    make(map[provider.Name]provider.Provider),
-		previousPrevote:   nil,
-		providerTimeout:   providerTimeout,
-		deviations:        deviations,
-		paramCache:        ParamCache{},
-		endpoints:         endpoints,
-		healthchecks:      healthchecks,
-		derivatives:       derivatives,
-		derivativePairs:   derivativePairs,
-		derivativeSymbols: derivativeDenoms,
-		history:           history,
+		logger:               logger.With().Str("module", "oracle").Logger(),
+		closer:               pfsync.NewCloser(),
+		oracleClient:         oc,
+		providerPairs:        providerPairs,
+		priceProviders:       make(map[provider.Name]provider.Provider),
+		previousPrevote:      nil,
+		providerTimeout:      providerTimeout,
+		deviations:           deviations,
+		providerMinOverrides: providerMinOverrides,
+		paramCache:           ParamCache{},
+		endpoints:            endpoints,
+		healthchecks:         healthchecks,
+		derivatives:          derivatives,
+		derivativePairs:      derivativePairs,
+		derivativeSymbols:    derivativeDenoms,
+		history:              history,
 	}
 }
 
@@ -288,14 +292,14 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 			pairsMap[pair.String()] = tickerPrice
 
 			provider.TelemetryProviderPrice(
-				"_twap",
+				provider.Name(fmt.Sprintf("_twap.%s", pair)),
 				pair.String(),
 				float32(tickerPrice.Price.MustFloat64()),
 				float32(tickerPrice.Volume.MustFloat64()),
 			)
 		}
 
-		providerPrices["_derivative"] = pairsMap
+		providerPrices["_twap"] = pairsMap
 	}
 
 	computedPrices, err := GetComputedPrices(
@@ -303,6 +307,7 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 		providerPrices,
 		o.providerPairs,
 		o.deviations,
+		o.providerMinOverrides,
 	)
 	if err != nil {
 		return err
@@ -316,6 +321,7 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 			}
 		}
 
+		sort.Strings(missingPrices)
 		o.logger.Error().Msg(
 			"unable to get prices for: " + strings.Join(missingPrices, ", "),
 		)
@@ -335,13 +341,15 @@ func GetComputedPrices(
 	providerPrices provider.AggregatedProviderPrices,
 	providerPairs map[provider.Name][]types.CurrencyPair,
 	deviations map[string]sdk.Dec,
+	providerMinOverrides map[string]int64,
 ) (prices map[string]sdk.Dec, err error) {
 
-	rates, err := convertTickersToUSD(
+	rates, err := convertTickersToUSD2(
 		logger,
 		providerPrices,
 		providerPairs,
 		deviations,
+		providerMinOverrides,
 	)
 	if err != nil {
 		return nil, err

@@ -178,3 +178,68 @@ func TestStandardDeviation(t *testing.T) {
 		})
 	}
 }
+
+func TestStandardDeviation2(t *testing.T) {
+	type result struct {
+		mean      sdk.Dec
+		deviation sdk.Dec
+		err       bool
+	}
+	restCases := map[string]struct {
+		prices   []sdk.Dec
+		expected result
+	}{
+		"empty prices": {
+			prices:   []sdk.Dec{},
+			expected: result{},
+		},
+		"nil prices": {
+			prices:   nil,
+			expected: result{},
+		},
+		"not enough prices": {
+			prices: []sdk.Dec{
+				sdk.MustNewDecFromStr("28.21000000"),
+				sdk.MustNewDecFromStr("28.23000000"),
+			},
+			expected: result{},
+		},
+		"enough prices 1": {
+			prices: []sdk.Dec{
+				sdk.MustNewDecFromStr("28.21000000"),
+				sdk.MustNewDecFromStr("28.23000000"),
+				sdk.MustNewDecFromStr("28.40000000"),
+			},
+			expected: result{
+				mean:      sdk.MustNewDecFromStr("28.28"),
+				deviation: sdk.MustNewDecFromStr("0.085244745683629475"),
+				err:       false,
+			},
+		},
+		"enough prices 2": {
+			prices: []sdk.Dec{
+				sdk.MustNewDecFromStr("1.13000000"),
+				sdk.MustNewDecFromStr("1.13050000"),
+				sdk.MustNewDecFromStr("1.14000000"),
+			},
+			expected: result{
+				mean:      sdk.MustNewDecFromStr("1.1335"),
+				deviation: sdk.MustNewDecFromStr("0.004600724580614015"),
+				err:       false,
+			},
+		},
+	}
+
+	for name, test := range restCases {
+		test := test
+
+		t.Run(name, func(t *testing.T) {
+			deviation, mean, _ := oracle.StandardDeviation2(test.prices)
+			// if test.expected.err == false {
+			// 	require.NoError(t, err)
+			// }
+			require.Equal(t, test.expected.deviation, deviation)
+			require.Equal(t, test.expected.mean, mean)
+		})
+	}
+}

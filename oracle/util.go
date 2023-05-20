@@ -1,6 +1,7 @@
 package oracle
 
 import (
+	"fmt"
 	"price-feeder/oracle/provider"
 	"price-feeder/oracle/types"
 
@@ -23,7 +24,7 @@ func ComputeVWAP(tickers []types.TickerPrice) (sdk.Dec, error) {
 	}
 
 	if volumeSum.Equal(sdk.ZeroDec()) {
-		return sdk.ZeroDec(), nil
+		return sdk.Dec{}, fmt.Errorf("total volume is zero")
 	}
 
 	return weightedPrice.Quo(volumeSum), nil
@@ -87,4 +88,36 @@ func StandardDeviation(
 	}
 
 	return deviations, means, nil
+}
+
+func StandardDeviation2(prices []sdk.Dec) (sdk.Dec, sdk.Dec, error) {
+	// Skip if standard deviation would not be meaningful
+	if len(prices) < 3 {
+		err := fmt.Errorf("not enough values to calculate deviation")
+		return sdk.Dec{}, sdk.Dec{}, err
+	}
+
+	sum := sdk.ZeroDec()
+
+	for _, price := range prices {
+		sum = sum.Add(price)
+	}
+
+	numPrices := int64(len(prices))
+	mean := sum.QuoInt64(numPrices)
+	varianceSum := sdk.ZeroDec()
+
+	for _, price := range prices {
+		deviation := price.Sub(mean)
+		varianceSum = varianceSum.Add(deviation.Mul(deviation))
+	}
+
+	variance := varianceSum.QuoInt64(numPrices)
+
+	deviation, err := variance.ApproxSqrt()
+	if err != nil {
+		return sdk.Dec{}, sdk.Dec{}, err
+	}
+
+	return deviation, mean, nil
 }

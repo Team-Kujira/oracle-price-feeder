@@ -405,6 +405,19 @@ func (p *provider) setPairs(
 }
 
 func (p *provider) setTickerPrice(symbol string, price sdk.Dec, volume sdk.Dec, timestamp time.Time) {
+	if price.IsZero() {
+		p.logger.Warn().
+			Str("symbol", symbol).
+			Msg("price is zero")
+		return
+	}
+
+	if volume.IsZero() {
+		p.logger.Warn().
+			Str("symbol", symbol).
+			Msg("volume is zero")
+		return
+	}
 
 	// check if price needs to be inverted
 	pair, inverse := p.inverse[symbol]

@@ -97,6 +97,7 @@ func (ots *OracleTestSuite) SetupSuite() {
 		},
 		time.Millisecond*100,
 		make(map[string]sdk.Dec),
+		make(map[string]int64),
 		make(map[provider.Name]provider.Endpoint),
 		map[string]derivative.Derivative{},
 		map[string][]types.CurrencyPair{},
@@ -409,6 +410,7 @@ func TestSuccessGetComputedPricesTickers(t *testing.T) {
 		providerPrices,
 		providerPair,
 		make(map[string]sdk.Dec),
+		make(map[string]int64),
 	)
 
 	require.NoError(t, err, "It should successfully get computed ticker prices")
@@ -486,6 +488,7 @@ func TestGetComputedPricesTickersConversion(t *testing.T) {
 		providerPrices,
 		providerPair,
 		make(map[string]sdk.Dec),
+		make(map[string]int64),
 	)
 
 	require.NoError(t, err,
