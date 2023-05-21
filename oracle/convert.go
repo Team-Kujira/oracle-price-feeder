@@ -1,7 +1,6 @@
 package oracle
 
 import (
-	"fmt"
 	"price-feeder/oracle/provider"
 	"price-feeder/oracle/types"
 	"sort"
@@ -338,7 +337,7 @@ func convertTickersToUSD2(
 	for denom, tickers := range usdRates {
 		for name, ticker := range tickers {
 			provider.TelemetryProviderPrice(
-				provider.Name(fmt.Sprintf("_%s", name)),
+				provider.Name("_"+name.String()),
 				denom+"USD",
 				float32(ticker.Price.MustFloat64()),
 				float32(ticker.Volume.MustFloat64()),

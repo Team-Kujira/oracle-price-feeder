@@ -280,26 +280,31 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 	}
 
 	for name, pairs := range o.derivativePairs {
-		pairsMap := map[string]types.TickerPrice{}
 		for _, pair := range pairs {
-			tickerPrice, err := o.derivatives[name].GetPrice(pair)
+			symbol := pair.String()
+			tickerPrices, err := o.derivatives[name].GetPrices(symbol)
 
 			if err != nil {
 				// o.logger.Err(err).Msg("failed to get derivative price")
 				continue
 			}
 
-			pairsMap[pair.String()] = tickerPrice
+			for nameString, tickerPrice := range tickerPrices {
+				providerName := provider.Name(nameString)
+				_, found := providerPrices[providerName]
+				if !found {
+					providerPrices[providerName] = map[string]types.TickerPrice{}
+				}
+				providerPrices[providerName][symbol] = tickerPrice
 
-			provider.TelemetryProviderPrice(
-				provider.Name(fmt.Sprintf("_twap.%s", pair)),
-				pair.String(),
-				float32(tickerPrice.Price.MustFloat64()),
-				float32(tickerPrice.Volume.MustFloat64()),
-			)
+				provider.TelemetryProviderPrice(
+					provider.Name(nameString+"_twap"),
+					symbol,
+					float32(tickerPrice.Price.MustFloat64()),
+					float32(tickerPrice.Volume.MustFloat64()),
+				)
+			}
 		}
-
-		providerPrices["_twap"] = pairsMap
 	}
 
 	computedPrices, err := GetComputedPrices(
