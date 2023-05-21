@@ -17,7 +17,6 @@ const (
 
 type (
 	Derivative interface {
-		GetPrice(types.CurrencyPair) (types.TickerPrice, error)
 		GetPrices(string) (map[string]types.TickerPrice, error)
 	}
 

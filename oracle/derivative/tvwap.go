@@ -88,43 +88,6 @@ func (d *TvwapDerivative) GetPrices(symbol string) (map[string]types.TickerPrice
 	return derivativePrices, nil
 }
 
-func (d *TvwapDerivative) GetPrice(pair types.CurrencyPair) (types.TickerPrice, error) {
-	now := time.Now()
-	symbol := pair.String()
-
-	period, ok := d.periods[symbol]
-	if !ok {
-		d.logger.Error().Str("pair", symbol).Msg("pair not configured")
-		return types.TickerPrice{}, fmt.Errorf("pair not configured")
-	}
-	start := now.Add(-period)
-	tickers, err := d.history.GetTickerPrices(pair.String(), start, now)
-	if err != nil {
-		d.logger.Error().Err(err).Str("pair", symbol).Msg("failed to get historical tickers")
-		return types.TickerPrice{}, err
-	}
-	pairPrice, err := Tvwap(tickers, start, now)
-	if err != nil || pairPrice.IsNil() || pairPrice.IsZero() {
-		d.logger.Warn().Err(err).Str("pair", symbol).Dur("period", period).Msg("failed to compute derivative price")
-		return types.TickerPrice{}, err
-	}
-
-	volume := sdk.ZeroDec()
-	for _, tps := range tickers {
-		for _, tp := range tps {
-			volume = volume.Add(tp.Volume)
-		}
-	}
-
-	ticker := types.TickerPrice{
-		Price:  pairPrice,
-		Volume: volume,
-		Time:   now,
-	}
-
-	return ticker, nil
-}
-
 func Tvwap(
 	tickers map[string][]types.TickerPrice,
 	start time.Time,

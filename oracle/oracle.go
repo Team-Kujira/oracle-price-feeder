@@ -349,7 +349,7 @@ func GetComputedPrices(
 	providerMinOverrides map[string]int64,
 ) (prices map[string]sdk.Dec, err error) {
 
-	rates, err := convertTickersToUSD2(
+	rates, err := convertTickersToUSD(
 		logger,
 		providerPrices,
 		providerPairs,
