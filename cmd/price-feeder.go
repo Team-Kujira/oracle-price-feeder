@@ -183,7 +183,6 @@ func priceFeederCmdHandler(cmd *cobra.Command, args []string) error {
 			}
 			providerMinOverrides[denom] = int(override.Providers)
 		}
-
 	}
 
 	endpoints := make(map[provider.Name]provider.Endpoint, len(cfg.ProviderEndpoints))

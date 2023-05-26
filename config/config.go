@@ -129,7 +129,7 @@ type (
 	// ProviderMinOverrides defines the minimum amount of sources that need
 	// to *sucessfully* provide price data for a certain asset
 	ProviderMinOverrides struct {
-		Denoms    []string `toml:"denom" validate:"required"`
+		Denoms    []string `toml:"denoms" validate:"required"`
 		Providers uint     `toml:"providers" validate:"required"`
 	}
 
