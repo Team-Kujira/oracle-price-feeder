@@ -71,37 +71,44 @@ func convertTickersToUSD(
 			base := currencyPair.Base
 			quote := currencyPair.Quote
 
-			threshold := deviationThresholds[base]
-
+			maxDeviation := deviationThresholds[base]
 			tickerPrices := providerPricesBySymbol[symbol]
 
+			newRates := map[provider.Name]types.TickerPrice{}
+
 			if quote == "USD" {
-				newRates, err := addRates(
-					logger,
-					symbol,
-					threshold,
-					usdRates[base],
-					tickerPrices,
-				)
-				if err != nil {
-					if len(tickerPrices) >= 3 {
-						return nil, err
-					}
+				for providerName, tickerPrice := range tickerPrices {
+					newRates[providerName] = tickerPrice
 				}
-				usdRates[base] = newRates
 			} else {
-				rates, found := usdRates[quote]
+				minProviders, found := providerMinOverrides[quote]
 				if !found {
+					minProviders = 3
+				}
+
+				// a minimum of 3 usd prices are needed
+				rates, found := usdRates[quote]
+				if !found || len(rates) < int(minProviders) {
+
 					unresolved = append(unresolved, currencyPair)
 					continue
 				}
 
-				rate, err := vwapRate(rates)
+				filtered, err := FilterTickerDeviations(
+					logger, symbol, rates, maxDeviation,
+				)
+				if err != nil {
+					if len(rates) >= 3 {
+						unresolved = append(unresolved, currencyPair)
+						continue
+					}
+				}
+
+				rate, err := vwapRate(filtered)
 				if err != nil {
 					return nil, err
 				}
 
-				newRates := map[provider.Name]types.TickerPrice{}
 				for providerName, tickerPrice := range tickerPrices {
 					newRates[providerName] = types.TickerPrice{
 						Price:  tickerPrice.Price.Mul(rate),
@@ -109,18 +116,18 @@ func convertTickersToUSD(
 						Time:   tickerPrice.Time,
 					}
 				}
+			}
 
-				newRates, err = addRates(
+			if len(newRates) > 0 {
+				newRates, err := addRates(
 					logger,
 					symbol,
-					threshold,
+					maxDeviation,
 					usdRates[base],
 					newRates,
 				)
 				if err != nil {
-					if len(tickerPrices) >= 3 {
-						return nil, err
-					}
+					return nil, err
 				}
 				usdRates[base] = newRates
 			}
@@ -160,7 +167,7 @@ func convertTickersToUSD(
 				continue
 			}
 			if int64(len(filtered)) < minimum {
-				logger.Info().
+				logger.Warn().
 					Str("denom", denom).
 					Int64("minimum", minimum).
 					Int("available", len(filtered)).
@@ -219,7 +226,8 @@ func addRates(
 		rates[providerName] = tickerPrice
 	}
 	// Filter outliers
-	return FilterTickerDeviations(logger, symbol, rates, threshold)
+	// return FilterTickerDeviations(logger, symbol, rates, threshold)
+	return rates, nil
 }
 
 func vwapRate(rates map[provider.Name]types.TickerPrice) (sdk.Dec, error) {
