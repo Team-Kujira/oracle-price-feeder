@@ -89,7 +89,6 @@ func convertTickersToUSD(
 				// a minimum of 3 usd prices are needed
 				rates, found := usdRates[quote]
 				if !found || len(rates) < minProviders {
-
 					unresolved = append(unresolved, currencyPair)
 					continue
 				}

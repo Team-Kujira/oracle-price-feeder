@@ -97,7 +97,7 @@ func (ots *OracleTestSuite) SetupSuite() {
 		},
 		time.Millisecond*100,
 		make(map[string]sdk.Dec),
-		make(map[string]int64),
+		make(map[string]int),
 		make(map[provider.Name]provider.Endpoint),
 		map[string]derivative.Derivative{},
 		map[string][]types.CurrencyPair{},
@@ -410,7 +410,7 @@ func TestSuccessGetComputedPricesTickers(t *testing.T) {
 		providerPrices,
 		providerPair,
 		make(map[string]sdk.Dec),
-		make(map[string]int64),
+		make(map[string]int),
 	)
 
 	require.NoError(t, err, "It should successfully get computed ticker prices")
@@ -418,31 +418,31 @@ func TestSuccessGetComputedPricesTickers(t *testing.T) {
 }
 
 func TestGetComputedPricesTickersConversion(t *testing.T) {
-	btcPair := types.CurrencyPair{
+	btcEthPair := types.CurrencyPair{
 		Base:  "BTC",
 		Quote: "ETH",
 	}
-	btcUSDPair := types.CurrencyPair{
+	btcUsdPair := types.CurrencyPair{
 		Base:  "BTC",
 		Quote: "USD",
 	}
-	ethPair := types.CurrencyPair{
+	ethUsdPair := types.CurrencyPair{
 		Base:  "ETH",
 		Quote: "USD",
 	}
 	volume := sdk.MustNewDecFromStr("881272.00")
 	btcEthPrice := sdk.MustNewDecFromStr("72.55")
 	ethUsdPrice := sdk.MustNewDecFromStr("9989.02")
-	btcUSDPrice := sdk.MustNewDecFromStr("724603.401")
+	btcUsdPrice := sdk.MustNewDecFromStr("724603.401")
 	providerPrices := make(provider.AggregatedProviderPrices, 1)
 
 	// normal rates
 	binanceTickerPrices := make(map[string]types.TickerPrice, 2)
-	binanceTickerPrices[btcPair.Base] = types.TickerPrice{
+	binanceTickerPrices[btcEthPair.String()] = types.TickerPrice{
 		Price:  btcEthPrice,
 		Volume: volume,
 	}
-	binanceTickerPrices[ethPair.Base] = types.TickerPrice{
+	binanceTickerPrices[ethUsdPair.String()] = types.TickerPrice{
 		Price:  ethUsdPrice,
 		Volume: volume,
 	}
@@ -450,11 +450,11 @@ func TestGetComputedPricesTickersConversion(t *testing.T) {
 
 	// normal rates
 	gateTickerPrices := make(map[string]types.TickerPrice, 4)
-	gateTickerPrices[btcPair.Base] = types.TickerPrice{
-		Price:  btcEthPrice,
-		Volume: volume,
-	}
-	gateTickerPrices[ethPair.Base] = types.TickerPrice{
+	// gateTickerPrices[btcEthPair.String()] = types.TickerPrice{
+	// 	Price:  btcEthPrice,
+	// 	Volume: volume,
+	// }
+	gateTickerPrices[ethUsdPair.String()] = types.TickerPrice{
 		Price:  ethUsdPrice,
 		Volume: volume,
 	}
@@ -462,7 +462,7 @@ func TestGetComputedPricesTickersConversion(t *testing.T) {
 
 	// abnormal eth rate
 	okxTickerPrices := make(map[string]types.TickerPrice, 1)
-	okxTickerPrices[ethPair.Base] = types.TickerPrice{
+	okxTickerPrices[ethUsdPair.String()] = types.TickerPrice{
 		Price:  sdk.MustNewDecFromStr("1.0"),
 		Volume: volume,
 	}
@@ -470,17 +470,21 @@ func TestGetComputedPricesTickersConversion(t *testing.T) {
 
 	// btc / usd rate
 	krakenTickerPrices := make(map[string]types.TickerPrice, 1)
-	krakenTickerPrices[btcUSDPair.Base] = types.TickerPrice{
-		Price:  btcUSDPrice,
+	krakenTickerPrices[btcUsdPair.String()] = types.TickerPrice{
+		Price:  btcUsdPrice,
 		Volume: volume,
 	}
 	providerPrices[provider.ProviderKraken] = krakenTickerPrices
 
 	providerPair := map[provider.Name][]types.CurrencyPair{
-		provider.ProviderBinance: {ethPair, btcPair},
-		provider.ProviderGate:    {ethPair},
-		provider.ProviderOkx:     {ethPair},
-		provider.ProviderKraken:  {btcUSDPair},
+		provider.ProviderBinance: {ethUsdPair, btcEthPair},
+		provider.ProviderGate:    {ethUsdPair},
+		provider.ProviderOkx:     {ethUsdPair},
+		provider.ProviderKraken:  {btcUsdPair},
+	}
+
+	providerMinOverrides := map[string]int{
+		"BTC": 1,
 	}
 
 	prices, err := GetComputedPrices(
@@ -488,15 +492,16 @@ func TestGetComputedPricesTickersConversion(t *testing.T) {
 		providerPrices,
 		providerPair,
 		make(map[string]sdk.Dec),
-		make(map[string]int64),
+		providerMinOverrides,
 	)
 
 	require.NoError(t, err,
 		"It should successfully filter out bad tickers and convert everything to USD",
 	)
 	require.Equal(t,
+
 		ethUsdPrice.Mul(
-			btcEthPrice).Add(btcUSDPrice).Quo(sdk.MustNewDecFromStr("2")),
-		prices[btcPair.Base],
+			btcEthPrice).Add(btcUsdPrice).Quo(sdk.MustNewDecFromStr("2")),
+		prices[btcEthPair.Base],
 	)
 }
