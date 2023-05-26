@@ -68,7 +68,7 @@ type Oracle struct {
 	priceProviders       map[provider.Name]provider.Provider
 	oracleClient         client.OracleClient
 	deviations           map[string]sdk.Dec
-	providerMinOverrides map[string]int64
+	providerMinOverrides map[string]int
 	endpoints            map[provider.Name]provider.Endpoint
 	history              history.PriceHistory
 	derivatives          map[string]derivative.Derivative
@@ -88,7 +88,7 @@ func New(
 	currencyPairs []config.CurrencyPair,
 	providerTimeout time.Duration,
 	deviations map[string]sdk.Dec,
-	providerMinOverrides map[string]int64,
+	providerMinOverrides map[string]int,
 	endpoints map[provider.Name]provider.Endpoint,
 	derivatives map[string]derivative.Derivative,
 	derivativePairs map[string][]types.CurrencyPair,
@@ -346,7 +346,7 @@ func GetComputedPrices(
 	providerPrices provider.AggregatedProviderPrices,
 	providerPairs map[provider.Name][]types.CurrencyPair,
 	deviations map[string]sdk.Dec,
-	providerMinOverrides map[string]int64,
+	providerMinOverrides map[string]int,
 ) (prices map[string]sdk.Dec, err error) {
 
 	rates, err := convertTickersToUSD(

@@ -93,7 +93,6 @@ type (
 		GasPrices            string                 `toml:"gas_prices" validate:"required"`
 		ProviderTimeout      string                 `toml:"provider_timeout"`
 		ProviderEndpoints    []ProviderEndpoints    `toml:"provider_endpoints" validate:"dive"`
-		ProviderMinOverride  bool                   `toml:"provider_min_override"`
 		EnableServer         bool                   `toml:"enable_server"`
 		EnableVoter          bool                   `toml:"enable_voter"`
 		Healthchecks         []Healthchecks         `toml:"healthchecks" validate:"dive"`
@@ -130,8 +129,8 @@ type (
 	// ProviderMinOverrides defines the minimum amount of sources that need
 	// to *sucessfully* provide price data for a certain asset
 	ProviderMinOverrides struct {
-		Base      string `toml:"base" validate:"required"`
-		Providers int64  `toml:"providers" validate:"required"`
+		Denoms    []string `toml:"denom" validate:"required"`
+		Providers uint     `toml:"providers" validate:"required"`
 	}
 
 	// Account defines account related configuration that is related to the
@@ -323,16 +322,6 @@ func ParseConfig(configPath string) (Config, error) {
 				return cfg, fmt.Errorf("unsupported provider: %s", provider)
 			}
 			pairs[cp.Base][provider] = struct{}{}
-		}
-	}
-
-	if !cfg.ProviderMinOverride {
-		for base, providers := range pairs {
-			_, isMock := pairs[base]["mock"]
-			_, isDerivative := derivativeBases[base]
-			if !isDerivative && !isMock && len(providers) < 3 {
-				return cfg, fmt.Errorf("must have at least three providers for %s", base)
-			}
 		}
 	}
 

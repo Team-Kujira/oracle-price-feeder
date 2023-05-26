@@ -18,7 +18,7 @@ func convertTickersToUSD(
 	providerPrices provider.AggregatedProviderPrices,
 	providerPairs map[provider.Name][]types.CurrencyPair,
 	deviationThresholds map[string]sdk.Dec,
-	providerMinOverrides map[string]int64,
+	providerMinOverrides map[string]int,
 ) (map[string]sdk.Dec, error) {
 
 	if len(providerPrices) == 0 {
@@ -88,7 +88,7 @@ func convertTickersToUSD(
 
 				// a minimum of 3 usd prices are needed
 				rates, found := usdRates[quote]
-				if !found || len(rates) < int(minProviders) {
+				if !found || len(rates) < minProviders {
 
 					unresolved = append(unresolved, currencyPair)
 					continue
@@ -166,10 +166,10 @@ func convertTickersToUSD(
 				logger.Err(err)
 				continue
 			}
-			if int64(len(filtered)) < minimum {
+			if len(filtered) < minimum {
 				logger.Warn().
 					Str("denom", denom).
-					Int64("minimum", minimum).
+					Int("minimum", minimum).
 					Int("available", len(filtered)).
 					Msg("not enough tickers")
 				continue

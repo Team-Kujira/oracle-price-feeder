@@ -72,7 +72,7 @@ func TestConvertTickersToUsdChaining(t *testing.T) {
 		providerPrices,
 		providerPairs,
 		make(map[string]sdk.Dec),
-		make(map[string]int64),
+		make(map[string]int),
 	)
 	require.NoError(t, err)
 
@@ -156,7 +156,7 @@ func TestConvertTickersToUSDFiltering(t *testing.T) {
 		providerPrices,
 		providerPairs,
 		make(map[string]sdk.Dec),
-		make(map[string]int64),
+		make(map[string]int),
 	)
 	require.NoError(t, err)
 
@@ -207,7 +207,7 @@ func TestConvertTickersToUsdVwap(t *testing.T) {
 		providerPrices,
 		providerPairs,
 		make(map[string]sdk.Dec),
-		make(map[string]int64),
+		make(map[string]int),
 	)
 	require.NoError(t, err)
 
@@ -246,7 +246,7 @@ func TestConvertTickersToUsdEmptyProvider(t *testing.T) {
 		providerPrices,
 		providerPairs,
 		make(map[string]sdk.Dec),
-		make(map[string]int64),
+		make(map[string]int),
 	)
 	require.NoError(t, err)
 
@@ -263,7 +263,7 @@ func TestConvertTickersToUsdEmptyPrices(t *testing.T) {
 		providerPrices,
 		providerPairs,
 		make(map[string]sdk.Dec),
-		make(map[string]int64),
+		make(map[string]int),
 	)
 	require.NoError(t, err)
 
