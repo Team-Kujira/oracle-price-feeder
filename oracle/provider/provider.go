@@ -166,7 +166,10 @@ func (p *provider) GetTickerPrices(pairs ...types.CurrencyPair) (map[string]type
 				continue
 			}
 			if time.Since(price.Time) > staleTickersCutoff {
-				p.logger.Warn().Str("pair", symbol).Time("time", price.Time).Msg("tickers data is stale")
+				p.logger.Warn().
+					Str("pair", symbol).
+					Time("time", price.Time).
+					Msg("tickers data is stale")
 			} else {
 				tickers[symbol] = price
 			}

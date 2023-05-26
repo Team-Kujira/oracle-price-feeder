@@ -210,9 +210,22 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 		providerName := providerName
 		currencyPairs := currencyPairs
 
-		priceProvider, err := o.getOrSetProvider(ctx, providerName)
-		if err != nil {
-			return err
+		priceProvider, found := o.priceProviders[providerName]
+		if !found {
+			newProvider, err := NewProvider(
+				ctx,
+				providerName,
+				o.logger,
+				o.endpoints[providerName],
+				o.providerPairs[providerName]...,
+			)
+			if err != nil {
+				return err
+			}
+			priceProvider = newProvider
+
+			o.priceProviders[providerName] = priceProvider
+			continue
 		}
 
 		for _, pair := range currencyPairs {
@@ -228,6 +241,7 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 			errCh := make(chan error, 1)
 
 			go func() {
+				var err error
 				defer close(ch)
 				prices, err = priceProvider.GetTickerPrices(currencyPairs...)
 				if err != nil {
@@ -404,32 +418,6 @@ func (o *Oracle) GetParams(ctx context.Context) (oracletypes.Params, error) {
 	}
 
 	return queryResponse.Params, nil
-}
-
-func (o *Oracle) getOrSetProvider(ctx context.Context, providerName provider.Name) (provider.Provider, error) {
-	var (
-		priceProvider provider.Provider
-		ok            bool
-	)
-
-	priceProvider, ok = o.priceProviders[providerName]
-	if !ok {
-		newProvider, err := NewProvider(
-			ctx,
-			providerName,
-			o.logger,
-			o.endpoints[providerName],
-			o.providerPairs[providerName]...,
-		)
-		if err != nil {
-			return nil, err
-		}
-		priceProvider = newProvider
-
-		o.priceProviders[providerName] = priceProvider
-	}
-
-	return priceProvider, nil
 }
 
 func NewProvider(
