@@ -1,4 +1,4 @@
-# v0.6.x
+# v0.5.x
 
 ## Breaking Changes
 
