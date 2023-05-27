@@ -4,7 +4,7 @@
 
 ### provider_min_override
 
-This option has been replace by `provider_min_overrides` (plural). Please remove `provider_min_override` from your config, if set.
+This option has been replaced by `provider_min_overrides` (plural). Please remove `provider_min_override` from your config, if set.
 
 ### provider_min_overrides
 
