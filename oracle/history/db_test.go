@@ -7,14 +7,14 @@ import (
 	"price-feeder/oracle/types"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/stretchr/testify/require"
 	"github.com/rs/zerolog"
+	"github.com/stretchr/testify/require"
 )
 
 var (
-	testPairAtom = types.CurrencyPair{Base: "ATOM", Quote: "USD"}
+	testPairAtom   = types.CurrencyPair{Base: "ATOM", Quote: "USD"}
 	testStartTime1 = time.Unix(0, 0)
-	testEndTime1 = time.Unix(10, 0)
+	testEndTime1   = time.Unix(10, 0)
 
 	testHistoricalTickers1 = map[string][]types.TickerPrice{
 		"osmosis": {
@@ -25,12 +25,15 @@ var (
 	}
 )
 
-
 func TestPriceHistory_getPrices(t *testing.T) {
 	h, err := NewPriceHistory(":memory:", zerolog.Nop())
 	require.NoError(t, err)
 	require.NoError(t, h.Init())
-	res1, err1 := h.GetTickerPrices(testPairAtom, testStartTime1, testEndTime1)
+	res1, err1 := h.GetTickerPrices(
+		testPairAtom.String(),
+		testStartTime1,
+		testEndTime1,
+	)
 	require.NoError(t, err1)
 	require.Equal(t, 0, len(res1))
 	for provider, tickers := range testHistoricalTickers1 {
@@ -39,7 +42,11 @@ func TestPriceHistory_getPrices(t *testing.T) {
 			require.NoError(t, err)
 		}
 	}
-	res2, err2 := h.GetTickerPrices(testPairAtom, testStartTime1, testEndTime1)
+	res2, err2 := h.GetTickerPrices(
+		testPairAtom.String(),
+		testStartTime1,
+		testEndTime1,
+	)
 	require.NoError(t, err2)
 	require.Equal(t, testHistoricalTickers1, res2)
 }

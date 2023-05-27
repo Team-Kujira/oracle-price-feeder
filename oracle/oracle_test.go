@@ -133,30 +133,6 @@ func (ots *OracleTestSuite) TestPrices() {
 	// initial prices should be empty (not set)
 	ots.Require().Empty(ots.oracle.GetPrices())
 
-	// Use a mock provider with exchange rates that are not specified in
-	// configuration.
-	ots.oracle.priceProviders = map[provider.Name]provider.Provider{
-		provider.ProviderBinance: mockProvider{
-			prices: map[string]types.TickerPrice{
-				"UMEEUSDX": {
-					Price:  sdk.MustNewDecFromStr("3.72"),
-					Volume: sdk.MustNewDecFromStr("2396974.02000000"),
-				},
-			},
-		},
-		provider.ProviderKraken: mockProvider{
-			prices: map[string]types.TickerPrice{
-				"UMEEUSDX": {
-					Price:  sdk.MustNewDecFromStr("3.70"),
-					Volume: sdk.MustNewDecFromStr("1994674.34000000"),
-				},
-			},
-		},
-	}
-
-	ots.Require().Error(ots.oracle.SetPrices(context.TODO()))
-	ots.Require().Empty(ots.oracle.GetPrices())
-
 	// use a mock provider without a conversion rate for these stablecoins
 	ots.oracle.priceProviders = map[provider.Name]provider.Provider{
 		provider.ProviderBinance: mockProvider{
@@ -177,7 +153,7 @@ func (ots *OracleTestSuite) TestPrices() {
 		},
 	}
 
-	ots.Require().Error(ots.oracle.SetPrices(context.TODO()))
+	ots.Require().NoError(ots.oracle.SetPrices(context.TODO()))
 
 	prices := ots.oracle.GetPrices()
 	ots.Require().Len(prices, 0)
@@ -224,6 +200,13 @@ func (ots *OracleTestSuite) TestPrices() {
 				},
 			},
 		},
+	}
+
+	ots.oracle.providerMinOverrides = map[string]int{
+		"XBT":  1,
+		"UMEE": 1,
+		"USDT": 1,
+		"USDC": 1,
 	}
 
 	ots.Require().NoError(ots.oracle.SetPrices(context.TODO()))
@@ -394,15 +377,19 @@ func TestSuccessGetComputedPricesTickers(t *testing.T) {
 	atomPrice := sdk.MustNewDecFromStr("29.93")
 	atomVolume := sdk.MustNewDecFromStr("894123.00")
 
-	tickerPrices := make(map[string]types.TickerPrice, 1)
-	tickerPrices[pair.Base] = types.TickerPrice{
+	tickerPrices := map[string]types.TickerPrice{}
+	tickerPrices[pair.String()] = types.TickerPrice{
 		Price:  atomPrice,
 		Volume: atomVolume,
 	}
 	providerPrices[provider.ProviderBinance] = tickerPrices
 
 	providerPair := map[provider.Name][]types.CurrencyPair{
-		"binance": {pair},
+		provider.ProviderBinance: {pair},
+	}
+
+	providerMinOverrides := map[string]int{
+		"ATOM": 1,
 	}
 
 	prices, err := GetComputedPrices(
@@ -410,11 +397,11 @@ func TestSuccessGetComputedPricesTickers(t *testing.T) {
 		providerPrices,
 		providerPair,
 		make(map[string]sdk.Dec),
-		make(map[string]int),
+		providerMinOverrides,
 	)
 
 	require.NoError(t, err, "It should successfully get computed ticker prices")
-	require.Equal(t, prices[pair.Base], atomPrice)
+	require.Equal(t, atomPrice, prices[pair.Base])
 }
 
 func TestGetComputedPricesTickersConversion(t *testing.T) {

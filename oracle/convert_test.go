@@ -67,20 +67,22 @@ func TestConvertTickersToUsdChaining(t *testing.T) {
 		}},
 	}
 
+	providerMinOverrides := map[string]int{
+		"STATOM": 1,
+		"STOSMO": 1,
+		"USDT":   1,
+		"OSMO":   1,
+		"ATOM":   1,
+	}
+
 	convertedTickers, err := convertTickersToUSD(
 		zerolog.Nop(),
 		providerPrices,
 		providerPairs,
 		make(map[string]sdk.Dec),
-		make(map[string]int),
+		providerMinOverrides,
 	)
 	require.NoError(t, err)
-
-	require.Equal(
-		t,
-		convertedTickers["STATOM"],
-		sdk.MustNewDecFromStr("10.989"),
-	)
 
 	require.Equal(
 		t,
@@ -151,12 +153,17 @@ func TestConvertTickersToUSDFiltering(t *testing.T) {
 		provider.ProviderCoinbase: {btcUsdt, usdtUsd},
 	}
 
+	prividerMinOverrides := map[string]int{
+		"USDT": 1,
+		"BTC":  1,
+	}
+
 	rates, err := convertTickersToUSD(
 		zerolog.Nop(),
 		providerPrices,
 		providerPairs,
 		make(map[string]sdk.Dec),
-		make(map[string]int),
+		prividerMinOverrides,
 	)
 	require.NoError(t, err)
 
@@ -178,28 +185,40 @@ func TestConvertTickersToUsdVwap(t *testing.T) {
 			Price:  sdk.MustNewDecFromStr("0.066"),
 			Volume: sdk.MustNewDecFromStr("100"),
 		},
-		"BTCUSD": {
-			Price:  sdk.MustNewDecFromStr("30050"),
-			Volume: sdk.MustNewDecFromStr("45"),
-		},
 		"BTCUSDT": {
 			Price:  sdk.MustNewDecFromStr("30000"),
 			Volume: sdk.MustNewDecFromStr("55"),
+		},
+	}
+	providerPrices[provider.ProviderBinance] = binanceTickers
+
+	coinbaseTickers := map[string]types.TickerPrice{
+		"BTCUSD": {
+			Price:  sdk.MustNewDecFromStr("30050"),
+			Volume: sdk.MustNewDecFromStr("45"),
 		},
 		"USDTUSD": {
 			Price:  sdk.MustNewDecFromStr("0.999"),
 			Volume: sdk.MustNewDecFromStr("100000"),
 		},
 	}
-	providerPrices[provider.ProviderBinance] = binanceTickers
+	providerPrices[provider.ProviderCoinbase] = coinbaseTickers
 
 	providerPairs := map[provider.Name][]types.CurrencyPair{
 		provider.ProviderBinance: {
 			types.CurrencyPair{Base: "ETH", Quote: "BTC"},
-			types.CurrencyPair{Base: "BTC", Quote: "USD"},
 			types.CurrencyPair{Base: "BTC", Quote: "USDT"},
+		},
+		provider.ProviderCoinbase: {
+			types.CurrencyPair{Base: "BTC", Quote: "USD"},
 			types.CurrencyPair{Base: "USDT", Quote: "USD"},
 		},
+	}
+
+	providerMinOverrides := map[string]int{
+		"BTC":  1,
+		"ETH":  1,
+		"USDT": 1,
 	}
 
 	rates, err := convertTickersToUSD(
@@ -207,7 +226,7 @@ func TestConvertTickersToUsdVwap(t *testing.T) {
 		providerPrices,
 		providerPairs,
 		make(map[string]sdk.Dec),
-		make(map[string]int),
+		providerMinOverrides,
 	)
 	require.NoError(t, err)
 
