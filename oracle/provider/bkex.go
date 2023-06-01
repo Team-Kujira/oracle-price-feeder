@@ -55,23 +55,31 @@ func NewBkexProvider(
 		nil,
 		nil,
 	)
+
+	availablePairs, _ := provider.GetAvailablePairs()
+	provider.setPairs(pairs, availablePairs, currencyPairToBkexSymbol)
+
 	go startPolling(provider, provider.endpoints.PollInterval, logger)
 	return provider, nil
 }
 
-func (p *BkexProvider) Poll() error {
-	symbols := make(map[string]string, len(p.pairs))
-	for _, pair := range p.pairs {
-		symbols[pair.Join("_")] = pair.String()
-	}
-
+func (p *BkexProvider) getTickers() (BkexTickersResponse, error) {
 	content, err := p.httpGet("/v2/q/tickers")
 	if err != nil {
-		return err
+		return BkexTickersResponse{}, err
 	}
 
 	var tickers BkexTickersResponse
 	err = json.Unmarshal(content, &tickers)
+	if err != nil {
+		return BkexTickersResponse{}, err
+	}
+
+	return tickers, nil
+}
+
+func (p *BkexProvider) Poll() error {
+	tickers, err := p.getTickers()
 	if err != nil {
 		return err
 	}
@@ -80,17 +88,35 @@ func (p *BkexProvider) Poll() error {
 	defer p.mtx.Unlock()
 
 	for _, ticker := range tickers.Data {
-		symbol, ok := symbols[ticker.Symbol]
-		if !ok {
+		if !p.isPair(ticker.Symbol) {
 			continue
 		}
 
-		p.tickers[symbol] = types.TickerPrice{
-			Price:  floatToDec(ticker.Price),
-			Volume: floatToDec(ticker.Volume),
-			Time:   time.UnixMilli(ticker.Time),
-		}
+		p.setTickerPrice(
+			ticker.Symbol,
+			floatToDec(ticker.Price),
+			floatToDec(ticker.Volume),
+			time.UnixMilli(ticker.Time),
+		)
 	}
 	p.logger.Debug().Msg("updated tickers")
 	return nil
+}
+
+func (p *BkexProvider) GetAvailablePairs() (map[string]struct{}, error) {
+	tickers, err := p.getTickers()
+	if err != nil {
+		return nil, err
+	}
+
+	symbols := map[string]struct{}{}
+	for _, ticker := range tickers.Data {
+		symbols[ticker.Symbol] = struct{}{}
+	}
+
+	return symbols, nil
+}
+
+func currencyPairToBkexSymbol(pair types.CurrencyPair) string {
+	return pair.Join("_")
 }

@@ -36,35 +36,37 @@ var (
 	// SupportedProviders defines a lookup table of all the supported currency API
 	// providers.
 	SupportedProviders = map[provider.Name]struct{}{
-		provider.ProviderBybit:     {},
-		provider.ProviderBitfinex:  {},
-		provider.ProviderBitforex:  {},
-		provider.ProviderBkex:      {},
-		provider.ProviderBitmart:   {},
-		provider.ProviderFin:       {},
-		provider.ProviderFinUsk:    {},
-		provider.ProviderPoloniex:  {},
-		provider.ProviderPhemex:    {},
-		provider.ProviderLbank:     {},
-		provider.ProviderHitBtc:    {},
-		provider.ProviderKraken:    {},
-		provider.ProviderKucoin:    {},
-		provider.ProviderBinance:   {},
-		provider.ProviderBinanceUS: {},
-		provider.ProviderOsmosis:   {},
-		provider.ProviderOsmosisV2: {},
-		provider.ProviderOkx:       {},
-		provider.ProviderHuobi:     {},
-		provider.ProviderGate:      {},
-		provider.ProviderCoinbase:  {},
-		provider.ProviderBitget:    {},
-		provider.ProviderMexc:      {},
-		provider.ProviderCrypto:    {},
-		provider.ProviderCurve:     {},
-		provider.ProviderMock:      {},
-		provider.ProviderStride:    {},
-		provider.ProviderXt:        {},
-		provider.ProviderZero:      {},
+		provider.ProviderBybit:      {},
+		provider.ProviderBitfinex:   {},
+		provider.ProviderBitforex:   {},
+		provider.ProviderBkex:       {},
+		provider.ProviderBitmart:    {},
+		provider.ProviderFin:        {},
+		provider.ProviderFinUsk:     {},
+		provider.ProviderPoloniex:   {},
+		provider.ProviderPhemex:     {},
+		provider.ProviderLbank:      {},
+		provider.ProviderHitBtc:     {},
+		provider.ProviderKraken:     {},
+		provider.ProviderKucoin:     {},
+		provider.ProviderBinance:    {},
+		provider.ProviderBinanceUS:  {},
+		provider.ProviderOsmosis:    {},
+		provider.ProviderOsmosisV2:  {},
+		provider.ProviderOkx:        {},
+		provider.ProviderHuobi:      {},
+		provider.ProviderGate:       {},
+		provider.ProviderCoinbase:   {},
+		provider.ProviderBitget:     {},
+		provider.ProviderMexc:       {},
+		provider.ProviderCrypto:     {},
+		provider.ProviderCurve:      {},
+		provider.ProviderMock:       {},
+		provider.ProviderStride:     {},
+		provider.ProviderXt:         {},
+		provider.ProviderIdxOsmosis: {},
+		provider.ProviderPyth:       {},
+		provider.ProviderZero:       {},
 	}
 
 	SupportedDerivatives = map[string]struct{}{
@@ -79,23 +81,23 @@ var (
 type (
 	// Config defines all necessary price-feeder configuration parameters.
 	Config struct {
-		Server              Server              `toml:"server"`
-		CurrencyPairs       []CurrencyPair      `toml:"currency_pairs" validate:"required,gt=0,dive,required"`
-		Deviations          []Deviation         `toml:"deviation_thresholds"`
-		Account             Account             `toml:"account" validate:"required,gt=0,dive,required"`
-		Keyring             Keyring             `toml:"keyring" validate:"required,gt=0,dive,required"`
-		RPC                 RPC                 `toml:"rpc" validate:"required,gt=0,dive,required"`
-		Telemetry           Telemetry           `toml:"telemetry"`
-		GasAdjustment       float64             `toml:"gas_adjustment" validate:"required"`
-		GasPrices           string              `toml:"gas_prices" validate:"required"`
-		ProviderTimeout     string              `toml:"provider_timeout"`
-		ProviderEndpoints   []ProviderEndpoints `toml:"provider_endpoints" validate:"dive"`
-		ProviderMinOverride bool                `toml:"provider_min_override"`
-		EnableServer        bool                `toml:"enable_server"`
-		EnableVoter         bool                `toml:"enable_voter"`
-		Healthchecks        []Healthchecks      `toml:"healthchecks" validate:"dive"`
-		HeightPollInterval  string              `toml:"height_poll_interval"`
-		HistoryDb           string              `toml:"history_db"`
+		Server               Server                 `toml:"server"`
+		CurrencyPairs        []CurrencyPair         `toml:"currency_pairs" validate:"required,gt=0,dive,required"`
+		Deviations           []Deviation            `toml:"deviation_thresholds"`
+		ProviderMinOverrides []ProviderMinOverrides `toml:"provider_min_overrides"`
+		Account              Account                `toml:"account" validate:"required,gt=0,dive,required"`
+		Keyring              Keyring                `toml:"keyring" validate:"required,gt=0,dive,required"`
+		RPC                  RPC                    `toml:"rpc" validate:"required,gt=0,dive,required"`
+		Telemetry            Telemetry              `toml:"telemetry"`
+		GasAdjustment        float64                `toml:"gas_adjustment" validate:"required"`
+		GasPrices            string                 `toml:"gas_prices" validate:"required"`
+		ProviderTimeout      string                 `toml:"provider_timeout"`
+		ProviderEndpoints    []ProviderEndpoints    `toml:"provider_endpoints" validate:"dive"`
+		EnableServer         bool                   `toml:"enable_server"`
+		EnableVoter          bool                   `toml:"enable_voter"`
+		Healthchecks         []Healthchecks         `toml:"healthchecks" validate:"dive"`
+		HeightPollInterval   string                 `toml:"height_poll_interval"`
+		HistoryDb            string                 `toml:"history_db"`
 	}
 
 	// Server defines the API server configuration.
@@ -122,6 +124,13 @@ type (
 	Deviation struct {
 		Base      string `toml:"base" validate:"required"`
 		Threshold string `toml:"threshold" validate:"required"`
+	}
+
+	// ProviderMinOverrides defines the minimum amount of sources that need
+	// to *sucessfully* provide price data for a certain asset
+	ProviderMinOverrides struct {
+		Denoms    []string `toml:"denoms" validate:"required"`
+		Providers uint     `toml:"providers" validate:"required"`
 	}
 
 	// Account defines account related configuration that is related to the
@@ -316,16 +325,6 @@ func ParseConfig(configPath string) (Config, error) {
 		}
 	}
 
-	if !cfg.ProviderMinOverride {
-		for base, providers := range pairs {
-			_, isMock := pairs[base]["mock"]
-			_, isDerivative := derivativeBases[base]
-			if !isDerivative && !isMock && len(providers) < 3 {
-				return cfg, fmt.Errorf("must have at least three providers for %s", base)
-			}
-		}
-	}
-
 	for _, deviation := range cfg.Deviations {
 		threshold, err := sdk.NewDecFromStr(deviation.Threshold)
 		if err != nil {
@@ -334,6 +333,12 @@ func ParseConfig(configPath string) (Config, error) {
 
 		if threshold.GT(maxDeviationThreshold) {
 			return cfg, fmt.Errorf("deviation thresholds must not exceed 3.0")
+		}
+	}
+
+	for _, override := range cfg.ProviderMinOverrides {
+		if override.Providers < 1 {
+			return cfg, fmt.Errorf("minimum providers must be greater than 0")
 		}
 	}
 

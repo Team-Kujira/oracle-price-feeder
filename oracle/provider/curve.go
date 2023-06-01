@@ -79,6 +79,10 @@ func NewCurveProvider(
 		nil,
 		nil,
 	)
+
+	availablePairs, _ := provider.GetAvailablePairs()
+	provider.setPairs(pairs, availablePairs, nil)
+
 	go startPolling(provider, provider.endpoints.PollInterval, logger)
 	return provider, nil
 }
@@ -159,4 +163,31 @@ func (p *CurveProvider) Poll() error {
 	}
 	p.logger.Debug().Msg("updated tickers")
 	return nil
+}
+
+func (p *CurveProvider) GetAvailablePairs() (map[string]struct{}, error) {
+	symbols := map[string]struct{}{}
+
+	for _, registryID := range []string{"main", "crypto", "factory"} {
+		path := "/api/getPools/ethereum/" + registryID
+		content, err := p.httpGet(path)
+		if err != nil {
+			return nil, err
+		}
+
+		var poolsResponse CurvePoolsResponse
+		err = json.Unmarshal(content, &poolsResponse)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, pool := range poolsResponse.Data.Pools {
+			for _, coin := range pool.Coins {
+				symbol := strings.ToUpper(coin.Symbol) + "USD"
+				symbols[symbol] = struct{}{}
+			}
+		}
+	}
+
+	return symbols, nil
 }

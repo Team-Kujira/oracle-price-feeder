@@ -3,7 +3,6 @@ package provider
 import (
 	"context"
 	"encoding/json"
-	"strings"
 	"time"
 
 	"price-feeder/oracle/types"
@@ -39,6 +38,7 @@ type (
 		QuoteVolume string `json:"target_volume"`   // ex.: "4875.4890980000"
 		Base        string `json:"base_currency"`   // ex.: "LUNA"
 		Quote       string `json:"target_currency"` // ex.: "axlUSDC"
+		Symbol      string `json:"ticker_id"`       // ex.: "LUNA_axlUSDC"
 	}
 )
 
@@ -57,18 +57,31 @@ func NewFinProvider(
 		nil,
 		nil,
 	)
+
+	availablePairs, _ := provider.GetAvailablePairs()
+	provider.setPairs(pairs, availablePairs, currencyPairToFinSymbol)
+
 	go startPolling(provider, provider.endpoints.PollInterval, logger)
 	return provider, nil
 }
 
-func (p *FinProvider) Poll() error {
+func (p *FinProvider) getTickers() (FinTickersResponse, error) {
 	content, err := p.httpGet("/api/coingecko/tickers")
 	if err != nil {
-		return err
+		return FinTickersResponse{}, err
 	}
 
 	var tickersResponse FinTickersResponse
 	err = json.Unmarshal(content, &tickersResponse)
+	if err != nil {
+		return FinTickersResponse{}, err
+	}
+
+	return tickersResponse, nil
+}
+
+func (p *FinProvider) Poll() error {
+	tickersResponse, err := p.getTickers()
 	if err != nil {
 		return err
 	}
@@ -79,39 +92,50 @@ func (p *FinProvider) Poll() error {
 	timestamp := time.Now()
 
 	for _, ticker := range tickersResponse.Tickers {
-		base := finTranslateProviderSymbol(ticker.Base)
-		quote := finTranslateProviderSymbol(ticker.Quote)
-
-		symbol := base + quote
-		reciprocal := false
-		volume := ticker.BaseVolume
-
-		_, ok := p.pairs[symbol]
-		if !ok {
-			symbol = quote + base
-			reciprocal = true
-			volume = ticker.QuoteVolume
-			_, ok = p.pairs[symbol]
-			if !ok {
-				continue
-			}
+		if !p.isPair(ticker.Symbol) {
+			continue
 		}
 
-		price := strToDec(ticker.Price)
-		if reciprocal {
-			price = strToDec("1").Quo(price)
-		}
-
-		p.tickers[symbol] = types.TickerPrice{
-			Price:  price,
-			Volume: strToDec(volume),
-			Time:   timestamp,
-		}
+		p.setTickerPrice(
+			ticker.Symbol,
+			strToDec(ticker.Price),
+			strToDec(ticker.BaseVolume),
+			timestamp,
+		)
 	}
 	p.logger.Debug().Msg("updated tickers")
 	return nil
 }
 
-func finTranslateProviderSymbol(symbol string) string {
-	return strings.ToUpper(strings.Replace(symbol, "axl", "", 1))
+func (p *FinProvider) GetAvailablePairs() (map[string]struct{}, error) {
+	tickersResponse, err := p.getTickers()
+	if err != nil {
+		return nil, err
+	}
+
+	symbols := map[string]struct{}{}
+	for _, ticker := range tickersResponse.Tickers {
+		symbols[ticker.Symbol] = struct{}{}
+	}
+
+	return symbols, nil
+}
+
+func currencyPairToFinSymbol(pair types.CurrencyPair) string {
+	mapping := map[string]string{
+		"USDC": "axlUSDC",
+		"USDT": "axlUSDT",
+	}
+
+	base, found := mapping[pair.Base]
+	if !found {
+		base = pair.Base
+	}
+
+	quote, found := mapping[pair.Quote]
+	if !found {
+		quote = pair.Quote
+	}
+
+	return base + "_" + quote
 }

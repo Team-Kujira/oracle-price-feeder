@@ -3,7 +3,6 @@ package oracle
 import (
 	"price-feeder/oracle/provider"
 	"price-feeder/oracle/types"
-	"sort"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/rs/zerolog"
@@ -16,187 +15,224 @@ import (
 // Ref: https://github.com/umee-network/umee/blob/4348c3e433df8c37dd98a690e96fc275de609bc1/price-feeder/oracle/filter.go#L41
 func convertTickersToUSD(
 	logger zerolog.Logger,
-	tickers provider.AggregatedProviderPrices,
+	providerPrices provider.AggregatedProviderPrices,
 	providerPairs map[provider.Name][]types.CurrencyPair,
 	deviationThresholds map[string]sdk.Dec,
+	providerMinOverrides map[string]int,
 ) (map[string]sdk.Dec, error) {
 
-	if len(tickers) == 0 {
+	if len(providerPrices) == 0 {
 		return nil, nil
-	}
-
-	type Vwap struct {
-		Base   string
-		Quote  string
-		Value  sdk.Dec
-		Volume sdk.Dec
-	}
-
-	type Rate struct {
-		Value  sdk.Dec
-		Volume sdk.Dec
-	}
-
-	// prepare map of vwap prices calculated over all providers
-
-	tickerPriceVwaps := map[string]Vwap{}
-
-	for _, pairs := range providerPairs {
-		for _, pair := range pairs {
-			symbol := pair.String()
-			_, found := tickerPriceVwaps[symbol]
-			if !found {
-				tickerPriceVwaps[symbol] = Vwap{
-					Base:  pair.Base,
-					Quote: pair.Quote,
-				}
-			}
-		}
-	}
-
-	// remove outliers
-
-	providerPrices, err := FilterTickerDeviations(
-		logger,
-		tickers,
-		deviationThresholds,
-	)
-	if err != nil {
-		return nil, err
 	}
 
 	// group ticker prices by symbol
 
-	tickerPricesBySymbol := map[string][]types.TickerPrice{}
-	for _, tickerPrices := range providerPrices {
+	providerPricesBySymbol := map[string]map[provider.Name]types.TickerPrice{}
+	for providerName, tickerPrices := range providerPrices {
 		for symbol, tickerPrice := range tickerPrices {
-			_, found := tickerPricesBySymbol[symbol]
+			_, found := providerPricesBySymbol[symbol]
 			if !found {
-				tickerPricesBySymbol[symbol] = []types.TickerPrice{}
+				providerPricesBySymbol[symbol] = map[provider.Name]types.TickerPrice{}
 			}
 
-			tickerPricesBySymbol[symbol] = append(
-				tickerPricesBySymbol[symbol],
-				tickerPrice,
-			)
+			providerPricesBySymbol[symbol][providerName] = tickerPrice
 		}
 	}
 
-	// calculate vwap for every symbol
-
-	for symbol, tickerPrices := range tickerPricesBySymbol {
-		_, found := tickerPriceVwaps[symbol]
-
-		if !found {
-			logger.Error().
-				Str("symbol", symbol).
-				Msg("Symbol not in providerPairs")
-			continue
+	symbols := map[string]struct{}{}
+	pairs := []types.CurrencyPair{}
+	for _, currencyPairs := range providerPairs {
+		for _, currencyPair := range currencyPairs {
+			symbol := currencyPair.String()
+			_, found := symbols[symbol]
+			if !found {
+				symbols[symbol] = struct{}{}
+				pairs = append(pairs, currencyPair)
+			}
 		}
-
-		vwap, err := ComputeVWAP(tickerPrices)
-
-		if err != nil {
-			logger.Error().
-				Str("symbol", symbol).
-				Msg("Failed computing VWAP")
-			continue
-		}
-
-		volume := sdk.ZeroDec()
-		for _, ticker := range tickerPrices {
-			volume = volume.Add(ticker.Volume)
-		}
-
-		tickerPriceVwap := tickerPriceVwaps[symbol]
-
-		tickerPriceVwaps[symbol] = Vwap{
-			Base:   tickerPriceVwap.Base,
-			Quote:  tickerPriceVwap.Quote,
-			Value:  vwap,
-			Volume: volume,
-		}
-
-	}
-
-	vwaps := []Vwap{}
-	for _, vwap := range tickerPriceVwaps {
-		if vwap.Value.IsNil() || vwap.Value.IsZero() {
-			continue
-		}
-		vwaps = append(vwaps, vwap)
 	}
 
 	// calculate USD values
 
 	// more than 6 conversions for the USD price is probably not very accurate
 	maxConversions := 6
-	rates := map[string]Rate{}
+	usdRates := map[string]map[provider.Name]types.TickerPrice{}
 
 	for i := 0; i < maxConversions; i++ {
-		unresolved := []Vwap{}
+		unresolved := []types.CurrencyPair{}
+		// sort.Slice(vwaps, func(i, j int) bool {
+		// 	volume1 := vwaps[i].Volume.Mul(vwaps[i].Value)
+		// 	volume2 := vwaps[j].Volume.Mul(vwaps[j].Value)
+		// 	return volume1.GT(volume2)
+		// })
 
-		sort.Slice(vwaps, func(i, j int) bool {
-			volume1 := vwaps[i].Volume.Mul(vwaps[i].Value)
-			volume2 := vwaps[j].Volume.Mul(vwaps[j].Value)
-			return volume1.GT(volume2)
-		})
+		for _, currencyPair := range pairs {
+			symbol := currencyPair.String()
+			base := currencyPair.Base
+			quote := currencyPair.Quote
 
-		for _, vwap := range vwaps {
-			rate := Rate{}
-			add := false
-			if vwap.Quote == "USD" {
-				rate.Value = vwap.Value
-				rate.Volume = vwap.Volume
-				add = true
+			maxDeviation := deviationThresholds[base]
+			tickerPrices := providerPricesBySymbol[symbol]
+
+			newRates := map[provider.Name]types.TickerPrice{}
+
+			if quote == "USD" {
+				for providerName, tickerPrice := range tickerPrices {
+					newRates[providerName] = tickerPrice
+				}
 			} else {
-				quoteRate, found := rates[vwap.Quote]
-				add = found
-				if found {
-					rate.Value = vwap.Value.Mul(quoteRate.Value)
-					rate.Volume = vwap.Volume
-				} else {
-					unresolved = append(unresolved, vwap)
+				minProviders, found := providerMinOverrides[quote]
+				if !found {
+					minProviders = 3
+				}
+
+				// a minimum of 3 usd prices are needed
+				rates, found := usdRates[quote]
+				if !found || len(rates) < minProviders {
+					unresolved = append(unresolved, currencyPair)
+					continue
+				}
+
+				filtered, err := FilterTickerDeviations(
+					logger, symbol, rates, maxDeviation,
+				)
+				if err != nil {
+					if len(rates) >= 3 {
+						unresolved = append(unresolved, currencyPair)
+						continue
+					}
+				}
+
+				rate, err := vwapRate(filtered)
+				if err != nil {
+					return nil, err
+				}
+
+				for providerName, tickerPrice := range tickerPrices {
+					newRates[providerName] = types.TickerPrice{
+						Price:  tickerPrice.Price.Mul(rate),
+						Volume: tickerPrice.Volume,
+						Time:   tickerPrice.Time,
+					}
 				}
 			}
 
-			if add {
-				// VWAP
-				existing, found := rates[vwap.Base]
-				if found {
-					difference := existing.Value.Sub(rate.Value).Abs()
-					if !difference.IsZero() {
-						difference = difference.Quo(existing.Value)
-					}
-
-					if difference.LT(sdk.MustNewDecFromStr("0.02")) {
-
-						total := existing.Value.Mul(existing.Volume)
-						total = total.Add(rate.Value.Mul(rate.Volume))
-						volume := existing.Volume.Add(rate.Volume)
-
-						rate.Value = total.Quo(volume)
-						rate.Volume = volume
-					}
-
+			if len(newRates) > 0 {
+				newRates, err := addRates(
+					logger,
+					symbol,
+					maxDeviation,
+					usdRates[base],
+					newRates,
+				)
+				if err != nil {
+					return nil, err
 				}
-
-				rates[vwap.Base] = rate
+				usdRates[base] = newRates
 			}
 		}
 
-		if len(unresolved) == 0 || len(unresolved) == len(vwaps) {
+		// Stop if there are no unresolved symbols left or no symbol could
+		// be converted, in which case the list of unresolved symbols is
+		// the same as the list of pairs
+		if len(unresolved) == 0 || len(unresolved) == len(pairs) {
 			break
 		}
 
-		vwaps = []Vwap{}
-		vwaps = append(vwaps, unresolved...)
+		// Try the next round with all unresolved symbols
+		pairs = []types.CurrencyPair{}
+		pairs = append(pairs, unresolved...)
 	}
 
 	ratesDec := map[string]sdk.Dec{}
-	for denom, rate := range rates {
-		ratesDec[denom] = rate.Value
+	for denom, tickers := range usdRates {
+		for name, ticker := range tickers {
+			provider.TelemetryProviderPrice(
+				provider.Name("_"+name.String()),
+				denom+"USD",
+				float32(ticker.Price.MustFloat64()),
+				float32(ticker.Volume.MustFloat64()),
+			)
+		}
+
+		threshold := deviationThresholds[denom]
+		filtered, err := FilterTickerDeviations(
+			logger, denom, tickers, threshold,
+		)
+		if err != nil {
+			minimum, found := providerMinOverrides[denom]
+			if !found {
+				logger.Err(err)
+				continue
+			}
+			if len(filtered) < minimum {
+				logger.Warn().
+					Str("denom", denom).
+					Int("minimum", minimum).
+					Int("available", len(filtered)).
+					Msg("not enough tickers")
+				continue
+			}
+		}
+
+		rate, err := vwapRate(filtered)
+		if err != nil {
+			logger.Err(err)
+			continue
+		}
+
+		if rate.IsZero() {
+			logger.Error().
+				Str("denom", denom).
+				Msg("rate is zero")
+			continue
+		}
+
+		ratesDec[denom] = rate
+
+		provider.TelemetryProviderPrice(
+			"_final",
+			denom+"USD",
+			float32(rate.MustFloat64()),
+			float32(1),
+		)
 	}
 
 	return ratesDec, nil
+}
+
+func addRates(
+	logger zerolog.Logger,
+	symbol string,
+	threshold sdk.Dec,
+	rates map[provider.Name]types.TickerPrice,
+	tickers map[provider.Name]types.TickerPrice,
+) (map[provider.Name]types.TickerPrice, error) {
+	if rates == nil {
+		rates = map[provider.Name]types.TickerPrice{}
+	}
+	for providerName, tickerPrice := range tickers {
+		// Don't add new calculated USD price if there is already one from
+		// the same provider
+		_, found := rates[providerName]
+		if found {
+			logger.Info().
+				Str("provider", providerName.String()).
+				Str("symbol", symbol).
+				Msg("rate already set for provider")
+			continue
+		}
+		rates[providerName] = tickerPrice
+	}
+	// Filter outliers
+	// return FilterTickerDeviations(logger, symbol, rates, threshold)
+	return rates, nil
+}
+
+func vwapRate(rates map[provider.Name]types.TickerPrice) (sdk.Dec, error) {
+	prices := []types.TickerPrice{}
+	for _, price := range rates {
+		prices = append(prices, price)
+	}
+	return ComputeVWAP(prices)
 }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -60,18 +61,19 @@ type Oracle struct {
 	logger zerolog.Logger
 	closer *pfsync.Closer
 
-	providerTimeout    time.Duration
-	providerPairs      map[provider.Name][]types.CurrencyPair
-	previousPrevote    *PreviousPrevote
-	previousVotePeriod float64
-	priceProviders     map[provider.Name]provider.Provider
-	oracleClient       client.OracleClient
-	deviations         map[string]sdk.Dec
-	endpoints          map[provider.Name]provider.Endpoint
-	history            history.PriceHistory
-	derivatives        map[string]derivative.Derivative
-	derivativePairs    map[string][]types.CurrencyPair
-	derivativeSymbols  map[string]struct{}
+	providerTimeout      time.Duration
+	providerPairs        map[provider.Name][]types.CurrencyPair
+	previousPrevote      *PreviousPrevote
+	previousVotePeriod   float64
+	priceProviders       map[provider.Name]provider.Provider
+	oracleClient         client.OracleClient
+	deviations           map[string]sdk.Dec
+	providerMinOverrides map[string]int
+	endpoints            map[provider.Name]provider.Endpoint
+	history              history.PriceHistory
+	derivatives          map[string]derivative.Derivative
+	derivativePairs      map[string][]types.CurrencyPair
+	derivativeSymbols    map[string]struct{}
 
 	mtx             sync.RWMutex
 	lastPriceSyncTS time.Time
@@ -86,6 +88,7 @@ func New(
 	currencyPairs []config.CurrencyPair,
 	providerTimeout time.Duration,
 	deviations map[string]sdk.Dec,
+	providerMinOverrides map[string]int,
 	endpoints map[provider.Name]provider.Endpoint,
 	derivatives map[string]derivative.Derivative,
 	derivativePairs map[string][]types.CurrencyPair,
@@ -116,21 +119,22 @@ func New(
 		}
 	}
 	return &Oracle{
-		logger:            logger.With().Str("module", "oracle").Logger(),
-		closer:            pfsync.NewCloser(),
-		oracleClient:      oc,
-		providerPairs:     providerPairs,
-		priceProviders:    make(map[provider.Name]provider.Provider),
-		previousPrevote:   nil,
-		providerTimeout:   providerTimeout,
-		deviations:        deviations,
-		paramCache:        ParamCache{},
-		endpoints:         endpoints,
-		healthchecks:      healthchecks,
-		derivatives:       derivatives,
-		derivativePairs:   derivativePairs,
-		derivativeSymbols: derivativeDenoms,
-		history:           history,
+		logger:               logger.With().Str("module", "oracle").Logger(),
+		closer:               pfsync.NewCloser(),
+		oracleClient:         oc,
+		providerPairs:        providerPairs,
+		priceProviders:       make(map[provider.Name]provider.Provider),
+		previousPrevote:      nil,
+		providerTimeout:      providerTimeout,
+		deviations:           deviations,
+		providerMinOverrides: providerMinOverrides,
+		paramCache:           ParamCache{},
+		endpoints:            endpoints,
+		healthchecks:         healthchecks,
+		derivatives:          derivatives,
+		derivativePairs:      derivativePairs,
+		derivativeSymbols:    derivativeDenoms,
+		history:              history,
 	}
 }
 
@@ -206,9 +210,22 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 		providerName := providerName
 		currencyPairs := currencyPairs
 
-		priceProvider, err := o.getOrSetProvider(ctx, providerName)
-		if err != nil {
-			return err
+		priceProvider, found := o.priceProviders[providerName]
+		if !found {
+			newProvider, err := NewProvider(
+				ctx,
+				providerName,
+				o.logger,
+				o.endpoints[providerName],
+				o.providerPairs[providerName]...,
+			)
+			if err != nil {
+				return err
+			}
+			priceProvider = newProvider
+
+			o.priceProviders[providerName] = priceProvider
+			continue
 		}
 
 		for _, pair := range currencyPairs {
@@ -224,6 +241,7 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 			errCh := make(chan error, 1)
 
 			go func() {
+				var err error
 				defer close(ch)
 				prices, err = priceProvider.GetTickerPrices(currencyPairs...)
 				if err != nil {
@@ -276,17 +294,31 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 	}
 
 	for name, pairs := range o.derivativePairs {
-		pairsMap := map[string]types.TickerPrice{}
 		for _, pair := range pairs {
-			tickerPrice, err := o.derivatives[name].GetPrice(pair)
+			symbol := pair.String()
+			tickerPrices, err := o.derivatives[name].GetPrices(symbol)
+
 			if err != nil {
 				// o.logger.Err(err).Msg("failed to get derivative price")
 				continue
 			}
-			pairsMap[pair.String()] = tickerPrice
-		}
 
-		providerPrices["_derivative"] = pairsMap
+			for nameString, tickerPrice := range tickerPrices {
+				providerName := provider.Name(nameString)
+				_, found := providerPrices[providerName]
+				if !found {
+					providerPrices[providerName] = map[string]types.TickerPrice{}
+				}
+				providerPrices[providerName][symbol] = tickerPrice
+
+				provider.TelemetryProviderPrice(
+					provider.Name(nameString+"_twap"),
+					symbol,
+					float32(tickerPrice.Price.MustFloat64()),
+					float32(tickerPrice.Volume.MustFloat64()),
+				)
+			}
+		}
 	}
 
 	computedPrices, err := GetComputedPrices(
@@ -294,6 +326,7 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 		providerPrices,
 		o.providerPairs,
 		o.deviations,
+		o.providerMinOverrides,
 	)
 	if err != nil {
 		return err
@@ -307,6 +340,7 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 			}
 		}
 
+		sort.Strings(missingPrices)
 		o.logger.Error().Msg(
 			"unable to get prices for: " + strings.Join(missingPrices, ", "),
 		)
@@ -326,12 +360,15 @@ func GetComputedPrices(
 	providerPrices provider.AggregatedProviderPrices,
 	providerPairs map[provider.Name][]types.CurrencyPair,
 	deviations map[string]sdk.Dec,
+	providerMinOverrides map[string]int,
 ) (prices map[string]sdk.Dec, err error) {
+
 	rates, err := convertTickersToUSD(
 		logger,
 		providerPrices,
 		providerPairs,
 		deviations,
+		providerMinOverrides,
 	)
 	if err != nil {
 		return nil, err
@@ -383,32 +420,6 @@ func (o *Oracle) GetParams(ctx context.Context) (oracletypes.Params, error) {
 	return queryResponse.Params, nil
 }
 
-func (o *Oracle) getOrSetProvider(ctx context.Context, providerName provider.Name) (provider.Provider, error) {
-	var (
-		priceProvider provider.Provider
-		ok            bool
-	)
-
-	priceProvider, ok = o.priceProviders[providerName]
-	if !ok {
-		newProvider, err := NewProvider(
-			ctx,
-			providerName,
-			o.logger,
-			o.endpoints[providerName],
-			o.providerPairs[providerName]...,
-		)
-		if err != nil {
-			return nil, err
-		}
-		priceProvider = newProvider
-
-		o.priceProviders[providerName] = priceProvider
-	}
-
-	return priceProvider, nil
-}
-
 func NewProvider(
 	ctx context.Context,
 	providerName provider.Name,
@@ -448,6 +459,8 @@ func NewProvider(
 		return provider.NewHitBtcProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderHuobi:
 		return provider.NewHuobiProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderIdxOsmosis:
+		return provider.NewIdxProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderKraken:
 		return provider.NewKrakenProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderKucoin:
@@ -468,6 +481,8 @@ func NewProvider(
 		return provider.NewPhemexProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderPoloniex:
 		return provider.NewPoloniexProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderPyth:
+		return provider.NewPythProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderXt:
 		return provider.NewXtProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderZero:

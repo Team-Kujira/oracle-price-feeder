@@ -60,23 +60,31 @@ func NewLbankProvider(
 		nil,
 		nil,
 	)
+
+	availablePairs, _ := provider.GetAvailablePairs()
+	provider.setPairs(pairs, availablePairs, currencyPairToLbankSymbol)
+
 	go startPolling(provider, provider.endpoints.PollInterval, logger)
 	return provider, nil
 }
 
-func (p *LbankProvider) Poll() error {
-	symbols := make(map[string]string, len(p.pairs))
-	for _, pair := range p.pairs {
-		symbols[strings.ToLower(pair.Join("_"))] = pair.String()
-	}
-
+func (p *LbankProvider) getTickers() (LbankTickersResponse, error) {
 	content, err := p.httpGet("/v2/ticker.do?symbol=all")
 	if err != nil {
-		return err
+		return LbankTickersResponse{}, err
 	}
 
 	var tickers LbankTickersResponse
 	err = json.Unmarshal(content, &tickers)
+	if err != nil {
+		return LbankTickersResponse{}, err
+	}
+
+	return tickers, nil
+}
+
+func (p *LbankProvider) Poll() error {
+	tickers, err := p.getTickers()
 	if err != nil {
 		return err
 	}
@@ -85,17 +93,35 @@ func (p *LbankProvider) Poll() error {
 	defer p.mtx.Unlock()
 
 	for _, ticker := range tickers.Data {
-		symbol, ok := symbols[ticker.Symbol]
-		if !ok {
+		if !p.isPair(ticker.Symbol) {
 			continue
 		}
 
-		p.tickers[symbol] = types.TickerPrice{
-			Price:  floatToDec(ticker.Ticker.Price),
-			Volume: floatToDec(ticker.Ticker.Volume),
-			Time:   time.UnixMilli(ticker.Time),
-		}
+		p.setTickerPrice(
+			ticker.Symbol,
+			floatToDec(ticker.Ticker.Price),
+			floatToDec(ticker.Ticker.Volume),
+			time.UnixMilli(ticker.Time),
+		)
 	}
 	p.logger.Debug().Msg("updated tickers")
 	return nil
+}
+
+func (p *LbankProvider) GetAvailablePairs() (map[string]struct{}, error) {
+	tickers, err := p.getTickers()
+	if err != nil {
+		return nil, err
+	}
+
+	symbols := map[string]struct{}{}
+	for _, ticker := range tickers.Data {
+		symbols[ticker.Symbol] = struct{}{}
+	}
+
+	return symbols, nil
+}
+
+func currencyPairToLbankSymbol(pair types.CurrencyPair) string {
+	return strings.ToLower(pair.Join("_"))
 }

@@ -50,18 +50,31 @@ func NewMexcProvider(
 		nil,
 		nil,
 	)
+
+	availablePairs, _ := provider.GetAvailablePairs()
+	provider.setPairs(pairs, availablePairs, nil)
+
 	go startPolling(provider, provider.endpoints.PollInterval, logger)
 	return provider, nil
 }
 
-func (p *MexcProvider) Poll() error {
+func (p *MexcProvider) getTickers() ([]MexcTicker, error) {
 	content, err := p.httpGet("/api/v3/ticker/24hr")
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	var tickers []MexcTicker
 	err = json.Unmarshal(content, &tickers)
+	if err != nil {
+		return nil, err
+	}
+
+	return tickers, nil
+}
+
+func (p *MexcProvider) Poll() error {
+	tickers, err := p.getTickers()
 	if err != nil {
 		return err
 	}
@@ -70,16 +83,31 @@ func (p *MexcProvider) Poll() error {
 	defer p.mtx.Unlock()
 	now := time.Now()
 	for _, ticker := range tickers {
-		_, ok := p.pairs[ticker.Symbol]
-		if !ok {
+		if !p.isPair(ticker.Symbol) {
 			continue
 		}
-		p.tickers[ticker.Symbol] = types.TickerPrice{
-			Price:  strToDec(ticker.Price),
-			Volume: strToDec(ticker.Volume),
-			Time:   now,
-		}
+
+		p.setTickerPrice(
+			ticker.Symbol,
+			strToDec(ticker.Price),
+			strToDec(ticker.Volume),
+			now,
+		)
 	}
 	p.logger.Debug().Msg("updated tickers")
 	return nil
+}
+
+func (p *MexcProvider) GetAvailablePairs() (map[string]struct{}, error) {
+	tickers, err := p.getTickers()
+	if err != nil {
+		return nil, err
+	}
+
+	symbols := map[string]struct{}{}
+	for _, ticker := range tickers {
+		symbols[ticker.Symbol] = struct{}{}
+	}
+
+	return symbols, nil
 }

@@ -164,3 +164,7 @@ func (p MockProvider) GetAvailablePairs() (map[string]struct{}, error) {
 
 	return availablePairs, nil
 }
+
+func (p *MockProvider) SetPairs([]types.CurrencyPair) error {
+	return nil
+}

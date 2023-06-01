@@ -3,7 +3,6 @@ package provider
 import (
 	"context"
 	"encoding/json"
-	"strings"
 	"time"
 
 	"price-feeder/oracle/types"
@@ -51,25 +50,31 @@ func NewOsmosisProvider(
 		nil,
 		nil,
 	)
+
+	availablePairs, _ := provider.GetAvailablePairs()
+	provider.setPairs(pairs, availablePairs, nil)
+
 	go startPolling(provider, provider.endpoints.PollInterval, logger)
 	return provider, nil
 }
 
-func (p *OsmosisProvider) Poll() error {
-	denoms := map[string]bool{}
-	for _, pair := range p.pairs {
-		if pair.Quote == "USD" {
-			denoms[strings.ToUpper(pair.Base)] = true
-		}
-	}
-
+func (p *OsmosisProvider) getTickers() ([]OsmosisTicker, error) {
 	content, err := p.httpGet("/tokens/v2/all")
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	var tickers []OsmosisTicker
 	err = json.Unmarshal(content, &tickers)
+	if err != nil {
+		return nil, err
+	}
+
+	return tickers, nil
+}
+
+func (p *OsmosisProvider) Poll() error {
+	tickers, err := p.getTickers()
 	if err != nil {
 		return err
 	}
@@ -80,17 +85,32 @@ func (p *OsmosisProvider) Poll() error {
 	defer p.mtx.Unlock()
 
 	for _, ticker := range tickers {
-		_, ok := denoms[strings.ToUpper(ticker.Symbol)]
-		if !ok {
+		symbol := ticker.Symbol + "USD"
+		if !p.isPair(symbol) {
 			continue
 		}
 
-		p.tickers[strings.ToUpper(ticker.Symbol+"USD")] = types.TickerPrice{
-			Price:  floatToDec(ticker.Price),
-			Volume: floatToDec(ticker.Volume),
-			Time:   timestamp,
-		}
+		p.setTickerPrice(
+			symbol,
+			floatToDec(ticker.Price),
+			floatToDec(ticker.Volume),
+			timestamp,
+		)
 	}
 	p.logger.Debug().Msg("updated tickers")
 	return nil
+}
+
+func (p *OsmosisProvider) GetAvailablePairs() (map[string]struct{}, error) {
+	tickers, err := p.getTickers()
+	if err != nil {
+		return nil, err
+	}
+
+	symbols := map[string]struct{}{}
+	for _, ticker := range tickers {
+		symbols[ticker.Symbol+"USD"] = struct{}{}
+	}
+
+	return symbols, nil
 }

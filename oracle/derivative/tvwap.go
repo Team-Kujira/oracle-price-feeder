@@ -39,41 +39,53 @@ func NewTvwapDerivative(
 	return d, nil
 }
 
-func (d *TvwapDerivative) GetPrice(pair types.CurrencyPair) (types.TickerPrice, error) {
+func (d *TvwapDerivative) GetPrices(symbol string) (map[string]types.TickerPrice, error) {
 	now := time.Now()
-	symbol := pair.String()
 
 	period, ok := d.periods[symbol]
 	if !ok {
-		d.logger.Error().Str("pair", symbol).Msg("pair not configured")
-		return types.TickerPrice{}, fmt.Errorf("pair not configured")
-	}
-	start := now.Add(-period)
-	tickers, err := d.history.GetTickerPrices(pair, start, now)
-	if err != nil {
-		d.logger.Error().Err(err).Str("pair", symbol).Msg("failed to get historical tickers")
-		return types.TickerPrice{}, err
-	}
-	pairPrice, err := Tvwap(tickers, start, now)
-	if err != nil || pairPrice.IsNil() || pairPrice.IsZero() {
-		d.logger.Warn().Err(err).Str("pair", symbol).Dur("period", period).Msg("failed to compute derivative price")
-		return types.TickerPrice{}, err
+		d.logger.Error().
+			Str("symbol", symbol).
+			Msg("pair not configured")
+		return nil, fmt.Errorf("pair not configured")
 	}
 
-	volume := sdk.ZeroDec()
-	for _, tps := range tickers {
-		for _, tp := range tps {
-			volume = volume.Add(tp.Volume)
+	start := now.Add(-period)
+	tickers, err := d.history.GetTickerPrices(symbol, start, now)
+	if err != nil {
+		d.logger.Error().
+			Err(err).
+			Str("symbol", symbol).
+			Msg("failed to get historical tickers")
+		return nil, err
+	}
+
+	derivativePrices := map[string]types.TickerPrice{}
+	for providerName, tickerPrices := range tickers {
+		tmpTickers := map[string][]types.TickerPrice{
+			providerName: tickerPrices,
+		}
+
+		pairPrice, err := Tvwap(tmpTickers, start, now)
+		if err != nil || pairPrice.IsNil() || pairPrice.IsZero() {
+			d.logger.Warn().
+				Err(err).
+				Str("symbol", symbol).
+				Dur("period", period).
+				Msg("failed to compute derivative price")
+			continue
+		}
+
+		latestTicker := tickerPrices[len(tickerPrices)-1]
+
+		derivativePrices[providerName] = types.TickerPrice{
+			Price:  pairPrice,
+			Volume: latestTicker.Volume,
+			Time:   now,
 		}
 	}
 
-	ticker := types.TickerPrice{
-		Price:  pairPrice,
-		Volume: volume,
-		Time:   now,
-	}
-
-	return ticker, nil
+	return derivativePrices, nil
 }
 
 func Tvwap(

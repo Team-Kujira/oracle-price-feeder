@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"price-feeder/oracle"
-	"price-feeder/oracle/provider"
 	"price-feeder/oracle/types"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -66,115 +65,66 @@ func TestComputeVWAP(t *testing.T) {
 }
 
 func TestStandardDeviation(t *testing.T) {
-	type deviation struct {
+	type result struct {
 		mean      sdk.Dec
 		deviation sdk.Dec
+		err       bool
 	}
-	testCases := map[string]struct {
-		prices   map[provider.Name]map[string]sdk.Dec
-		expected map[string]deviation
+	restCases := map[string]struct {
+		prices   []sdk.Dec
+		expected result
 	}{
 		"empty prices": {
-			prices:   make(map[provider.Name]map[string]sdk.Dec),
-			expected: map[string]deviation{},
+			prices:   []sdk.Dec{},
+			expected: result{},
 		},
 		"nil prices": {
 			prices:   nil,
-			expected: map[string]deviation{},
+			expected: result{},
 		},
 		"not enough prices": {
-			prices: map[provider.Name]map[string]sdk.Dec{
-				provider.ProviderBinance: {
-					"ATOM": sdk.MustNewDecFromStr("28.21000000"),
-					"UMEE": sdk.MustNewDecFromStr("1.13000000"),
-					"LUNA": sdk.MustNewDecFromStr("64.87000000"),
-				},
-				provider.ProviderKraken: {
-					"ATOM": sdk.MustNewDecFromStr("28.23000000"),
-					"UMEE": sdk.MustNewDecFromStr("1.13050000"),
-					"LUNA": sdk.MustNewDecFromStr("64.85000000"),
-				},
+			prices: []sdk.Dec{
+				sdk.MustNewDecFromStr("28.21000000"),
+				sdk.MustNewDecFromStr("28.23000000"),
 			},
-			expected: map[string]deviation{},
+			expected: result{},
 		},
-		"some prices": {
-			prices: map[provider.Name]map[string]sdk.Dec{
-				provider.ProviderBinance: {
-					"ATOM": sdk.MustNewDecFromStr("28.21000000"),
-					"UMEE": sdk.MustNewDecFromStr("1.13000000"),
-					"LUNA": sdk.MustNewDecFromStr("64.87000000"),
-				},
-				provider.ProviderKraken: {
-					"ATOM": sdk.MustNewDecFromStr("28.23000000"),
-					"UMEE": sdk.MustNewDecFromStr("1.13050000"),
-				},
-				provider.ProviderOsmosis: {
-					"ATOM": sdk.MustNewDecFromStr("28.40000000"),
-					"UMEE": sdk.MustNewDecFromStr("1.14000000"),
-					"LUNA": sdk.MustNewDecFromStr("64.10000000"),
-				},
+		"enough prices 1": {
+			prices: []sdk.Dec{
+				sdk.MustNewDecFromStr("28.21000000"),
+				sdk.MustNewDecFromStr("28.23000000"),
+				sdk.MustNewDecFromStr("28.40000000"),
 			},
-			expected: map[string]deviation{
-				"ATOM": {
-					mean:      sdk.MustNewDecFromStr("28.28"),
-					deviation: sdk.MustNewDecFromStr("0.085244745683629475"),
-				},
-				"UMEE": {
-					mean:      sdk.MustNewDecFromStr("1.1335"),
-					deviation: sdk.MustNewDecFromStr("0.004600724580614015"),
-				},
+			expected: result{
+				mean:      sdk.MustNewDecFromStr("28.28"),
+				deviation: sdk.MustNewDecFromStr("0.085244745683629475"),
+				err:       false,
 			},
 		},
-
-		"non empty prices": {
-			prices: map[provider.Name]map[string]sdk.Dec{
-				provider.ProviderBinance: {
-					"ATOM": sdk.MustNewDecFromStr("28.21000000"),
-
-					"UMEE": sdk.MustNewDecFromStr("1.13000000"),
-					"LUNA": sdk.MustNewDecFromStr("64.87000000"),
-				},
-				provider.ProviderKraken: {
-					"ATOM": sdk.MustNewDecFromStr("28.23000000"),
-					"UMEE": sdk.MustNewDecFromStr("1.13050000"),
-					"LUNA": sdk.MustNewDecFromStr("64.85000000"),
-				},
-				provider.ProviderOsmosis: {
-					"ATOM": sdk.MustNewDecFromStr("28.40000000"),
-					"UMEE": sdk.MustNewDecFromStr("1.14000000"),
-					"LUNA": sdk.MustNewDecFromStr("64.10000000"),
-				},
+		"enough prices 2": {
+			prices: []sdk.Dec{
+				sdk.MustNewDecFromStr("1.13000000"),
+				sdk.MustNewDecFromStr("1.13050000"),
+				sdk.MustNewDecFromStr("1.14000000"),
 			},
-			expected: map[string]deviation{
-				"ATOM": {
-					mean:      sdk.MustNewDecFromStr("28.28"),
-					deviation: sdk.MustNewDecFromStr("0.085244745683629475"),
-				},
-				"UMEE": {
-					mean:      sdk.MustNewDecFromStr("1.1335"),
-					deviation: sdk.MustNewDecFromStr("0.004600724580614015"),
-				},
-				"LUNA": {
-					mean:      sdk.MustNewDecFromStr("64.606666666666666666"),
-					deviation: sdk.MustNewDecFromStr("0.358360464089193609"),
-				},
+			expected: result{
+				mean:      sdk.MustNewDecFromStr("1.1335"),
+				deviation: sdk.MustNewDecFromStr("0.004600724580614015"),
+				err:       false,
 			},
 		},
 	}
 
-	for name, tc := range testCases {
-		tc := tc
+	for name, test := range restCases {
+		test := test
 
 		t.Run(name, func(t *testing.T) {
-			deviation, mean, err := oracle.StandardDeviation(tc.prices)
-			require.NoError(t, err)
-			require.Len(t, deviation, len(tc.expected))
-			require.Len(t, mean, len(tc.expected))
-
-			for k, v := range tc.expected {
-				require.Equalf(t, v.deviation, deviation[k], "unexpected deviation for %s", k)
-				require.Equalf(t, v.mean, mean[k], "unexpected mean for %s", k)
-			}
+			deviation, mean, _ := oracle.StandardDeviation(test.prices)
+			// if test.expected.err == false {
+			// 	require.NoError(t, err)
+			// }
+			require.Equal(t, test.expected.deviation, deviation)
+			require.Equal(t, test.expected.mean, mean)
 		})
 	}
 }

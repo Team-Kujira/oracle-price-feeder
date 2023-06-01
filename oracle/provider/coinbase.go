@@ -33,6 +33,10 @@ type (
 		Volume string `json:"volume"` // ex.: "7421.5009"
 		Time   string `json:"time"`   // ex.: "1660704288118"
 	}
+
+	CoinbaseTradingPair struct {
+		Symbol string `json:"id"` // ex.: "ADA-BTC"
+	}
 )
 
 func NewCoinbaseProvider(
@@ -51,7 +55,10 @@ func NewCoinbaseProvider(
 		nil,
 	)
 
-	interval := time.Duration(len(pairs)/10*2+1) * time.Second
+	availablePairs, _ := provider.GetAvailablePairs()
+	provider.setPairs(pairs, availablePairs, currencyPairToCoinbaseSymbol)
+
+	interval := time.Duration(len(provider.getAllPairs())/10*2+1) * time.Second
 
 	go startPolling(provider, interval, logger)
 	return provider, nil
@@ -59,9 +66,9 @@ func NewCoinbaseProvider(
 
 func (p *CoinbaseProvider) Poll() error {
 	i := 0
-	for _, pair := range p.pairs {
-		go func(p *CoinbaseProvider, pair types.CurrencyPair) {
-			path := fmt.Sprintf("/products/%s/ticker", pair.Join("-"))
+	for symbol, pair := range p.getAllPairs() {
+		go func(p *CoinbaseProvider, symbol string, pair types.CurrencyPair) {
+			path := fmt.Sprintf("/products/%s/ticker", symbol)
 			content, err := p.httpGet(path)
 			if err != nil {
 				return
@@ -73,24 +80,18 @@ func (p *CoinbaseProvider) Poll() error {
 				return
 			}
 
-			timestamp, err := time.Parse(time.RFC3339, ticker.Time)
-			if err != nil {
-				p.logger.
-					Err(err).
-					Msg("failed parsing timestamp")
-				return
-			}
+			now := time.Now()
 
 			p.mtx.Lock()
 			defer p.mtx.Unlock()
 
-			p.tickers[pair.String()] = types.TickerPrice{
-				Price:  strToDec(ticker.Price),
-				Volume: strToDec(ticker.Volume),
-				Time:   timestamp,
-			}
-
-		}(p, pair)
+			p.setTickerPrice(
+				symbol,
+				strToDec(ticker.Price),
+				strToDec(ticker.Volume),
+				now,
+			)
+		}(p, symbol, pair)
 		// Coinbase has a rate limit of 10req/s, sleeping 1.2s before running
 		// the next batch of requests
 		i = i + 1
@@ -102,4 +103,28 @@ func (p *CoinbaseProvider) Poll() error {
 
 	p.logger.Debug().Msg("updated tickers")
 	return nil
+}
+
+func (p *CoinbaseProvider) GetAvailablePairs() (map[string]struct{}, error) {
+	content, err := p.httpGet("/products")
+	if err != nil {
+		return nil, err
+	}
+
+	var pairs []CoinbaseTradingPair
+	err = json.Unmarshal(content, &pairs)
+	if err != nil {
+		return nil, err
+	}
+
+	symbols := map[string]struct{}{}
+	for _, pair := range pairs {
+		symbols[pair.Symbol] = struct{}{}
+	}
+
+	return symbols, nil
+}
+
+func currencyPairToCoinbaseSymbol(pair types.CurrencyPair) string {
+	return pair.Join("-")
 }

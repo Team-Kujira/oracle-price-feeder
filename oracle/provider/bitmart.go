@@ -98,3 +98,12 @@ func (p *BitmartProvider) Poll() error {
 	p.logger.Debug().Msg("updated tickers")
 	return nil
 }
+
+func (p *BitmartProvider) GetAvailablePairs() (map[string]struct{}, error) {
+	p.logger.Warn().Msg("available pairs query not implemented")
+	return nil, nil
+}
+
+func (p *BitmartProvider) SetPairs([]types.CurrencyPair) error {
+	return nil
+}

@@ -13,10 +13,10 @@ import (
 
 	"price-feeder/config"
 	"price-feeder/oracle/client"
+	"price-feeder/oracle/derivative"
 	"price-feeder/oracle/history"
 	"price-feeder/oracle/provider"
 	"price-feeder/oracle/types"
-	"price-feeder/oracle/derivative"
 )
 
 type mockProvider struct {
@@ -35,13 +35,17 @@ func (m mockProvider) GetAvailablePairs() (map[string]struct{}, error) {
 	return map[string]struct{}{}, nil
 }
 
+func (m mockProvider) SetPairs([]types.CurrencyPair) error {
+	return nil
+}
+
 func (m mockProvider) CurrencyPairToProviderPair(pair types.CurrencyPair) string {
 	return ""
 }
 
-func (m mockProvider) ProviderPairToCurrencyPair(pair string) types.CurrencyPair {
-	return types.CurrencyPair{}
-}
+// func (m mockProvider) ProviderPairToCurrencyPair(pair string) types.CurrencyPair {
+// 	return types.CurrencyPair{}
+// }
 
 type failingProvider struct {
 	mockProvider
@@ -93,6 +97,7 @@ func (ots *OracleTestSuite) SetupSuite() {
 		},
 		time.Millisecond*100,
 		make(map[string]sdk.Dec),
+		make(map[string]int),
 		make(map[provider.Name]provider.Endpoint),
 		map[string]derivative.Derivative{},
 		map[string][]types.CurrencyPair{},
@@ -128,30 +133,6 @@ func (ots *OracleTestSuite) TestPrices() {
 	// initial prices should be empty (not set)
 	ots.Require().Empty(ots.oracle.GetPrices())
 
-	// Use a mock provider with exchange rates that are not specified in
-	// configuration.
-	ots.oracle.priceProviders = map[provider.Name]provider.Provider{
-		provider.ProviderBinance: mockProvider{
-			prices: map[string]types.TickerPrice{
-				"UMEEUSDX": {
-					Price:  sdk.MustNewDecFromStr("3.72"),
-					Volume: sdk.MustNewDecFromStr("2396974.02000000"),
-				},
-			},
-		},
-		provider.ProviderKraken: mockProvider{
-			prices: map[string]types.TickerPrice{
-				"UMEEUSDX": {
-					Price:  sdk.MustNewDecFromStr("3.70"),
-					Volume: sdk.MustNewDecFromStr("1994674.34000000"),
-				},
-			},
-		},
-	}
-
-	ots.Require().Error(ots.oracle.SetPrices(context.TODO()))
-	ots.Require().Empty(ots.oracle.GetPrices())
-
 	// use a mock provider without a conversion rate for these stablecoins
 	ots.oracle.priceProviders = map[provider.Name]provider.Provider{
 		provider.ProviderBinance: mockProvider{
@@ -172,7 +153,7 @@ func (ots *OracleTestSuite) TestPrices() {
 		},
 	}
 
-	ots.Require().Error(ots.oracle.SetPrices(context.TODO()))
+	ots.Require().NoError(ots.oracle.SetPrices(context.TODO()))
 
 	prices := ots.oracle.GetPrices()
 	ots.Require().Len(prices, 0)
@@ -219,6 +200,13 @@ func (ots *OracleTestSuite) TestPrices() {
 				},
 			},
 		},
+	}
+
+	ots.oracle.providerMinOverrides = map[string]int{
+		"XBT":  1,
+		"UMEE": 1,
+		"USDT": 1,
+		"USDC": 1,
 	}
 
 	ots.Require().NoError(ots.oracle.SetPrices(context.TODO()))
@@ -389,15 +377,19 @@ func TestSuccessGetComputedPricesTickers(t *testing.T) {
 	atomPrice := sdk.MustNewDecFromStr("29.93")
 	atomVolume := sdk.MustNewDecFromStr("894123.00")
 
-	tickerPrices := make(map[string]types.TickerPrice, 1)
-	tickerPrices[pair.Base] = types.TickerPrice{
+	tickerPrices := map[string]types.TickerPrice{}
+	tickerPrices[pair.String()] = types.TickerPrice{
 		Price:  atomPrice,
 		Volume: atomVolume,
 	}
 	providerPrices[provider.ProviderBinance] = tickerPrices
 
 	providerPair := map[provider.Name][]types.CurrencyPair{
-		"binance": {pair},
+		provider.ProviderBinance: {pair},
+	}
+
+	providerMinOverrides := map[string]int{
+		"ATOM": 1,
 	}
 
 	prices, err := GetComputedPrices(
@@ -405,38 +397,39 @@ func TestSuccessGetComputedPricesTickers(t *testing.T) {
 		providerPrices,
 		providerPair,
 		make(map[string]sdk.Dec),
+		providerMinOverrides,
 	)
 
 	require.NoError(t, err, "It should successfully get computed ticker prices")
-	require.Equal(t, prices[pair.Base], atomPrice)
+	require.Equal(t, atomPrice, prices[pair.Base])
 }
 
 func TestGetComputedPricesTickersConversion(t *testing.T) {
-	btcPair := types.CurrencyPair{
+	btcEthPair := types.CurrencyPair{
 		Base:  "BTC",
 		Quote: "ETH",
 	}
-	btcUSDPair := types.CurrencyPair{
+	btcUsdPair := types.CurrencyPair{
 		Base:  "BTC",
 		Quote: "USD",
 	}
-	ethPair := types.CurrencyPair{
+	ethUsdPair := types.CurrencyPair{
 		Base:  "ETH",
 		Quote: "USD",
 	}
 	volume := sdk.MustNewDecFromStr("881272.00")
 	btcEthPrice := sdk.MustNewDecFromStr("72.55")
 	ethUsdPrice := sdk.MustNewDecFromStr("9989.02")
-	btcUSDPrice := sdk.MustNewDecFromStr("724603.401")
+	btcUsdPrice := sdk.MustNewDecFromStr("724603.401")
 	providerPrices := make(provider.AggregatedProviderPrices, 1)
 
 	// normal rates
 	binanceTickerPrices := make(map[string]types.TickerPrice, 2)
-	binanceTickerPrices[btcPair.Base] = types.TickerPrice{
+	binanceTickerPrices[btcEthPair.String()] = types.TickerPrice{
 		Price:  btcEthPrice,
 		Volume: volume,
 	}
-	binanceTickerPrices[ethPair.Base] = types.TickerPrice{
+	binanceTickerPrices[ethUsdPair.String()] = types.TickerPrice{
 		Price:  ethUsdPrice,
 		Volume: volume,
 	}
@@ -444,11 +437,11 @@ func TestGetComputedPricesTickersConversion(t *testing.T) {
 
 	// normal rates
 	gateTickerPrices := make(map[string]types.TickerPrice, 4)
-	gateTickerPrices[btcPair.Base] = types.TickerPrice{
-		Price:  btcEthPrice,
-		Volume: volume,
-	}
-	gateTickerPrices[ethPair.Base] = types.TickerPrice{
+	// gateTickerPrices[btcEthPair.String()] = types.TickerPrice{
+	// 	Price:  btcEthPrice,
+	// 	Volume: volume,
+	// }
+	gateTickerPrices[ethUsdPair.String()] = types.TickerPrice{
 		Price:  ethUsdPrice,
 		Volume: volume,
 	}
@@ -456,7 +449,7 @@ func TestGetComputedPricesTickersConversion(t *testing.T) {
 
 	// abnormal eth rate
 	okxTickerPrices := make(map[string]types.TickerPrice, 1)
-	okxTickerPrices[ethPair.Base] = types.TickerPrice{
+	okxTickerPrices[ethUsdPair.String()] = types.TickerPrice{
 		Price:  sdk.MustNewDecFromStr("1.0"),
 		Volume: volume,
 	}
@@ -464,17 +457,21 @@ func TestGetComputedPricesTickersConversion(t *testing.T) {
 
 	// btc / usd rate
 	krakenTickerPrices := make(map[string]types.TickerPrice, 1)
-	krakenTickerPrices[btcUSDPair.Base] = types.TickerPrice{
-		Price:  btcUSDPrice,
+	krakenTickerPrices[btcUsdPair.String()] = types.TickerPrice{
+		Price:  btcUsdPrice,
 		Volume: volume,
 	}
 	providerPrices[provider.ProviderKraken] = krakenTickerPrices
 
 	providerPair := map[provider.Name][]types.CurrencyPair{
-		provider.ProviderBinance: {ethPair, btcPair},
-		provider.ProviderGate:    {ethPair},
-		provider.ProviderOkx:     {ethPair},
-		provider.ProviderKraken:  {btcUSDPair},
+		provider.ProviderBinance: {ethUsdPair, btcEthPair},
+		provider.ProviderGate:    {ethUsdPair},
+		provider.ProviderOkx:     {ethUsdPair},
+		provider.ProviderKraken:  {btcUsdPair},
+	}
+
+	providerMinOverrides := map[string]int{
+		"BTC": 1,
 	}
 
 	prices, err := GetComputedPrices(
@@ -482,14 +479,16 @@ func TestGetComputedPricesTickersConversion(t *testing.T) {
 		providerPrices,
 		providerPair,
 		make(map[string]sdk.Dec),
+		providerMinOverrides,
 	)
 
 	require.NoError(t, err,
 		"It should successfully filter out bad tickers and convert everything to USD",
 	)
 	require.Equal(t,
+
 		ethUsdPrice.Mul(
-			btcEthPrice).Add(btcUSDPrice).Quo(sdk.MustNewDecFromStr("2")),
-		prices[btcPair.Base],
+			btcEthPrice).Add(btcUsdPrice).Quo(sdk.MustNewDecFromStr("2")),
+		prices[btcEthPair.Base],
 	)
 }

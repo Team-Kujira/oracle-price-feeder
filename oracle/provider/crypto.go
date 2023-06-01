@@ -60,23 +60,31 @@ func NewCryptoProvider(
 		nil,
 		nil,
 	)
+
+	availablePairs, _ := provider.GetAvailablePairs()
+	provider.setPairs(pairs, availablePairs, currencyPairToCryptoSymbol)
+
 	go startPolling(provider, provider.endpoints.PollInterval, logger)
 	return provider, nil
 }
 
-func (p *CryptoProvider) Poll() error {
-	symbols := make(map[string]string, len(p.pairs))
-	for _, pair := range p.pairs {
-		symbols[pair.Join("_")] = pair.String()
-	}
-
+func (p *CryptoProvider) getTickers() (CryptoTickersResponse, error) {
 	content, err := p.httpGet("/v2/public/get-ticker")
 	if err != nil {
-		return err
+		return CryptoTickersResponse{}, err
 	}
 
 	var tickers CryptoTickersResponse
 	err = json.Unmarshal(content, &tickers)
+	if err != nil {
+		return CryptoTickersResponse{}, err
+	}
+
+	return tickers, nil
+}
+
+func (p *CryptoProvider) Poll() error {
+	tickers, err := p.getTickers()
 	if err != nil {
 		return err
 	}
@@ -84,17 +92,35 @@ func (p *CryptoProvider) Poll() error {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 	for _, ticker := range tickers.Result.Data {
-		symbol, ok := symbols[ticker.Symbol]
-		if !ok {
+		if !p.isPair(ticker.Symbol) {
 			continue
 		}
 
-		p.tickers[symbol] = types.TickerPrice{
-			Price:  strToDec(ticker.Price),
-			Volume: strToDec(ticker.Volume),
-			Time:   time.UnixMilli(ticker.Time),
-		}
+		p.setTickerPrice(
+			ticker.Symbol,
+			strToDec(ticker.Price),
+			strToDec(ticker.Volume),
+			time.UnixMilli(ticker.Time),
+		)
 	}
 	p.logger.Debug().Msg("updated tickers")
 	return nil
+}
+
+func (p *CryptoProvider) GetAvailablePairs() (map[string]struct{}, error) {
+	tickers, err := p.getTickers()
+	if err != nil {
+		return nil, err
+	}
+
+	symbols := map[string]struct{}{}
+	for _, ticker := range tickers.Result.Data {
+		symbols[ticker.Symbol] = struct{}{}
+	}
+
+	return symbols, nil
+}
+
+func currencyPairToCryptoSymbol(pair types.CurrencyPair) string {
+	return pair.Join("_")
 }

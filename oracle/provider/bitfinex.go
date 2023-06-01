@@ -27,7 +27,6 @@ type (
 	// REF: https://docs.bitfinex.com/docs
 	BitfinexProvider struct {
 		provider
-		symbols map[string]string
 	}
 )
 
@@ -47,37 +46,14 @@ func NewBitfinexProvider(
 		nil,
 	)
 
-	content, err := provider.httpGet("/v2/conf/pub:list:pair:exchange")
-	if err != nil {
-		return nil, err
-	}
-
-	var bitfinexPairs [1][]string
-	err = json.Unmarshal(content, &bitfinexPairs)
-	if err != nil {
-		return nil, err
-	}
-
-	provider.symbols = map[string]string{}
-	for _, pair := range bitfinexPairs[0] {
-		symbol := pair
-		symbol = strings.Replace(symbol, "LUNA:", "LUNC:", 1)
-		symbol = strings.Replace(symbol, "LUNA2:", "LUNA:", 1)
-		symbol = strings.Replace(symbol, ":", "", 1)
-		provider.symbols[symbol] = pair
-	}
+	availablePairs, _ := provider.GetAvailablePairs()
+	provider.setPairs(pairs, availablePairs, currencyPairToBitfinexSymbol)
 
 	go startPolling(provider, provider.endpoints.PollInterval, logger)
 	return provider, nil
 }
 
 func (p *BitfinexProvider) Poll() error {
-	symbols := make(map[string]string, len(p.pairs))
-	for _, pair := range p.pairs {
-		bitfinexSymbol := p.symbols[pair.String()]
-		symbols["t"+bitfinexSymbol] = pair.String()
-	}
-
 	content, err := p.httpGet("/v2/tickers?symbols=ALL")
 	if err != nil {
 		return err
@@ -107,8 +83,8 @@ func (p *BitfinexProvider) Poll() error {
 			continue
 		}
 
-		symbol, ok := symbols[tickerSymbol]
-		if !ok {
+		tickerSymbol = strings.Replace(tickerSymbol, ":", "", 1)
+		if !p.isPair(tickerSymbol) {
 			continue
 		}
 
@@ -124,12 +100,53 @@ func (p *BitfinexProvider) Poll() error {
 			continue
 		}
 
-		p.tickers[symbol] = types.TickerPrice{
-			Price:  floatToDec(tickerPrice),
-			Volume: floatToDec(tickerVolume),
-			Time:   timestamp,
-		}
+		p.setTickerPrice(
+			tickerSymbol,
+			floatToDec(tickerPrice),
+			floatToDec(tickerVolume),
+			timestamp,
+		)
 	}
 	p.logger.Debug().Msg("updated tickers")
 	return nil
+}
+
+func (p *BitfinexProvider) GetAvailablePairs() (map[string]struct{}, error) {
+	content, err := p.httpGet("/v2/conf/pub:list:pair:exchange")
+	if err != nil {
+		return nil, err
+	}
+
+	var bitfinexPairs [1][]string
+	err = json.Unmarshal(content, &bitfinexPairs)
+	if err != nil {
+		return nil, err
+	}
+
+	symbols := map[string]struct{}{}
+	for _, symbol := range bitfinexPairs[0] {
+		symbol = "t" + strings.Replace(symbol, ":", "", 1)
+		symbols[symbol] = struct{}{}
+	}
+
+	return symbols, nil
+}
+
+func currencyPairToBitfinexSymbol(pair types.CurrencyPair) string {
+	mapping := map[string]string{
+		"LUNC": "LUNA",
+		"LUNA": "LUNA2",
+	}
+
+	base, found := mapping[pair.Base]
+	if !found {
+		base = pair.Base
+	}
+
+	quote, found := mapping[pair.Quote]
+	if !found {
+		quote = pair.Quote
+	}
+
+	return "t" + base + quote
 }

@@ -50,23 +50,31 @@ func NewGateProvider(
 		nil,
 		nil,
 	)
+
+	availablePairs, _ := provider.GetAvailablePairs()
+	provider.setPairs(pairs, availablePairs, currencyPairToGateSymbol)
+
 	go startPolling(provider, provider.endpoints.PollInterval, logger)
 	return provider, nil
 }
 
-func (p *GateProvider) Poll() error {
-	symbols := make(map[string]string, len(p.pairs))
-	for _, pair := range p.pairs {
-		symbols[pair.Join("_")] = pair.String()
-	}
-
+func (p *GateProvider) getTickers() ([]GateTicker, error) {
 	content, err := p.httpGet("/api/v4/spot/tickers")
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	var tickers []GateTicker
 	err = json.Unmarshal(content, &tickers)
+	if err != nil {
+		return nil, err
+	}
+
+	return tickers, nil
+}
+
+func (p *GateProvider) Poll() error {
+	tickers, err := p.getTickers()
 	if err != nil {
 		return err
 	}
@@ -75,16 +83,35 @@ func (p *GateProvider) Poll() error {
 	defer p.mtx.Unlock()
 	now := time.Now()
 	for _, ticker := range tickers {
-		symbol, ok := symbols[ticker.Symbol]
-		if !ok {
+		if !p.isPair(ticker.Symbol) {
 			continue
 		}
-		p.tickers[symbol] = types.TickerPrice{
-			Price:  strToDec(ticker.Price),
-			Volume: strToDec(ticker.Volume),
-			Time:   now,
-		}
+
+		p.setTickerPrice(
+			ticker.Symbol,
+			strToDec(ticker.Price),
+			strToDec(ticker.Volume),
+			now,
+		)
 	}
 	p.logger.Debug().Msg("updated tickers")
 	return nil
+}
+
+func (p *GateProvider) GetAvailablePairs() (map[string]struct{}, error) {
+	tickers, err := p.getTickers()
+	if err != nil {
+		return nil, err
+	}
+
+	symbols := map[string]struct{}{}
+	for _, ticker := range tickers {
+		symbols[ticker.Symbol] = struct{}{}
+	}
+
+	return symbols, nil
+}
+
+func currencyPairToGateSymbol(pair types.CurrencyPair) string {
+	return pair.Join("_")
 }

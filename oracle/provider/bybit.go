@@ -58,18 +58,31 @@ func NewBybitProvider(
 		nil,
 		nil,
 	)
+
+	availablePairs, _ := provider.GetAvailablePairs()
+	provider.setPairs(pairs, availablePairs, nil)
+
 	go startPolling(provider, provider.endpoints.PollInterval, logger)
 	return provider, nil
 }
 
-func (p *BybitProvider) Poll() error {
+func (p *BybitProvider) getTickers() (BybitTickersResponse, error) {
 	content, err := p.httpGet("/v5/market/tickers?category=spot")
 	if err != nil {
-		return err
+		return BybitTickersResponse{}, err
 	}
 
 	var tickersResponse BybitTickersResponse
 	err = json.Unmarshal(content, &tickersResponse)
+	if err != nil {
+		return BybitTickersResponse{}, err
+	}
+
+	return tickersResponse, nil
+}
+
+func (p *BybitProvider) Poll() error {
+	tickersResponse, err := p.getTickers()
 	if err != nil {
 		return err
 	}
@@ -80,17 +93,31 @@ func (p *BybitProvider) Poll() error {
 	defer p.mtx.Unlock()
 
 	for _, ticker := range tickersResponse.Result.List {
-		_, ok := p.pairs[ticker.Symbol]
-		if !ok {
+		if !p.isPair(ticker.Symbol) {
 			continue
 		}
 
-		p.tickers[ticker.Symbol] = types.TickerPrice{
-			Price:  strToDec(ticker.Price),
-			Volume: strToDec(ticker.Volume),
-			Time:   timestamp,
-		}
+		p.setTickerPrice(
+			ticker.Symbol,
+			strToDec(ticker.Price),
+			strToDec(ticker.Volume),
+			timestamp,
+		)
 	}
 	p.logger.Debug().Msg("updated tickers")
 	return nil
+}
+
+func (p *BybitProvider) GetAvailablePairs() (map[string]struct{}, error) {
+	tickers, err := p.getTickers()
+	if err != nil {
+		return nil, err
+	}
+
+	symbols := map[string]struct{}{}
+	for _, ticker := range tickers.Result.List {
+		symbols[ticker.Symbol] = struct{}{}
+	}
+
+	return symbols, nil
 }

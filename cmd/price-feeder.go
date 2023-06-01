@@ -172,6 +172,19 @@ func priceFeederCmdHandler(cmd *cobra.Command, args []string) error {
 		deviations[deviation.Base] = threshold
 	}
 
+	providerMinOverrides := make(map[string]int, len(cfg.ProviderMinOverrides))
+	for _, override := range cfg.ProviderMinOverrides {
+		for _, denom := range override.Denoms {
+			_, found := providerMinOverrides[denom]
+			if found {
+				logger.Warn().
+					Str("denom", denom).
+					Msg("provider_min_overrides already set")
+			}
+			providerMinOverrides[denom] = int(override.Providers)
+		}
+	}
+
 	endpoints := make(map[provider.Name]provider.Endpoint, len(cfg.ProviderEndpoints))
 	for _, e := range cfg.ProviderEndpoints {
 		endpoint, err := e.ToEndpoint()
@@ -224,6 +237,7 @@ func priceFeederCmdHandler(cmd *cobra.Command, args []string) error {
 		providerPairs,
 		providerTimeout,
 		deviations,
+		providerMinOverrides,
 		endpoints,
 		derivatives,
 		derivativePairs,

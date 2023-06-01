@@ -59,23 +59,31 @@ func NewKucoinProvider(
 		nil,
 		nil,
 	)
+
+	availablePairs, _ := provider.GetAvailablePairs()
+	provider.setPairs(pairs, availablePairs, currencyPairToKucoinSymbol)
+
 	go startPolling(provider, provider.endpoints.PollInterval, logger)
 	return provider, nil
 }
 
-func (p *KucoinProvider) Poll() error {
-	symbols := make(map[string]string, len(p.pairs))
-	for _, pair := range p.pairs {
-		symbols[pair.Join("-")] = pair.String()
-	}
-
+func (p *KucoinProvider) getTickers() (KucoinTickersResponse, error) {
 	content, err := p.httpGet("/api/v1/market/allTickers")
 	if err != nil {
-		return err
+		return KucoinTickersResponse{}, err
 	}
 
 	var tickers KucoinTickersResponse
 	err = json.Unmarshal(content, &tickers)
+	if err != nil {
+		return KucoinTickersResponse{}, err
+	}
+
+	return tickers, nil
+}
+
+func (p *KucoinProvider) Poll() error {
+	tickers, err := p.getTickers()
 	if err != nil {
 		return err
 	}
@@ -83,17 +91,37 @@ func (p *KucoinProvider) Poll() error {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 	now := time.Now()
+
 	for _, ticker := range tickers.Data.Ticker {
-		symbol, ok := symbols[ticker.Symbol]
-		if !ok {
+		if !p.isPair(ticker.Symbol) {
 			continue
 		}
-		p.tickers[symbol] = types.TickerPrice{
-			Price:  strToDec(ticker.Price),
-			Volume: strToDec(ticker.Volume),
-			Time:   now,
-		}
+
+		p.setTickerPrice(
+			ticker.Symbol,
+			strToDec(ticker.Price),
+			strToDec(ticker.Volume),
+			now,
+		)
 	}
 	p.logger.Debug().Msg("updated tickers")
 	return nil
+}
+
+func (p *KucoinProvider) GetAvailablePairs() (map[string]struct{}, error) {
+	tickers, err := p.getTickers()
+	if err != nil {
+		return nil, err
+	}
+
+	symbols := map[string]struct{}{}
+	for _, ticker := range tickers.Data.Ticker {
+		symbols[ticker.Symbol] = struct{}{}
+	}
+
+	return symbols, nil
+}
+
+func currencyPairToKucoinSymbol(pair types.CurrencyPair) string {
+	return pair.Join("-")
 }

@@ -62,3 +62,7 @@ func (p *ZeroProvider) Poll() error {
 
 	return nil
 }
+
+func (p *ZeroProvider) GetAvailablePairs() (map[string]struct{}, error) {
+	return nil, nil
+}
