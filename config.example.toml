@@ -3,8 +3,6 @@ gas_prices = "0.00125ukuji"
 enable_server = true
 enable_voter = true
 
-history_db = "/var/tmp/feeder.db"
-
 [server]
 listen_addr = "0.0.0.0:7171"
 read_timeout = "20s"
@@ -15,20 +13,73 @@ write_timeout = "20s"
 base = "USDT"
 threshold = "2"
 
-[[currency_pairs]]
-base = "USDT"
-quote = "USD"
-providers = ["coinbase", "kraken", "crypto", "gate", "binanceus"]
+[[deviation_thresholds]]
+base = "KUJI"
+threshold = "2"
+
+[[provider_min_overrides]]
+denoms = ["STATOM", "STOSMO", "MNTA", "WINK", "USK"]
+providers = 1
+
+[[provider_min_overrides]]
+denoms = ["KUJI"]
+providers = 2
 
 [[currency_pairs]]
-base = "BTC"
-quote = "USD"
-providers = ["coinbase", "kraken", "crypto"]
-
-[[currency_pairs]]
-base = "BTC"
+base = "KUJI"
 quote = "USDT"
-providers = ["binance", "mexc", "huobi"]
+providers = ["mexc"]
+derivative = "tvwap"
+derivative_period = "30m"
+
+[[currency_pairs]]
+base = "KUJI"
+quote = "USD"
+providers = ["osmosis"]
+derivative = "tvwap"
+derivative_period = "30m"
+
+[[currency_pairs]]
+base = "KUJI"
+quote = "USDC"
+providers = ["fin"]
+derivative = "tvwap"
+derivative_period = "30m"
+
+[[currency_pairs]]
+base = "MNTA"
+quote = "USDC"
+providers = ["fin"]
+derivative = "tvwap"
+derivative_period = "30m"
+
+[[currency_pairs]]
+base = "WINK"
+quote = "USK"
+providers = ["fin"]
+derivative = "tvwap"
+derivative_period = "30m"
+
+[[currency_pairs]]
+base = "STATOM"
+quote = "ATOM"
+providers = ["osmosisv2"]
+derivative = "tvwap"
+derivative_period = "30m"
+
+[[currency_pairs]]
+base = "STOSMO"
+quote = "OSMO"
+providers = ["osmosisv2"]
+derivative = "tvwap"
+derivative_period = "30m"
+
+[[currency_pairs]]
+base = "USK"
+quote = "USDC"
+providers = ["fin"]
+derivative = "tvwap"
+derivative_period = "30m"
 
 [account]
 address = "kujira..."
@@ -61,5 +112,15 @@ name = "binance"
 rest = "https://api1.binance.com"
 websocket = "stream.binance.com:9443"
 
-[[healthchecks]]
-url = "https://hc-ping.com/HEALTHCHECK-UUID"
+[[provider_endpoints]]
+name = "osmosis"
+urls = [
+  "https://api.osmosis.zone",
+  "https://api-osmosis.imperator.co",
+]
+
+[[provider_endpoints]]
+name = "fin"
+urls = [
+  "https://kaiyo-1.gigalixirapp.com"
+]
