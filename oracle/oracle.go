@@ -266,11 +266,22 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 			// e.g.: {ProviderKraken: {"ATOM": <price, volume>, ...}}
 			mtx.Lock()
 			defer mtx.Unlock()
+
+			filteredPairs := []types.CurrencyPair{}
 			for _, pair := range currencyPairs {
 				ticker, ok := prices[pair.String()]
 				if (!ok || ticker == types.TickerPrice{}) {
-					return fmt.Errorf("no ticker price found for %s", pair)
+					o.logger.Warn().
+						Str("pair", pair.String()).
+						Str("provider", providerName.String()).
+						Msg("no ticker price found")
+				} else {
+					filteredPairs = append(filteredPairs, pair)
 				}
+			}
+
+			for _, pair := range filteredPairs {
+				ticker := prices[pair.String()]
 				_, isDerivative := o.derivativeSymbols[pair.String()]
 				if isDerivative {
 					err := o.history.AddTickerPrice(pair, providerName.String(), ticker)
