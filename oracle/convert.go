@@ -234,5 +234,6 @@ func vwapRate(rates map[provider.Name]types.TickerPrice) (sdk.Dec, error) {
 	for _, price := range rates {
 		prices = append(prices, price)
 	}
+
 	return ComputeVWAP(prices)
 }

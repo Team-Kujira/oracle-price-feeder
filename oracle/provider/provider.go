@@ -419,7 +419,6 @@ func (p *provider) setTickerPrice(symbol string, price sdk.Dec, volume sdk.Dec, 
 		p.logger.Warn().
 			Str("symbol", symbol).
 			Msg("volume is zero")
-		return
 	}
 
 	// check if price needs to be inverted

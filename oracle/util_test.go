@@ -11,20 +11,8 @@ import (
 )
 
 func TestComputeVWAP(t *testing.T) {
-	// testCases := map[string]struct {
-	// 	prices   []types.TickerPrice
-	// 	expected sdk.Dec
-	// }{
-	// 	"empty prices": {
-	// 		prices:   []types.TickerPrice{},
-	// 		expected: sdk.Dec{},
-	// 	},
-	// 	"nil prices": {
-	// 		prices:   nil,
-	// 		expected: sdk.Dec{},
-	// 	},
-	// 	"non empty prices": {
 	prices := map[string][]types.TickerPrice{}
+
 	prices["ATOM"] = []types.TickerPrice{{
 		Price:  sdk.MustNewDecFromStr("28.21000000"),
 		Volume: sdk.MustNewDecFromStr("2749102.78000000"),
@@ -49,10 +37,25 @@ func TestComputeVWAP(t *testing.T) {
 		Volume: sdk.MustNewDecFromStr("458917.46353577"),
 	}}
 
+	prices["ZERO1"] = []types.TickerPrice{{
+		Price:  sdk.MustNewDecFromStr("12.34000000"),
+		Volume: sdk.MustNewDecFromStr("0"),
+	}}
+
+	prices["ZERO2"] = []types.TickerPrice{{
+		Price:  sdk.MustNewDecFromStr("10"),
+		Volume: sdk.MustNewDecFromStr("0"),
+	}, {
+		Price:  sdk.MustNewDecFromStr("20"),
+		Volume: sdk.MustNewDecFromStr("0"),
+	}}
+
 	expected := map[string]sdk.Dec{
-		"ATOM": sdk.MustNewDecFromStr("28.185812745610043621"),
-		"UMEE": sdk.MustNewDecFromStr("1.13000000"),
-		"LUNA": sdk.MustNewDecFromStr("64.870470848638112395"),
+		"ATOM":  sdk.MustNewDecFromStr("28.185812745610043621"),
+		"UMEE":  sdk.MustNewDecFromStr("1.13000000"),
+		"LUNA":  sdk.MustNewDecFromStr("64.870470848638112395"),
+		"ZERO1": sdk.MustNewDecFromStr("12.34000000"),
+		"ZERO2": sdk.MustNewDecFromStr("15"),
 	}
 
 	for denom, tickers := range prices {
@@ -62,6 +65,12 @@ func TestComputeVWAP(t *testing.T) {
 			require.Equal(t, expected[denom], vwap)
 		})
 	}
+
+	// Supply emty list of tickers
+	t.Run("EMPTY", func(t *testing.T) {
+		_, err := oracle.ComputeVWAP([]types.TickerPrice{})
+		require.Error(t, err)
+	})
 }
 
 func TestStandardDeviation(t *testing.T) {

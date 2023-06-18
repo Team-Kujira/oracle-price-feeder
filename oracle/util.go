@@ -7,23 +7,35 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
-// ComputeVWAP computes the volume weighted average price for all tickers
-// of all pairs of the same symbol.
+// ComputeVWAP computes the volume weighted average price for all tickers.
+// If all tickers report a volume of 0, treat all volumes as 1 and
+// effectively return the average price instead.
 // Ref: https://en.wikipedia.org/wiki/Volume-weighted_average_price
 func ComputeVWAP(tickers []types.TickerPrice) (sdk.Dec, error) {
-	weightedPrice := sdk.ZeroDec()
+	if len(tickers) == 0 {
+		return sdk.Dec{}, fmt.Errorf("no tickers supplied")
+	}
+
 	volumeSum := sdk.ZeroDec()
 
 	for _, tp := range tickers {
-		// weightedPrice = Σ {P * V} for all TickerPrice
-		weightedPrice = weightedPrice.Add(tp.Price.Mul(tp.Volume))
-
-		// track total volume for each base
 		volumeSum = volumeSum.Add(tp.Volume)
 	}
 
+	weightedPrice := sdk.ZeroDec()
+
+	for _, tp := range tickers {
+		volume := tp.Volume
+		if volumeSum.Equal(sdk.ZeroDec()) {
+			volume = sdk.NewDec(1)
+		}
+
+		// weightedPrice = Σ {P * V} for all TickerPrice
+		weightedPrice = weightedPrice.Add(tp.Price.Mul(volume))
+	}
+
 	if volumeSum.Equal(sdk.ZeroDec()) {
-		return sdk.Dec{}, fmt.Errorf("total volume is zero")
+		volumeSum = sdk.NewDec(int64(len(tickers)))
 	}
 
 	return weightedPrice.Quo(volumeSum), nil
