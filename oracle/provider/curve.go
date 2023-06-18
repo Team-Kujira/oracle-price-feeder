@@ -152,13 +152,12 @@ func (p *CurveProvider) Poll() error {
 				continue
 			}
 
-			p.tickers[denom+"USD"] = types.TickerPrice{
-				Price:  floatToDec(coin.Price),
-				Volume: floatToDec(subgraph.Volume),
-				Time:   timestamp,
-			}
-
-			maxVolumes[denom] = subgraph.Volume
+			p.setTickerPrice(
+				denom+"USD",
+				floatToDec(coin.Price),
+				floatToDec(subgraph.Volume),
+				timestamp,
+			)
 		}
 	}
 	p.logger.Debug().Msg("updated tickers")
