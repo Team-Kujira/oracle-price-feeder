@@ -15,6 +15,10 @@ write_timeout = "20s"
 base = "USDT"
 threshold = "2"
 
+[[provider_min_overrides]]
+denoms = ["BTC"]
+providers = 5
+
 [[currency_pairs]]
 base = "USDT"
 quote = "USD"
