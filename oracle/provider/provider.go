@@ -424,8 +424,8 @@ func (p *provider) setTickerPrice(symbol string, price sdk.Dec, volume sdk.Dec, 
 	// check if price needs to be inverted
 	pair, inverse := p.inverse[symbol]
 	if inverse {
-		price = invertDec(price)
 		volume = volume.Mul(price)
+		price = invertDec(price)
 
 		p.tickers[pair.String()] = types.TickerPrice{
 			Price:  price,
