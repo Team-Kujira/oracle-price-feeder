@@ -448,6 +448,8 @@ func NewProvider(
 		return provider.NewBitfinexProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderBitget:
 		return provider.NewBitgetProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderBitstamp:
+		return provider.NewBitstampProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderBkex:
 		return provider.NewBkexProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderBitmart:

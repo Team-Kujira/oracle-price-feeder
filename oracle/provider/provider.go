@@ -38,6 +38,7 @@ const (
 	ProviderBkex       Name = "bkex"
 	ProviderBitfinex   Name = "bitfinex"
 	ProviderBitforex   Name = "bitforex"
+	ProviderBitstamp   Name = "bitstamp"
 	ProviderHitBtc     Name = "hitbtc"
 	ProviderPoloniex   Name = "poloniex"
 	ProviderPyth       Name = "pyth"
@@ -265,6 +266,8 @@ func (e *Endpoint) SetDefaults() {
 		defaults = bitgetDefaultEndpoints
 	case ProviderBitmart:
 		defaults = bitmartDefaultEndpoints
+	case ProviderBitstamp:
+		defaults = bitstampDefaultEndpoints
 	case ProviderBkex:
 		defaults = bkexDefaultEndpoints
 	case ProviderBybit:

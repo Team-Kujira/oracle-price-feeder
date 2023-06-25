@@ -41,6 +41,7 @@ var (
 		provider.ProviderBitforex:   {},
 		provider.ProviderBkex:       {},
 		provider.ProviderBitmart:    {},
+		provider.ProviderBitstamp:   {},
 		provider.ProviderFin:        {},
 		provider.ProviderFinUsk:     {},
 		provider.ProviderPoloniex:   {},
