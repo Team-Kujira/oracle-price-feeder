@@ -71,7 +71,7 @@ var (
 	}
 
 	SupportedDerivatives = map[string]struct{}{
-		derivative.DerivativeTvwap: {},
+		derivative.DerivativeTwap: {},
 	}
 
 	// maxDeviationThreshold is the maxmimum allowed amount of standard

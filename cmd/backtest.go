@@ -43,26 +43,24 @@ func getBacktestCmd() *cobra.Command {
 				return err
 			}
 
-			var tickerMap map[string][]types.TickerPrice
-			json.Unmarshal(bz, &tickerMap)
+			var tickers []types.TickerPrice
+			json.Unmarshal(bz, &tickers)
 
 			var first, last time.Time
 
-			for _, tickers := range tickerMap {
-				for _, ticker := range tickers {
-					if first.IsZero() {
-						first = ticker.Time
-						last = ticker.Time
-						continue
-					}
+			for _, ticker := range tickers {
+				if first.IsZero() {
+					first = ticker.Time
+					last = ticker.Time
+					continue
+				}
 
-					if ticker.Time.Before(first) {
-						first = ticker.Time
-					}
+				if ticker.Time.Before(first) {
+					first = ticker.Time
+				}
 
-					if ticker.Time.After(last) {
-						last = ticker.Time
-					}
+				if ticker.Time.After(last) {
+					last = ticker.Time
 				}
 			}
 
@@ -74,7 +72,7 @@ func getBacktestCmd() *cobra.Command {
 			for tick.Before(last) {
 				tick = tick.Add(time.Second * time.Duration(interval))
 				start := tick.Add(time.Second * -1 * time.Duration(period))
-				tvwap, err := derivative.Tvwap(tickerMap, start, tick)
+				tvwap, _, err := derivative.Twap(tickers, start, tick)
 				if err != nil {
 					fmt.Printf("%s;\n", tick.UTC())
 				} else {
