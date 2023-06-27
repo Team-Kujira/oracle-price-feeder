@@ -74,6 +74,7 @@ type Oracle struct {
 	derivatives          map[string]derivative.Derivative
 	derivativePairs      map[string][]types.CurrencyPair
 	derivativeSymbols    map[string]struct{}
+	contractAddresses    map[string]map[string]string
 
 	mtx             sync.RWMutex
 	lastPriceSyncTS time.Time
@@ -95,6 +96,7 @@ func New(
 	derivativeDenoms map[string]struct{},
 	healthchecksConfig []config.Healthchecks,
 	history history.PriceHistory,
+	contractAddresses map[string]map[string]string,
 ) *Oracle {
 	providerPairs := make(map[provider.Name][]types.CurrencyPair)
 	for _, pair := range currencyPairs {
@@ -135,6 +137,7 @@ func New(
 		derivativePairs:      derivativePairs,
 		derivativeSymbols:    derivativeDenoms,
 		history:              history,
+		contractAddresses:    contractAddresses,
 	}
 }
 
@@ -212,11 +215,15 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 
 		priceProvider, found := o.priceProviders[providerName]
 		if !found {
+			endpoint := o.endpoints[providerName]
+			contractAddresses, _ := o.contractAddresses[providerName.String()]
+			endpoint.ContractAddresses = contractAddresses
+
 			newProvider, err := NewProvider(
 				ctx,
 				providerName,
 				o.logger,
-				o.endpoints[providerName],
+				endpoint,
 				o.providerPairs[providerName]...,
 			)
 			if err != nil {
@@ -464,8 +471,8 @@ func NewProvider(
 		return provider.NewCurveProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderFin:
 		return provider.NewFinProvider(ctx, providerLogger, endpoint, providerPairs...)
-	case provider.ProviderFinUsk:
-		return provider.NewFinUskProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderFinV2:
+		return provider.NewFinV2Provider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderGate:
 		return provider.NewGateProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderHitBtc:
@@ -496,6 +503,8 @@ func NewProvider(
 		return provider.NewPoloniexProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderPyth:
 		return provider.NewPythProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderUniswapV3:
+		return provider.NewUniswapV3Provider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderXt:
 		return provider.NewXtProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderZero:

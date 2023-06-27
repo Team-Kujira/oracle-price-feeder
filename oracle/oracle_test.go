@@ -106,6 +106,7 @@ func (ots *OracleTestSuite) SetupSuite() {
 			{URL: "https://hc-ping.com/HEALTHCHECK-UUID", Timeout: "200ms"},
 		},
 		history,
+		nil,
 	)
 }
 

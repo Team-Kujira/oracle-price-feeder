@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io/ioutil"
@@ -23,7 +24,7 @@ const (
 	providerCandlePeriod = 10 * time.Minute
 
 	ProviderFin        Name = "fin"
-	ProviderFinUsk     Name = "finusk"
+	ProviderFinV2      Name = "finv2"
 	ProviderKraken     Name = "kraken"
 	ProviderBinance    Name = "binance"
 	ProviderBinanceUS  Name = "binanceus"
@@ -54,6 +55,7 @@ const (
 	ProviderXt         Name = "xt"
 	ProviderIdxOsmosis Name = "idxosmosis"
 	ProviderZero       Name = "zero"
+	ProviderUniswapV3  Name = "uniswapv3"
 )
 
 type (
@@ -83,6 +85,7 @@ type (
 		pairs     map[string]types.CurrencyPair
 		inverse   map[string]types.CurrencyPair
 		tickers   map[string]types.TickerPrice
+		contracts map[string]string
 		websocket *WebsocketController
 	}
 
@@ -102,14 +105,15 @@ type (
 	// Endpoint defines an override setting in our config for the
 	// hardcoded rest and websocket api endpoints.
 	Endpoint struct {
-		Name          Name // ex. "binance"
-		Urls          []string
-		Websocket     string // ex. "stream.binance.com:9443"
-		WebsocketPath string
-		PollInterval  time.Duration
-		PingDuration  time.Duration
-		PingType      uint
-		PingMessage   string
+		Name              Name // ex. "binance"
+		Urls              []string
+		Websocket         string // ex. "stream.binance.com:9443"
+		WebsocketPath     string
+		PollInterval      time.Duration
+		PingDuration      time.Duration
+		PingType          uint
+		PingMessage       string
+		ContractAddresses map[string]string
 	}
 )
 
@@ -128,6 +132,9 @@ func (p *provider) Init(
 	p.tickers = map[string]types.TickerPrice{}
 	p.http = newDefaultHTTPClient()
 	p.httpBase = p.endpoints.Urls[0]
+
+	p.contracts = endpoints.ContractAddresses
+
 	if p.endpoints.Websocket != "" {
 		websocketUrl := url.URL{
 			Scheme: "wss",
@@ -205,7 +212,15 @@ func (p *provider) CurrencyPairToProviderPair(pair types.CurrencyPair) string {
 }
 
 func (p *provider) httpGet(path string) ([]byte, error) {
-	res, err := p.makeHttpRequest(p.httpBase + path)
+	return p.httpRequest(path, "GET", nil)
+}
+
+func (p *provider) httpPost(path string, body []byte) ([]byte, error) {
+	return p.httpRequest(path, "POST", body)
+}
+
+func (p *provider) httpRequest(path string, method string, body []byte) ([]byte, error) {
+	res, err := p.makeHttpRequest(p.httpBase+path, method, body)
 	if err != nil {
 		p.logger.Warn().
 			Str("endpoint", p.httpBase).
@@ -215,7 +230,7 @@ func (p *provider) httpGet(path string) ([]byte, error) {
 			if endpoint == p.httpBase {
 				continue
 			}
-			res, err = p.makeHttpRequest(endpoint + path)
+			res, err = p.makeHttpRequest(endpoint+path, method, body)
 			if err == nil {
 				p.logger.Info().Str("endpoint", endpoint).Msg("selected alternate http endpoint")
 				p.httpBase = endpoint
@@ -226,14 +241,20 @@ func (p *provider) httpGet(path string) ([]byte, error) {
 	return res, err
 }
 
-func (p *provider) makeHttpRequest(url string) ([]byte, error) {
-	res, err := p.http.Get(url)
+func (p *provider) makeHttpRequest(url string, method string, body []byte) ([]byte, error) {
+	req, err := http.NewRequest(method, url, bytes.NewBuffer(body))
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := p.http.Do(req)
 	if err != nil {
 		p.logger.Warn().
 			Err(err).
 			Msg("http request failed")
 		return nil, err
 	}
+
 	if res.StatusCode != 200 {
 		p.logger.Warn().
 			Int("code", res.StatusCode).
@@ -280,8 +301,8 @@ func (e *Endpoint) SetDefaults() {
 		defaults = curveDefaultEndpoints
 	case ProviderFin:
 		defaults = finDefaultEndpoints
-	case ProviderFinUsk:
-		defaults = finUskDefaultEndpoints
+	case ProviderFinV2:
+		defaults = finV2DefaultEndpoints
 	case ProviderGate:
 		defaults = gateDefaultEndpoints
 	case ProviderHitBtc:
@@ -312,6 +333,8 @@ func (e *Endpoint) SetDefaults() {
 		defaults = poloniexDefaultEndpoints
 	case ProviderPyth:
 		defaults = pythDefaultEndpoints
+	case ProviderUniswapV3:
+		defaults = uniswapv3DefaultEndpoints
 	case ProviderXt:
 		defaults = xtDefaultEndpoints
 	case ProviderZero:
@@ -343,6 +366,14 @@ func (e *Endpoint) SetDefaults() {
 		} else {
 			e.PingMessage = "ping"
 		}
+	}
+	// add default contract addresses, if not already defined
+	for symbol, address := range defaults.ContractAddresses {
+		_, found := e.ContractAddresses[symbol]
+		if found {
+			continue
+		}
+		e.ContractAddresses[symbol] = address
 	}
 }
 
@@ -419,7 +450,7 @@ func (p *provider) setTickerPrice(symbol string, price sdk.Dec, volume sdk.Dec, 
 	}
 
 	if volume.IsZero() {
-		p.logger.Warn().
+		p.logger.Info().
 			Str("symbol", symbol).
 			Msg("volume is zero")
 	}
@@ -492,6 +523,28 @@ func (p *provider) getAllPairs() map[string]types.CurrencyPair {
 	}
 
 	return pairs
+}
+
+func (p *provider) getAvailablePairsFromContracts() (map[string]struct{}, error) {
+	symbols := map[string]struct{}{}
+	for symbol := range p.contracts {
+		symbols[symbol] = struct{}{}
+	}
+	return symbols, nil
+}
+
+func (p *provider) getContractAddress(pair types.CurrencyPair) (string, error) {
+	address, found := p.contracts[pair.String()]
+	if found {
+		return address, nil
+	}
+
+	address, found = p.contracts[pair.Quote+pair.Base]
+	if found {
+		return address, nil
+	}
+
+	return "", fmt.Errorf("no contract address found")
 }
 
 // String cast provider name to string.
