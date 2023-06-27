@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -27,13 +28,14 @@ var (
 		},
 	}
 
+	// 0x3850c7bd0000000000000000000000000000000000000000000000000000000000000000
 	uniswapv3EthCallTemplate = `{
 		"jsonrpc": "2.0",
 		"method": "eth_call",
 		"params": [
 			{
-				"to": "<contract>", 
-				"data": "0x3850c7bd0000000000000000000000000000000000000000000000000000000000000000"
+				"to": "<address>", 
+				"data": "<data>"
 			},
 			"latest"
 		],
@@ -42,13 +44,11 @@ var (
 )
 
 type (
-	// UniswapV3Provider defines an oracle provider implemented by the Bitstamp
-	// public API.
-	//
-	// REF: https://www.bitstamp.net/api
+	// UniswapV3Provider defines an oracle provider calling uniswap pools
+	// directly on ethereum
 	UniswapV3Provider struct {
 		provider
-		contracts map[string]string
+		decimals map[string]uint64
 	}
 
 	UniswapV3Response struct {
@@ -75,6 +75,9 @@ func NewUniswapV3Provider(
 	availablePairs, _ := provider.GetAvailablePairs()
 	provider.setPairs(pairs, availablePairs, nil)
 
+	// get token decimals
+	provider.setDecimals()
+
 	go startPolling(provider, provider.endpoints.PollInterval, logger)
 	return provider, nil
 }
@@ -96,20 +99,8 @@ func (p *UniswapV3Provider) Poll() error {
 			continue
 		}
 
-		fmt.Println(symbol, contract)
-
-		body := []byte(
-			strings.Replace(uniswapv3EthCallTemplate, "<contract>", contract, 1),
-		)
-
-		content, err := p.httpPost("", body)
-		if err != nil {
-			p.logger.Err(err)
-			continue
-		}
-
-		var response UniswapV3Response
-		err = json.Unmarshal(content, &response)
+		data := "3850c7bd0000000000000000000000000000000000000000000000000000000000000000"
+		response, err := p.doEthCall(contract, data)
 		if err != nil {
 			p.logger.Err(err)
 			continue
@@ -123,7 +114,37 @@ func (p *UniswapV3Provider) Poll() error {
 
 		sqrtx96 := strToDec(fmt.Sprintf("%v", decoded[0]))
 
+		base := pair.Base
+		quote := pair.Quote
+		_, found := p.contracts[pair.String()]
+		if !found {
+			base = pair.Quote
+			quote = pair.Base
+		}
+
+		decimalsBase, found := p.decimals[base]
+		if !found {
+			p.logger.Error().
+				Str("denom", base).
+				Msg("no decimals found")
+		}
+		decimalsQuote, found := p.decimals[quote]
+		if !found {
+			p.logger.Error().
+				Str("denom", quote).
+				Msg("no decimals found")
+		}
+
 		price := sqrtx96.Power(2).Quo(sdk.NewDec(2).Power(192))
+
+		var diff uint64
+		if decimalsBase >= decimalsQuote {
+			diff = decimalsBase - decimalsQuote
+			price = price.Mul(sdk.NewDec(10).Power(diff))
+		} else {
+			diff = decimalsQuote - decimalsBase
+			price = price.Quo(sdk.NewDec(10).Power(diff))
+		}
 
 		now := time.Now()
 
@@ -141,6 +162,10 @@ func (p *UniswapV3Provider) Poll() error {
 func (p *UniswapV3Provider) GetAvailablePairs() (map[string]struct{}, error) {
 	return p.getAvailablePairsFromContracts()
 }
+
+// token0() 0dfe1681
+// token1() d21220a7
+// decimals() 313ce567
 
 func decodeEthData(data string, types []string) ([]interface{}, error) {
 	type AbiOutput struct {
@@ -188,4 +213,132 @@ func decodeEthData(data string, types []string) ([]interface{}, error) {
 	}
 
 	return abi.Unpack("fn", decoded)
+
+}
+
+func (p *UniswapV3Provider) doEthCall(address string, data string) (UniswapV3Response, error) {
+	body := strings.Replace(uniswapv3EthCallTemplate, "<address>", address, 1)
+	body = strings.Replace(body, "<data>", "0x"+data, 1)
+
+	content, err := p.httpPost("", []byte(body))
+	if err != nil {
+		return UniswapV3Response{}, err
+	}
+
+	var response UniswapV3Response
+	err = json.Unmarshal(content, &response)
+	if err != nil {
+		return UniswapV3Response{}, err
+	}
+
+	return response, nil
+}
+
+func (p *UniswapV3Provider) getUniswapV3Token(contract string, index int64) (string, error) {
+	if index < 0 || index > 1 {
+		return "", fmt.Errorf("index must be either 0 or 1")
+	}
+
+	hash := []string{"0dfe1681", "d21220a7"}[index]
+	data := hash + "0000000000000000000000000000000000000000000000000000000000000000"
+
+	response, err := p.doEthCall(contract, data)
+	if err != nil {
+		return "", err
+	}
+
+	types := []string{"address"}
+
+	decoded, err := decodeEthData(response.Result, types)
+	if err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("%v", decoded[0]), nil
+}
+
+func (p *UniswapV3Provider) getUniswapV3Decimals(contract string) (uint64, error) {
+	data := "313ce5670000000000000000000000000000000000000000000000000000000000000000"
+
+	response, err := p.doEthCall(contract, data)
+	if err != nil {
+		return 0, err
+	}
+
+	types := []string{"uint8"}
+
+	decoded, err := decodeEthData(response.Result, types)
+	if err != nil {
+		return 0, err
+	}
+
+	decimals, err := strconv.ParseUint(fmt.Sprintf("%v", decoded[0]), 10, 8)
+	if err != nil {
+		return 0, err
+	}
+
+	return decimals, nil
+}
+
+func (p *UniswapV3Provider) setDecimals() {
+	p.decimals = map[string]uint64{}
+	processed := map[string]struct{}{}
+	for _, pair := range p.getAllPairs() {
+		contract, err := p.getContractAddress(pair)
+		if err != nil {
+			p.logger.Error().Err(err)
+			continue
+		}
+
+		// get base/quote of the contract, getContractAddress also returns
+		// the address for the reversed pair
+		base := pair.Base
+		quote := pair.Quote
+		_, found := p.contracts[pair.String()]
+		if !found {
+			base = pair.Quote
+			quote = pair.Base
+		}
+
+		token0, err := p.getUniswapV3Token(contract, 0)
+		if err != nil {
+			p.logger.Error().Err(err)
+			continue
+		}
+
+		token1, err := p.getUniswapV3Token(contract, 1)
+		if err != nil {
+			p.logger.Error().Err(err)
+			continue
+		}
+
+		_, found = p.decimals[token0]
+		if !found {
+			p.logger.Info().
+				Str("denom", base).
+				Msg("get decimals")
+			decimals, err := p.getUniswapV3Decimals(token0)
+			if err != nil {
+				p.logger.Error().Err(err)
+				continue
+			}
+			processed[token0] = struct{}{}
+			p.decimals[base] = decimals
+		}
+
+		_, found = p.decimals[token1]
+		if !found {
+			p.logger.Info().
+				Str("denom", quote).
+				Msg("get decimals")
+			decimals, err := p.getUniswapV3Decimals(token1)
+			if err != nil {
+				p.logger.Error().Err(err)
+				continue
+			}
+			processed[token1] = struct{}{}
+			p.decimals[quote] = decimals
+		}
+	}
+	fmt.Println(p.decimals)
 }
