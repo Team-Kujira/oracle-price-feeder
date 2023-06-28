@@ -1,3 +1,11 @@
+# v0.6.x
+
+## Breaking Changes
+
+### derivative
+
+The derivative `tvwap` has been renamed to `twap`. Please replace all occurances of `derivative = "tvwap"` with `derivative = "twap"` in the config.
+
 # v0.5.x
 
 ## Breaking Changes
