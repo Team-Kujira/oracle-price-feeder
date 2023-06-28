@@ -212,15 +212,18 @@ func (p *provider) CurrencyPairToProviderPair(pair types.CurrencyPair) string {
 }
 
 func (p *provider) httpGet(path string) ([]byte, error) {
-	return p.httpRequest(path, "GET", nil)
+	return p.httpRequest(path, "GET", nil, nil)
 }
 
 func (p *provider) httpPost(path string, body []byte) ([]byte, error) {
-	return p.httpRequest(path, "POST", body)
+	headers := map[string]string{
+		"Content-Type": "application/json",
+	}
+	return p.httpRequest(path, "POST", body, headers)
 }
 
-func (p *provider) httpRequest(path string, method string, body []byte) ([]byte, error) {
-	res, err := p.makeHttpRequest(p.httpBase+path, method, body)
+func (p *provider) httpRequest(path string, method string, body []byte, headers map[string]string) ([]byte, error) {
+	res, err := p.makeHttpRequest(p.httpBase+path, method, body, headers)
 	if err != nil {
 		p.logger.Warn().
 			Str("endpoint", p.httpBase).
@@ -230,7 +233,7 @@ func (p *provider) httpRequest(path string, method string, body []byte) ([]byte,
 			if endpoint == p.httpBase {
 				continue
 			}
-			res, err = p.makeHttpRequest(endpoint+path, method, body)
+			res, err = p.makeHttpRequest(endpoint+path, method, body, headers)
 			if err == nil {
 				p.logger.Info().Str("endpoint", endpoint).Msg("selected alternate http endpoint")
 				p.httpBase = endpoint
@@ -241,10 +244,14 @@ func (p *provider) httpRequest(path string, method string, body []byte) ([]byte,
 	return res, err
 }
 
-func (p *provider) makeHttpRequest(url string, method string, body []byte) ([]byte, error) {
+func (p *provider) makeHttpRequest(url string, method string, body []byte, headers map[string]string) ([]byte, error) {
 	req, err := http.NewRequest(method, url, bytes.NewBuffer(body))
 	if err != nil {
 		return nil, err
+	}
+
+	for key, value := range headers {
+		req.Header.Set(key, value)
 	}
 
 	res, err := p.http.Do(req)
