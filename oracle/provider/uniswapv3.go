@@ -23,9 +23,9 @@ var (
 		Name:         ProviderUniswapV3,
 		Urls:         []string{"https://eth.llamarpc.com", "https://ethereum.publicnode.com"},
 		PollInterval: 10 * time.Second,
-		ContractAddresses: map[string]string{
-			"WSTETHWETH": "0x109830a1AAaD605BbF02a9dFA7B0B92EC2FB7dAa",
-		},
+		// ContractAddresses: map[string]string{
+		// 	"WSTETHWETH": "0x109830a1AAaD605BbF02a9dFA7B0B92EC2FB7dAa",
+		// },
 	}
 )
 
