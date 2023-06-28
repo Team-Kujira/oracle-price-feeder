@@ -450,7 +450,7 @@ func (p *provider) setTickerPrice(symbol string, price sdk.Dec, volume sdk.Dec, 
 	}
 
 	if volume.IsZero() {
-		p.logger.Info().
+		p.logger.Debug().
 			Str("symbol", symbol).
 			Msg("volume is zero")
 	}

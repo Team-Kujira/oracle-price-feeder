@@ -68,9 +68,10 @@ func (d *TwapDerivative) GetPrices(symbol string) (map[string]types.TickerPrice,
 			d.logger.Warn().
 				Err(err).
 				Str("symbol", symbol).
+				Str("provider", providerName).
 				Str("period", period.String()).
 				Str("missing", (time.Second * time.Duration(missing)).String()).
-				Msg("failed to compute derivative price")
+				Msg("failed to compute twap")
 			continue
 		}
 
