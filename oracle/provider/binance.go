@@ -50,6 +50,15 @@ func NewBinanceProvider(
 ) (*BinanceProvider, error) {
 	provider := &BinanceProvider{}
 
+	provider.Init(
+		ctx,
+		endpoints,
+		logger,
+		pairs,
+		nil,
+		nil,
+	)
+
 	if endpoints.Name == ProviderBinance {
 		// Add some failover URLs in random order for Binance global,
 		// avoid using the same URL at the same time on every feeder
@@ -66,17 +75,8 @@ func NewBinanceProvider(
 			func(i, j int) { urls[i], urls[j] = urls[j], urls[i] },
 		)
 
-		endpoints.Urls = append(endpoints.Urls, urls...)
+		provider.endpoints.Urls = append(provider.endpoints.Urls, urls...)
 	}
-
-	provider.Init(
-		ctx,
-		endpoints,
-		logger,
-		pairs,
-		nil,
-		nil,
-	)
 
 	availablePairs, _ := provider.GetAvailablePairs()
 	provider.setPairs(pairs, availablePairs, nil)

@@ -20,8 +20,13 @@ import (
 var (
 	_                         Provider = (*UniswapV3Provider)(nil)
 	uniswapv3DefaultEndpoints          = Endpoint{
-		Name:         ProviderUniswapV3,
-		Urls:         []string{"https://eth.llamarpc.com", "https://ethereum.publicnode.com"},
+		Name: ProviderUniswapV3,
+		Urls: []string{
+			"https://ethereum.publicnode.com",
+			"https://eth-mainnet.public.blastapi.io",
+			"https://eth.llamarpc.com",
+			"https://rpc.ankr.com/eth",
+		},
 		PollInterval: 10 * time.Second,
 		// ContractAddresses: map[string]string{
 		// 	"WSTETHWETH": "0x109830a1AAaD605BbF02a9dFA7B0B92EC2FB7dAa",
@@ -194,7 +199,6 @@ func decodeEthData(data string, types []string) ([]interface{}, error) {
 
 	decoded, err := hex.DecodeString(data)
 	if err != nil {
-		fmt.Println(err)
 		return nil, err
 	}
 
@@ -339,5 +343,4 @@ func (p *UniswapV3Provider) setDecimals() {
 			}
 		}
 	}
-	fmt.Println(p.decimals)
 }

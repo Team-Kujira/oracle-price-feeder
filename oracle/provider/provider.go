@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -350,7 +351,13 @@ func (e *Endpoint) SetDefaults() {
 		return
 	}
 	if e.Urls == nil {
-		e.Urls = defaults.Urls
+		urls := defaults.Urls
+		rand.Seed(time.Now().UnixNano())
+		rand.Shuffle(
+			len(urls),
+			func(i, j int) { urls[i], urls[j] = urls[j], urls[i] },
+		)
+		e.Urls = urls
 	}
 	if e.Websocket == "" && defaults.Websocket != "" { // don't enable websockets for providers that don't support them
 		e.Websocket = defaults.Websocket
