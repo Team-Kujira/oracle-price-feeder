@@ -244,6 +244,7 @@ func priceFeederCmdHandler(cmd *cobra.Command, args []string) error {
 		derivativeSymbols,
 		cfg.Healthchecks,
 		history,
+		cfg.ContractAdresses,
 	)
 
 	telemetryCfg := telemetry.Config{}

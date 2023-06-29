@@ -41,8 +41,9 @@ var (
 		provider.ProviderBitforex:   {},
 		provider.ProviderBkex:       {},
 		provider.ProviderBitmart:    {},
+		provider.ProviderBitstamp:   {},
 		provider.ProviderFin:        {},
-		provider.ProviderFinUsk:     {},
+		provider.ProviderFinV2:      {},
 		provider.ProviderPoloniex:   {},
 		provider.ProviderPhemex:     {},
 		provider.ProviderLbank:      {},
@@ -67,10 +68,11 @@ var (
 		provider.ProviderIdxOsmosis: {},
 		provider.ProviderPyth:       {},
 		provider.ProviderZero:       {},
+		provider.ProviderUniswapV3:  {},
 	}
 
 	SupportedDerivatives = map[string]struct{}{
-		derivative.DerivativeTvwap: {},
+		derivative.DerivativeTwap: {},
 	}
 
 	// maxDeviationThreshold is the maxmimum allowed amount of standard
@@ -81,23 +83,24 @@ var (
 type (
 	// Config defines all necessary price-feeder configuration parameters.
 	Config struct {
-		Server               Server                 `toml:"server"`
-		CurrencyPairs        []CurrencyPair         `toml:"currency_pairs" validate:"required,gt=0,dive,required"`
-		Deviations           []Deviation            `toml:"deviation_thresholds"`
-		ProviderMinOverrides []ProviderMinOverrides `toml:"provider_min_overrides"`
-		Account              Account                `toml:"account" validate:"required,gt=0,dive,required"`
-		Keyring              Keyring                `toml:"keyring" validate:"required,gt=0,dive,required"`
-		RPC                  RPC                    `toml:"rpc" validate:"required,gt=0,dive,required"`
-		Telemetry            Telemetry              `toml:"telemetry"`
-		GasAdjustment        float64                `toml:"gas_adjustment" validate:"required"`
-		GasPrices            string                 `toml:"gas_prices" validate:"required"`
-		ProviderTimeout      string                 `toml:"provider_timeout"`
-		ProviderEndpoints    []ProviderEndpoints    `toml:"provider_endpoints" validate:"dive"`
-		EnableServer         bool                   `toml:"enable_server"`
-		EnableVoter          bool                   `toml:"enable_voter"`
-		Healthchecks         []Healthchecks         `toml:"healthchecks" validate:"dive"`
-		HeightPollInterval   string                 `toml:"height_poll_interval"`
-		HistoryDb            string                 `toml:"history_db"`
+		Server               Server                       `toml:"server"`
+		CurrencyPairs        []CurrencyPair               `toml:"currency_pairs" validate:"required,gt=0,dive,required"`
+		Deviations           []Deviation                  `toml:"deviation_thresholds"`
+		ProviderMinOverrides []ProviderMinOverrides       `toml:"provider_min_overrides"`
+		Account              Account                      `toml:"account" validate:"required,gt=0,dive,required"`
+		Keyring              Keyring                      `toml:"keyring" validate:"required,gt=0,dive,required"`
+		RPC                  RPC                          `toml:"rpc" validate:"required,gt=0,dive,required"`
+		Telemetry            Telemetry                    `toml:"telemetry"`
+		GasAdjustment        float64                      `toml:"gas_adjustment" validate:"required"`
+		GasPrices            string                       `toml:"gas_prices" validate:"required"`
+		ProviderTimeout      string                       `toml:"provider_timeout"`
+		ProviderEndpoints    []ProviderEndpoints          `toml:"provider_endpoints" validate:"dive"`
+		EnableServer         bool                         `toml:"enable_server"`
+		EnableVoter          bool                         `toml:"enable_voter"`
+		Healthchecks         []Healthchecks               `toml:"healthchecks" validate:"dive"`
+		HeightPollInterval   string                       `toml:"height_poll_interval"`
+		HistoryDb            string                       `toml:"history_db"`
+		ContractAdresses     map[string]map[string]string `toml:"contract_addresses"`
 	}
 
 	// Server defines the API server configuration.
@@ -198,6 +201,7 @@ type (
 		Websocket     string        `toml:"websocket"`
 		WebsocketPath string        `toml:"websocket_path"`
 		PollInterval  string        `toml:"poll_interval"`
+		Contracts     []string      `toml:"contracts"`
 	}
 )
 
@@ -238,6 +242,7 @@ func (p ProviderEndpoints) ToEndpoint() (provider.Endpoint, error) {
 		}
 		pollInterval = interval
 	}
+
 	e := provider.Endpoint{
 		Name:          p.Name,
 		Urls:          p.Urls,

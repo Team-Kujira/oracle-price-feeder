@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	DerivativeTvwap  = "tvwap"
+	DerivativeTwap   = "twap"
 	DerivativeStride = "stride"
 )
 
@@ -38,9 +38,9 @@ func NewDerivative(
 	derivativeLogger := logger.With().Str("derivative", name).Logger()
 	switch name {
 	case DerivativeStride:
-		return NewTvwapDerivative(history, derivativeLogger, pairs, periods)
-	case DerivativeTvwap:
-		return NewTvwapDerivative(history, derivativeLogger, pairs, periods)
+		return NewTwapDerivative(history, derivativeLogger, pairs, periods)
+	case DerivativeTwap:
+		return NewTwapDerivative(history, derivativeLogger, pairs, periods)
 	}
 	return nil, fmt.Errorf("unsupported provider: %s", name)
 }

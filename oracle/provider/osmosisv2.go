@@ -8,6 +8,7 @@ import (
 
 	"price-feeder/oracle/types"
 
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/rs/zerolog"
 )
 
@@ -130,7 +131,7 @@ func (p *OsmosisV2Provider) Poll() error {
 		p.setTickerPrice(
 			symbol,
 			strToDec(spotPrice.Price),
-			strToDec("1"),
+			sdk.ZeroDec(),
 			timestamp,
 		)
 	}

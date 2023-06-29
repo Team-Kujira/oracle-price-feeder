@@ -7,6 +7,7 @@ require (
 	github.com/Team-Kujira/core v0.8.3
 	github.com/armon/go-metrics v0.4.1
 	github.com/cosmos/cosmos-sdk v0.46.9
+	github.com/ethereum/go-ethereum v1.10.17
 	github.com/go-playground/validator/v10 v10.11.0
 	github.com/golangci/golangci-lint v1.50.1
 	github.com/gorilla/mux v1.8.0
