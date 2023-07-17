@@ -24,39 +24,42 @@ const (
 	staleTickersCutoff   = 1 * time.Minute
 	providerCandlePeriod = 10 * time.Minute
 
-	ProviderFin        Name = "fin"
-	ProviderFinV2      Name = "finv2"
-	ProviderKraken     Name = "kraken"
-	ProviderBinance    Name = "binance"
-	ProviderBinanceUS  Name = "binanceus"
-	ProviderOsmosis    Name = "osmosis"
-	ProviderOsmosisV2  Name = "osmosisv2"
-	ProviderHuobi      Name = "huobi"
-	ProviderOkx        Name = "okx"
-	ProviderGate       Name = "gate"
-	ProviderCoinbase   Name = "coinbase"
-	ProviderBitget     Name = "bitget"
-	ProviderBitmart    Name = "bitmart"
-	ProviderBkex       Name = "bkex"
-	ProviderBitfinex   Name = "bitfinex"
-	ProviderBitforex   Name = "bitforex"
-	ProviderBitstamp   Name = "bitstamp"
-	ProviderHitBtc     Name = "hitbtc"
-	ProviderPoloniex   Name = "poloniex"
-	ProviderPyth       Name = "pyth"
-	ProviderPhemex     Name = "phemex"
-	ProviderLbank      Name = "lbank"
-	ProviderKucoin     Name = "kucoin"
-	ProviderBybit      Name = "bybit"
-	ProviderMexc       Name = "mexc"
-	ProviderCrypto     Name = "crypto"
-	ProviderCurve      Name = "curve"
-	ProviderMock       Name = "mock"
-	ProviderStride     Name = "stride"
-	ProviderXt         Name = "xt"
-	ProviderIdxOsmosis Name = "idxosmosis"
-	ProviderZero       Name = "zero"
-	ProviderUniswapV3  Name = "uniswapv3"
+	ProviderAstroportTerra2    Name = "astroport_terra2"
+	ProviderAstroportNeutron   Name = "astroport_neutron"
+	ProviderAstroportInjective Name = "astroport_injective"
+	ProviderFin                Name = "fin"
+	ProviderFinV2              Name = "finv2"
+	ProviderKraken             Name = "kraken"
+	ProviderBinance            Name = "binance"
+	ProviderBinanceUS          Name = "binanceus"
+	ProviderOsmosis            Name = "osmosis"
+	ProviderOsmosisV2          Name = "osmosisv2"
+	ProviderHuobi              Name = "huobi"
+	ProviderOkx                Name = "okx"
+	ProviderGate               Name = "gate"
+	ProviderCoinbase           Name = "coinbase"
+	ProviderBitget             Name = "bitget"
+	ProviderBitmart            Name = "bitmart"
+	ProviderBkex               Name = "bkex"
+	ProviderBitfinex           Name = "bitfinex"
+	ProviderBitforex           Name = "bitforex"
+	ProviderBitstamp           Name = "bitstamp"
+	ProviderHitBtc             Name = "hitbtc"
+	ProviderPoloniex           Name = "poloniex"
+	ProviderPyth               Name = "pyth"
+	ProviderPhemex             Name = "phemex"
+	ProviderLbank              Name = "lbank"
+	ProviderKucoin             Name = "kucoin"
+	ProviderBybit              Name = "bybit"
+	ProviderMexc               Name = "mexc"
+	ProviderCrypto             Name = "crypto"
+	ProviderCurve              Name = "curve"
+	ProviderMock               Name = "mock"
+	ProviderStride             Name = "stride"
+	ProviderXt                 Name = "xt"
+	ProviderIdxOsmosis         Name = "idxosmosis"
+	ProviderZero               Name = "zero"
+	ProviderUniswapV3          Name = "uniswapv3"
 )
 
 type (
@@ -285,6 +288,12 @@ func (p *provider) makeHttpRequest(url string, method string, body []byte, heade
 func (e *Endpoint) SetDefaults() {
 	var defaults Endpoint
 	switch e.Name {
+	case ProviderAstroportInjective:
+		defaults = astroportInjectiveDefaultEndpoints
+	case ProviderAstroportNeutron:
+		defaults = astroportNeutronDefaultEndpoints
+	case ProviderAstroportTerra2:
+		defaults = astroportTerra2DefaultEndpoints
 	case ProviderBinance:
 		defaults = binanceDefaultEndpoints
 	case ProviderBitfinex:

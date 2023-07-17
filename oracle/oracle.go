@@ -449,6 +449,8 @@ func NewProvider(
 	providerLogger := logger.With().Str("provider", providerName.String()).Logger()
 	switch providerName {
 
+	case provider.ProviderAstroportNeutron, provider.ProviderAstroportTerra2, provider.ProviderAstroportInjective:
+		return provider.NewAstroportProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderBinance, provider.ProviderBinanceUS:
 		return provider.NewBinanceProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderBitfinex:
