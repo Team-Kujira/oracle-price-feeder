@@ -71,7 +71,7 @@ func convertTickersToUSD(
 			base := currencyPair.Base
 			quote := currencyPair.Quote
 
-			maxDeviation := deviationThresholds[base]
+			maxDeviation := deviationThresholds[quote]
 			tickerPrices := providerPricesBySymbol[symbol]
 
 			newRates := map[provider.Name]types.TickerPrice{}
@@ -121,7 +121,6 @@ func convertTickersToUSD(
 				newRates, err := addRates(
 					logger,
 					symbol,
-					maxDeviation,
 					usdRates[base],
 					newRates,
 				)
@@ -204,7 +203,6 @@ func convertTickersToUSD(
 func addRates(
 	logger zerolog.Logger,
 	symbol string,
-	threshold sdk.Dec,
 	rates map[provider.Name]types.TickerPrice,
 	tickers map[provider.Name]types.TickerPrice,
 ) (map[provider.Name]types.TickerPrice, error) {
