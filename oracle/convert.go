@@ -3,6 +3,7 @@ package oracle
 import (
 	"price-feeder/oracle/provider"
 	"price-feeder/oracle/types"
+	"sort"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/rs/zerolog"
@@ -59,12 +60,29 @@ func convertTickersToUSD(
 	usdRates := map[string]map[provider.Name]types.TickerPrice{}
 
 	for i := 0; i < maxConversions; i++ {
+		// reorder pairs
+
+		sort.Slice(pairs, func(i, j int) bool {
+			return pairs[i].String() < pairs[j].String()
+		})
+
+		// Process denoms that currently have no USD rate yet at last. This allows
+		// to add more prices for already existing USD rates which are used to calculate
+		// the prices for the remaining denoms
+
+		reordered := []types.CurrencyPair{}
+		for _, pair := range pairs {
+			_, found := usdRates[pair.Base]
+			if found {
+				reordered = append([]types.CurrencyPair{pair}, reordered...)
+			} else {
+				reordered = append(reordered, pair)
+			}
+		}
+
+		pairs = reordered
+
 		unresolved := []types.CurrencyPair{}
-		// sort.Slice(vwaps, func(i, j int) bool {
-		// 	volume1 := vwaps[i].Volume.Mul(vwaps[i].Value)
-		// 	volume2 := vwaps[j].Volume.Mul(vwaps[j].Value)
-		// 	return volume1.GT(volume2)
-		// })
 
 		for _, currencyPair := range pairs {
 			symbol := currencyPair.String()
