@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"price-feeder/oracle/types"
@@ -85,7 +86,7 @@ func (p *OsmosisProvider) Poll() error {
 	defer p.mtx.Unlock()
 
 	for _, ticker := range tickers {
-		symbol := ticker.Symbol + "USD"
+		symbol := strings.ToUpper(ticker.Symbol) + "USD"
 		if !p.isPair(symbol) {
 			continue
 		}
@@ -109,7 +110,8 @@ func (p *OsmosisProvider) GetAvailablePairs() (map[string]struct{}, error) {
 
 	symbols := map[string]struct{}{}
 	for _, ticker := range tickers {
-		symbols[ticker.Symbol+"USD"] = struct{}{}
+		symbol := strings.ToUpper(ticker.Symbol) + "USD"
+		symbols[symbol] = struct{}{}
 	}
 
 	return symbols, nil
