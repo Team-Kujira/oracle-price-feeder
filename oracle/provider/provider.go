@@ -32,6 +32,8 @@ const (
 	ProviderKraken             Name = "kraken"
 	ProviderBinance            Name = "binance"
 	ProviderBinanceUS          Name = "binanceus"
+	ProviderCamelotV2          Name = "camelotv2"
+	ProviderCamelotV3          Name = "camelotv3"
 	ProviderOsmosis            Name = "osmosis"
 	ProviderOsmosisV2          Name = "osmosisv2"
 	ProviderHuobi              Name = "huobi"
@@ -310,6 +312,10 @@ func (e *Endpoint) SetDefaults() {
 		defaults = bkexDefaultEndpoints
 	case ProviderBybit:
 		defaults = bybitDefaultEndpoints
+	case ProviderCamelotV2:
+		defaults = camelotV2DefaultEndpoints
+	case ProviderCamelotV3:
+		defaults = camelotV3DefaultEndpoints
 	case ProviderCoinbase:
 		defaults = coinbaseDefaultEndpoints
 	case ProviderCrypto:
@@ -567,7 +573,13 @@ func (p *provider) getContractAddress(pair types.CurrencyPair) (string, error) {
 		return address, nil
 	}
 
-	return "", fmt.Errorf("no contract address found")
+	err := fmt.Errorf("no contract address found")
+
+	p.logger.Error().
+		Str("pair", pair.String()).
+		Err(err)
+
+	return "", err
 }
 
 // String cast provider name to string.
