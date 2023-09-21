@@ -35,7 +35,6 @@ type (
 	// REF: -
 	CamelotProvider struct {
 		provider
-		denoms    map[string]string
 		contracts map[string]string
 		volumes   map[string][]CamelotVolume
 	}
@@ -46,30 +45,39 @@ type (
 		Token1 sdk.Dec
 	}
 
-	CamelotV2Query struct {
+	CamelotQuery struct {
 		Query string `json:"query"`
 	}
 
-	CamelotV2QueryResponse struct {
-		Data CamelotV2ResponseData `json:"data"`
+	CamelotQueryResponse struct {
+		Data CamelotResponseData `json:"data"`
 	}
 
-	CamelotV2ResponseData struct {
-		HourData []CamelotV2HourData `json:"pairHourDatas"`
-		Pairs    []CamelotV2PairData `json:"pairs"`
+	CamelotResponseData struct {
+		PairsHourData []CamelotPairHourData `json:"pairHourDatas"`
+		Pairs         []CamelotPairData     `json:"pairs"`
+		PoolsHourData []CamelotPoolHourData `json:"poolHourDatas"`
+		Pools         []CamelotPairData     `json:"pools"`
 	}
 
-	CamelotV2HourData struct {
-		Time    int64             `json:"hourStartUnix"`
-		Pair    CamelotV2PairData `json:"pair"`
-		Volume0 string            `json:"hourlyVolumeToken0"`
-		Volume1 string            `json:"hourlyVolumeToken1"`
+	CamelotPairHourData struct {
+		Time    int64           `json:"hourStartUnix"`
+		Pair    CamelotPairData `json:"pair"`
+		Volume0 string          `json:"hourlyVolumeToken0"`
+		Volume1 string          `json:"hourlyVolumeToken1"`
+	}
+
+	CamelotPoolHourData struct {
+		Time    int64           `json:"periodStartUnix"`
+		Pool    CamelotPairData `json:"pool"`
+		Volume0 string          `json:"volumeToken0"`
+		Volume1 string          `json:"volumeToken1"`
 	}
 
 	// only the quote price is required
 	// the inverse price is calculated by
 	// the feeder automatically if needed
-	CamelotV2PairData struct {
+	CamelotPairData struct {
 		Id    string `json:"id"`
 		Price string `json:"token1Price"`
 	}
@@ -102,33 +110,19 @@ func NewCamelotProvider(
 	return provider, nil
 }
 
-func (p *CamelotProvider) Poll() error {
-	p.mtx.Lock()
-	defer p.mtx.Unlock()
-
-	switch p.endpoints.Name {
-	case ProviderCamelotV2:
-		p.pollV2()
-	case ProviderCamelotV3:
-		// v3
-	default:
-		return nil
-	}
-
-	p.logger.Debug().Msg("updated tickers")
-	return nil
-}
-
 func (p *CamelotProvider) GetAvailablePairs() (map[string]struct{}, error) {
 	return p.getAvailablePairsFromContracts()
 }
 
-func (p *CamelotProvider) pollV2() error {
+func (p *CamelotProvider) Poll() error {
+	if p.endpoints.Name != ProviderCamelotV2 && p.endpoints.Name != ProviderCamelotV3 {
+		return nil
+	}
+
 	offset := 3600
 	if p.volumes == nil {
 		p.volumes = map[string][]CamelotVolume{}
 		offset = 23 * 3600
-
 	}
 
 	contracts := []string{}
@@ -143,91 +137,21 @@ func (p *CamelotProvider) pollV2() error {
 		contracts = append(contracts, contract)
 	}
 
-	contractStr := `"` + strings.Join(contracts, `","`) + `"`
+	query, _ := p.getQuery(contracts, offset)
 
-	timestamp := time.Now()
-	hourStart := timestamp.Truncate(1*time.Hour).Unix() - int64(offset)
-
-	query := fmt.Sprintf(`
-		{
-			pairHourDatas(
-				where: {
-					pair_in: [%s],
-					hourStartUnix_gte: %d
-				}
-			) {
-				hourStartUnix,
-				hourlyVolumeToken0,
-				hourlyVolumeToken1,
-				pair {
-					id
-				}
-			}
-			pairs(
-				where: {
-					id_in: [%s]
-				}
-			) {
-				id,
-				token1Price
-			}
-		}`,
-		contractStr,
-		hourStart,
-		contractStr,
+	var (
+		prices  map[string]sdk.Dec
+		volumes map[string][]CamelotVolume
 	)
 
-	query = strings.ReplaceAll(query, " ", "")
-	query = strings.ReplaceAll(query, "\t", "")
-	query = strings.ReplaceAll(query, "\n", "")
-
-	request, err := json.Marshal(CamelotV2Query{Query: query})
-	if err != nil {
-		p.logger.Error().Msg("failed marshalling request")
-	}
-
-	path := "/subgraphs/name/camelotlabs/camelot-amm"
-
-	content, err := p.httpPost(path, request)
-	if err != nil {
-		p.logger.Error().
-			Err(err).
-			Msg("failed sending query")
-
-		return err
-	}
-
-	var response CamelotV2QueryResponse
-	err = json.Unmarshal(content, &response)
-	if err != nil {
-		p.logger.Error().
-			Err(err).
-			Msg("failed unmarshalling response")
-		return err
-	}
-
-	volumes := map[string][]CamelotVolume{}
-
-	for _, volume := range response.Data.HourData {
-		contract := volume.Pair.Id
-		_, found := volumes[contract]
-		if !found {
-			volumes[contract] = []CamelotVolume{}
-		}
-		volumes[contract] = append(volumes[contract], CamelotVolume{
-			Date:   volume.Time,
-			Token0: strToDec(volume.Volume0),
-			Token1: strToDec(volume.Volume1),
-		})
-	}
+	prices, volumes, _ = p.query(query)
 
 	p.updateVolumes(volumes)
 
-	prices := map[string]sdk.Dec{}
+	timestamp := time.Now()
 
-	for _, pair := range response.Data.Pairs {
-		prices[pair.Id] = strToDec(pair.Price)
-	}
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
 
 	for symbol, pair := range p.getAllPairs() {
 		contract, err := p.getContractAddress(pair)
@@ -265,6 +189,167 @@ func (p *CamelotProvider) pollV2() error {
 	}
 
 	return nil
+}
+
+func (p *CamelotProvider) query(
+	query string,
+) (
+	prices map[string]sdk.Dec,
+	volumes map[string][]CamelotVolume,
+	err error,
+) {
+	var (
+		version string
+		path    string
+	)
+
+	switch p.endpoints.Name {
+	case ProviderCamelotV2:
+		version = "v2"
+		path = "/subgraphs/name/camelotlabs/camelot-amm"
+	case ProviderCamelotV3:
+		version = "v3"
+		path = "/subgraphs/name/camelotlabs/camelot-amm-v3"
+	}
+
+	prices = map[string]sdk.Dec{}
+	volumes = map[string][]CamelotVolume{}
+
+	request, err := json.Marshal(CamelotQuery{Query: query})
+	if err != nil {
+		p.logger.Error().Msg("failed marshalling request")
+	}
+
+	content, err := p.httpPost(path, request)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var response CamelotQueryResponse
+	err = json.Unmarshal(content, &response)
+	if err != nil {
+		p.logger.Error().
+			Err(err).
+			Msg("failed unmarshalling response")
+		return nil, nil, err
+	}
+
+	if version == "v2" {
+		for _, volume := range response.Data.PairsHourData {
+			contract := volume.Pair.Id
+
+			_, found := volumes[contract]
+			if !found {
+				volumes[contract] = []CamelotVolume{}
+			}
+			volumes[contract] = append(volumes[contract], CamelotVolume{
+				Date:   volume.Time,
+				Token0: strToDec(volume.Volume0),
+				Token1: strToDec(volume.Volume1),
+			})
+		}
+
+		for _, pair := range response.Data.Pairs {
+			prices[pair.Id] = strToDec(pair.Price)
+		}
+	} else {
+		for _, volume := range response.Data.PoolsHourData {
+			contract := volume.Pool.Id
+
+			_, found := volumes[contract]
+			if !found {
+				volumes[contract] = []CamelotVolume{}
+			}
+			volumes[contract] = append(volumes[contract], CamelotVolume{
+				Date:   volume.Time,
+				Token0: strToDec(volume.Volume0),
+				Token1: strToDec(volume.Volume1),
+			})
+		}
+
+		for _, pool := range response.Data.Pools {
+			prices[pool.Id] = strToDec(pool.Price)
+		}
+	}
+
+	return prices, volumes, nil
+}
+
+func (p *CamelotProvider) getQuery(
+	contracts []string,
+	offset int,
+) (string, error) {
+	addresses := `"` + strings.Join(contracts, `","`) + `"`
+	timestamp := time.Now().Truncate(1*time.Hour).Unix() - int64(offset)
+
+	query := ""
+
+	switch p.endpoints.Name {
+	case ProviderCamelotV2:
+		query = fmt.Sprintf(`
+		{
+			pairHourDatas(
+				where: {
+					pair_in: [%s],
+					hourStartUnix_gte: %d
+				}
+			) {
+				hourStartUnix,
+				hourlyVolumeToken0,
+				hourlyVolumeToken1,
+				pair {
+					id
+				}
+			}
+			pairs(
+				where: {
+					id_in: [%s]
+				}
+			) {
+				id,
+				token1Price
+			}
+		}`,
+			addresses,
+			timestamp,
+			addresses,
+		)
+	case ProviderCamelotV3:
+		query = fmt.Sprintf(`
+		{
+			poolHourDatas(
+				where: {
+					pool_in: [%s],
+					periodStartUnix_gte: %d
+				}
+			) {
+				periodStartUnix,
+				volumeToken0,
+				volumeToken1,
+				pool {
+					id
+				}
+			}
+			pools(
+				where: {
+					id_in: [%s]
+				}
+			) {
+				id,
+				token1Price
+			}
+		}`,
+			addresses,
+			timestamp,
+			addresses,
+		)
+	}
+
+	query = strings.ReplaceAll(query, " ", "")
+	query = strings.ReplaceAll(query, "\t", "")
+	query = strings.ReplaceAll(query, "\n", "")
+
+	return query, nil
 }
 
 func (p *CamelotProvider) updateVolumes(volumes map[string][]CamelotVolume) error {
