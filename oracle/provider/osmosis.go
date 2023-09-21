@@ -12,10 +12,14 @@ import (
 )
 
 var (
-	_                       Provider = (*OsmosisProvider)(nil)
-	osmosisDefaultEndpoints          = Endpoint{
-		Name:         ProviderOsmosis,
-		Urls:         []string{"https://api-osmosis.imperator.co"},
+	_ Provider = (*OsmosisProvider)(nil)
+
+	osmosisDefaultEndpoints = Endpoint{
+		Name: ProviderOsmosis,
+		Urls: []string{
+			"https://api.osmosis.zone",
+			"https://api-osmosis.imperator.co",
+		},
 		PollInterval: 6 * time.Second,
 	}
 )
