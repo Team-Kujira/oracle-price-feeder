@@ -255,7 +255,6 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 					telemetry.IncrCounter(1, "failure", "provider", "type", "ticker")
 					errCh <- err
 				}
-
 			}()
 
 			select {
@@ -315,7 +314,6 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 		for _, pair := range pairs {
 			symbol := pair.String()
 			tickerPrices, err := o.derivatives[name].GetPrices(symbol)
-
 			if err != nil {
 				// o.logger.Err(err).Msg("failed to get derivative price")
 				continue
@@ -380,7 +378,6 @@ func GetComputedPrices(
 	deviations map[string]sdk.Dec,
 	providerMinOverrides map[string]int,
 ) (prices map[string]sdk.Dec, err error) {
-
 	rates, err := convertTickersToUSD(
 		logger,
 		providerPrices,
@@ -465,6 +462,8 @@ func NewProvider(
 		return provider.NewBitmartProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderBybit:
 		return provider.NewBybitProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderCamelotV2, provider.ProviderCamelotV3:
+		return provider.NewCamelotProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderCoinbase:
 		return provider.NewCoinbaseProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderCrypto:

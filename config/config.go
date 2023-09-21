@@ -42,6 +42,8 @@ var (
 		provider.ProviderBkex:               {},
 		provider.ProviderBitmart:            {},
 		provider.ProviderBitstamp:           {},
+		provider.ProviderCamelotV2:          {},
+		provider.ProviderCamelotV3:          {},
 		provider.ProviderFin:                {},
 		provider.ProviderFinV2:              {},
 		provider.ProviderPoloniex:           {},
