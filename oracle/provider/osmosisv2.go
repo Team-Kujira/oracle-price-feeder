@@ -103,15 +103,15 @@ func (p *OsmosisV2Provider) Poll() error {
 			continue
 		}
 
-		_, found := p.inverse[symbol]
-		if found {
-			pair = pair.Swap()
-		}
-
 		var price sdk.Dec
 
-		_, found = p.concentrated[poolId]
+		_, found := p.concentrated[poolId]
 		if found {
+			_, found := p.inverse[symbol]
+			if found {
+				pair = pair.Swap()
+			}
+
 			price, err = p.queryConcentratedLiquidityPool(pair, poolId)
 			if err != nil {
 				return err
