@@ -5,21 +5,21 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
-	tmrpcclient "github.com/tendermint/tendermint/rpc/client"
+	rpcclient "github.com/tendermint/tendermint/rpc/client"
 )
 
 type ChainHeight struct {
-	Logger zerolog.Logger
-	ctx context.Context
-	rpc tmrpcclient.Client
+	Logger       zerolog.Logger
+	ctx          context.Context
+	rpc          rpcclient.Client
 	pollInterval time.Duration
-	height int64
-	err error
+	height       int64
+	err          error
 }
 
 func NewChainHeight(
 	ctx context.Context,
-	rpc tmrpcclient.Client,
+	rpc rpcclient.Client,
 	logger zerolog.Logger,
 	pollInterval time.Duration,
 ) (*ChainHeight, error) {
@@ -30,12 +30,12 @@ func NewChainHeight(
 		}
 	}
 	c := &ChainHeight{
-		Logger: logger.With().Str("oracle_client", "chain_height").Logger(),
-		ctx: ctx,
-		rpc: rpc,
-		height: 0,
+		Logger:       logger.With().Str("oracle_client", "chain_height").Logger(),
+		ctx:          ctx,
+		rpc:          rpc,
+		height:       0,
 		pollInterval: pollInterval,
-		err: nil,
+		err:          nil,
 	}
 	c.update()
 	go c.poll()

@@ -12,8 +12,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Team-Kujira/core/app/params"
+
 	input "github.com/cosmos/cosmos-sdk/client/input"
-	"github.com/ignite/cli/ignite/pkg/cosmoscmd"
 	"github.com/mitchellh/mapstructure"
 
 	"github.com/gorilla/mux"
@@ -113,7 +114,7 @@ func priceFeederCmdHandler(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	cosmoscmd.SetPrefixes(cfg.Account.Prefix)
+	params.SetAddressPrefixes()
 
 	ctx, cancel := context.WithCancel(cmd.Context())
 	g, ctx := errgroup.WithContext(ctx)

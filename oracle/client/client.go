@@ -9,21 +9,22 @@ import (
 	"os"
 	"time"
 
-	"github.com/Team-Kujira/core/app"
+	"github.com/Team-Kujira/core/app/params"
+
+	rpchttp "github.com/cometbft/cometbft/rpc/client/http"
+	jsonclient "github.com/cometbft/cometbft/rpc/jsonrpc/client"
 
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/flags"
 	"github.com/cosmos/cosmos-sdk/client/tx"
-	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	"github.com/cosmos/cosmos-sdk/crypto/hd"
+	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	"github.com/cosmos/cosmos-sdk/telemetry"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
-	"github.com/ignite/cli/ignite/pkg/cosmoscmd"
+
 	"github.com/rs/zerolog"
-	rpchttp "github.com/tendermint/tendermint/rpc/client/http"
-	tmjsonclient "github.com/tendermint/tendermint/rpc/jsonrpc/client"
 )
 
 type (
@@ -41,7 +42,7 @@ type (
 		ValidatorAddr       sdk.ValAddress
 		ValidatorAddrString string
 		FeeGranterAddr      sdk.AccAddress
-		Encoding            cosmoscmd.EncodingConfig
+		Encoding            params.EncodingConfig
 		GasPrices           string
 		GasAdjustment       float64
 		GRPCEndpoint        string
@@ -92,7 +93,7 @@ func NewOracleClient(
 		ValidatorAddr:       sdk.ValAddress(validatorAddrString),
 		ValidatorAddrString: validatorAddrString,
 		FeeGranterAddr:      feegrantAddrErr,
-		Encoding:            cosmoscmd.MakeEncodingConfig(app.ModuleBasics),
+		Encoding:            params.MakeEncodingConfig(),
 		GasAdjustment:       gasAdjustment,
 		GRPCEndpoint:        grpcEndpoint,
 		GasPrices:           gasPrices,
@@ -210,12 +211,12 @@ func (oc OracleClient) BroadcastTx(nextBlockHeight, timeoutHeight int64, msgs ..
 func (oc OracleClient) CreateClientContext() (client.Context, error) {
 	keyringInput := newPassReader(oc.KeyringPass)
 
-	kr, err := keyring.New("kujira", oc.KeyringBackend, oc.KeyringDir, keyringInput, oc.Encoding.Marshaler)
+	kr, err := keyring.New("kujira", oc.KeyringBackend, oc.KeyringDir, keyringInput, oc.Encoding.Codec)
 	if err != nil {
 		return client.Context{}, err
 	}
 
-	httpClient, err := tmjsonclient.DefaultHTTPClient(oc.TMRPC)
+	httpClient, err := jsonclient.DefaultHTTPClient(oc.TMRPC)
 	if err != nil {
 		return client.Context{}, err
 	}
@@ -258,7 +259,7 @@ func (oc OracleClient) CreateClientContext() (client.Context, error) {
 		BroadcastMode:     flags.BroadcastSync,
 		TxConfig:          oc.Encoding.TxConfig,
 		AccountRetriever:  authtypes.AccountRetriever{},
-		Codec:             oc.Encoding.Marshaler,
+		Codec:             oc.Encoding.Codec,
 		LegacyAmino:       oc.Encoding.Amino,
 		Input:             os.Stdin,
 		NodeURI:           oc.TMRPC,
