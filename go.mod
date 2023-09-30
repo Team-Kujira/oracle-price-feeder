@@ -20,7 +20,7 @@ require (
 	github.com/sirkon/goproxy v1.4.8
 	github.com/spf13/cobra v1.7.0
 	github.com/stretchr/testify v1.8.4
-	github.com/tendermint/tendermint v0.34.24
+	github.com/cometbft/cometbft v0.37.2
 	golang.org/x/sync v0.2.0
 	google.golang.org/grpc v1.56.2
 	gopkg.in/yaml.v3 v3.0.1
