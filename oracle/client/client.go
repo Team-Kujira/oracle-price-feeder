@@ -211,8 +211,6 @@ func (oc OracleClient) BroadcastTx(nextBlockHeight, timeoutHeight int64, msgs ..
 func (oc OracleClient) CreateClientContext() (client.Context, error) {
 	keyringInput := newPassReader(oc.KeyringPass)
 
-	fmt.Println(sdk.KeyringServiceName())
-
 	kr, err := keyring.New("kujira", oc.KeyringBackend, oc.KeyringDir, keyringInput, oc.Encoding.Codec)
 	if err != nil {
 		return client.Context{}, err
