@@ -22,7 +22,11 @@ endif
 ###############################################################################
 
 ldflags = -X price-feeder/cmd.Version=$(VERSION) \
-		  -X price-feeder/cmd.Commit=$(COMMIT)
+		  		-X price-feeder/cmd.Commit=$(COMMIT) \
+					-X github.com/cosmos/cosmos-sdk/version.Name=kujira \
+					-X github.com/cosmos/cosmos-sdk/version.ServerName=price-feeder \
+					-X github.com/cosmos/cosmos-sdk/version.Version=$(VERSION) \
+					-X github.com/cosmos/cosmos-sdk/version.Commit=$(COMMIT) 
 
 BUILD_FLAGS := -ldflags '$(ldflags)'
 
