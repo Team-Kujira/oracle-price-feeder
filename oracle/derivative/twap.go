@@ -93,13 +93,12 @@ func Twap(
 	end time.Time,
 ) (sdk.Dec, int64, error) {
 	priceTotal := sdk.ZeroDec()
-	volumeTotal := sdk.ZeroDec()
 	timeTotal := int64(0)
 
 	period := end.Sub(start).Seconds()
 	minPeriod := int64(twapMinHistoryPeriodFraction * period)
 
-	var newStart time.Time
+	discardedTime := int64(0)
 
 	for i, ticker := range tickers {
 		if ticker.Time.Before(start) {
@@ -108,35 +107,32 @@ func Twap(
 		if ticker.Time.After(end) {
 			break
 		}
+
 		nextIndex := i + 1
-		var timeDelta int64
 		if nextIndex >= len(tickers) || tickers[nextIndex].Time.After(end) {
-			timeDelta = end.Unix() - ticker.Time.Unix()
-		} else {
-			timeDelta = tickers[nextIndex].Time.Unix() - ticker.Time.Unix()
+			break
 		}
 
+		timeDelta := tickers[nextIndex].Time.Unix() - ticker.Time.Unix()
+
 		if timeDelta > twapMaxTimeDeltaSeconds {
-			if nextIndex >= len(tickers) {
-				newStart = end
-			} else {
-				newStart = tickers[nextIndex].Time
-			}
+			discardedTime = discardedTime + timeDelta
+			continue
 		}
 
 		priceTotal = priceTotal.Add(ticker.Price.MulInt64(timeDelta))
-		volumeTotal = volumeTotal.Add(ticker.Volume)
 		timeTotal = timeTotal + timeDelta
 	}
 
-	if !newStart.IsZero() {
-		missing := newStart.Unix() - time.Now().Unix() + int64(period)
-		return sdk.Dec{}, missing, fmt.Errorf("not enough continuous history")
-	}
-
-	if timeTotal == 0 || timeTotal < minPeriod {
+	if timeTotal < minPeriod {
 		missing := minPeriod - timeTotal
-		return sdk.Dec{}, missing, fmt.Errorf("not enough history")
+		message := "not enough history"
+
+		if int64(period)-discardedTime < minPeriod {
+			message = "too much time gap in history"
+		}
+
+		return sdk.Dec{}, missing, fmt.Errorf(message)
 	}
 
 	return priceTotal.QuoInt64(timeTotal), 0, nil
