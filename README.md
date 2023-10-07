@@ -128,7 +128,7 @@ providers = [
 ```
 
 Providing multiple providers is beneficial in case any provider fails to return
-market data. Prices per exchange rate are submitted on-chain via pre-vote and
+market data or reports a price that deviates too much and should be considered wrong. Prices per exchange rate are submitted on-chain via pre-vote and
 vote messages using a volume-weighted average price (VWAP).
 
 ## Keyring
