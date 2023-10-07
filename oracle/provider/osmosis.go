@@ -95,10 +95,13 @@ func (p *OsmosisProvider) Poll() error {
 			continue
 		}
 
+		price := floatToDec(ticker.Price)
+		volume := floatToDec(ticker.Volume)
+
 		p.setTickerPrice(
 			symbol,
-			floatToDec(ticker.Price),
-			floatToDec(ticker.Volume),
+			price,
+			volume.Quo(price),
 			timestamp,
 		)
 	}
