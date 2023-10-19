@@ -1,10 +1,14 @@
 #!/bin/bash
 
-VALIDATOR="<KUJIRAVALOPERADDRESS"
+VALIDATOR="<KUJIRAVALOPERADDRESS>"
 LCD="<http://YOUR-ENDPOINT:1317>"
 
 # create your slack integration: https://api.slack.com/apps
 SLACK_WEBHOOK="<http://YOUR-SLACK-WEBHOOK-ENDPOINT>"
+
+# create you rown Telegram API https://core.telegram.org/bots/api  
+TELEGRAM_BOT_TOKEN="<TELEGRAM_API_TOKEN>"                          
+CHAT_ID="<TELEGRAM_CHAT_ID>"
 
 NOW=`date '+%F_%H:%M:%S'`;
 echo "$NOW Starting oracle-monitoring script..."
@@ -34,6 +38,11 @@ while (true); do
         TEXT="$TEXT\nlast logs:\`\`\`$LOGS\`\`\`"
 
         curl -X POST -H 'Content-type: application/json' --data '{"text":"'"$TEXT"'"}' $SLACK_WEBHOOK
+
+#	telegram integration
+#	curl -s "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage?chat_id=$CHAT_ID&text=$TEXT"
+
+	
     fi
 done;
 
