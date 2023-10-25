@@ -471,10 +471,10 @@ func (p *provider) setPairs(
 }
 
 func (p *provider) setTickerPrice(symbol string, price sdk.Dec, volume sdk.Dec, timestamp time.Time) {
-	if price.IsZero() {
+	if price.IsNil() || price.LTE(sdk.ZeroDec()) {
 		p.logger.Warn().
 			Str("symbol", symbol).
-			Msg("price is zero")
+			Msgf("price is %s", price)
 		return
 	}
 
@@ -630,11 +630,16 @@ func strToDec(str string) sdk.Dec {
 			str = split[0] + "." + split[1][0:18]
 		}
 	}
-	return sdk.MustNewDecFromStr(str)
+	dec, err := sdk.NewDecFromStr(str)
+	if err != nil {
+		dec = sdk.Dec{}
+	}
+
+	return dec
 }
 
 func floatToDec(f float64) sdk.Dec {
-	return sdk.MustNewDecFromStr(strconv.FormatFloat(f, 'f', -1, 64))
+	return strToDec(strconv.FormatFloat(f, 'f', -1, 64))
 }
 
 func invertDec(d sdk.Dec) sdk.Dec {

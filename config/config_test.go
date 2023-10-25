@@ -182,7 +182,7 @@ providers = [
 base = "STATOM"
 quote = "USDT"
 providers = ["osmosis"]
-derivative = "tvwap"
+derivative = "twap"
 derivative_period = "30m"
 
 [account]
@@ -230,7 +230,7 @@ timeout = "200ms"
 	require.Len(t, cfg.CurrencyPairs[0].Providers, 3)
 	require.Equal(t, provider.ProviderKraken, cfg.CurrencyPairs[0].Providers[0])
 	require.Equal(t, provider.ProviderBinance, cfg.CurrencyPairs[0].Providers[1])
-	require.Equal(t, "tvwap", cfg.CurrencyPairs[3].Derivative)
+	require.Equal(t, "twap", cfg.CurrencyPairs[3].Derivative)
 }
 
 func TestParseConfig_Valid_NoTelemetry(t *testing.T) {
