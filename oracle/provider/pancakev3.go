@@ -14,82 +14,69 @@ import (
 )
 
 var (
-	_ Provider = (*CamelotProvider)(nil)
+	_ Provider = (*PancakeProvider)(nil)
 
-	camelotV2DefaultEndpoints = Endpoint{
-		Name:         ProviderCamelotV2,
-		Urls:         []string{"https://api.thegraph.com"},
-		PollInterval: 10 * time.Second,
-	}
-
-	camelotV3DefaultEndpoints = Endpoint{
-		Name:         ProviderCamelotV3,
+	PancakeV3BscDefaultEndpoints = Endpoint{
+		Name:         ProviderPancakeV3Bsc,
 		Urls:         []string{"https://api.thegraph.com"},
 		PollInterval: 10 * time.Second,
 	}
 )
 
 type (
-	// CamelotProvider defines an oracle provider using on chain data from thegraph.com
+	// PancakeProvider defines an oracle provider using on chain data from thegraph.com
 	//
 	// REF: -
-	CamelotProvider struct {
+	PancakeProvider struct {
 		provider
 		contracts map[string]string
-		volumes   map[string][]CamelotVolume
+		volumes   map[string][]PancakeVolume
 	}
 
-	CamelotVolume struct {
+	PancakeVolume struct {
 		Date   int64
 		Token0 sdk.Dec
 		Token1 sdk.Dec
 	}
 
-	CamelotQuery struct {
+	PancakeQuery struct {
 		Query string `json:"query"`
 	}
 
-	CamelotQueryResponse struct {
-		Data CamelotResponseData `json:"data"`
+	PancakeQueryResponse struct {
+		Data PancakeResponseData `json:"data"`
 	}
 
-	CamelotResponseData struct {
-		PairsHourData []CamelotPairHourData `json:"pairHourDatas"`
-		Pairs         []CamelotPairData     `json:"pairs"`
-		PoolsHourData []CamelotPoolHourData `json:"poolHourDatas"`
-		Pools         []CamelotPairData     `json:"pools"`
+	PancakeResponseData struct {
+		Pools []PancakePool `json:"pools"`
 	}
 
-	CamelotPairHourData struct {
-		Time    int64           `json:"hourStartUnix"`
-		Pair    CamelotPairData `json:"pair"`
-		Volume0 string          `json:"hourlyVolumeToken0"`
-		Volume1 string          `json:"hourlyVolumeToken1"`
+	PancakePool struct {
+		Id        string            `json:"id"`
+		Token0    PancakeToken      `json:"token0"`
+		Token1    PancakeToken      `json:"token1"`
+		SqrtPrice string            `json:"sqrtPrice"`
+		HourData  []PancakeHourData `json:"poolHourData"`
 	}
 
-	CamelotPoolHourData struct {
-		Time    int64           `json:"periodStartUnix"`
-		Pool    CamelotPairData `json:"pool"`
-		Volume0 string          `json:"volumeToken0"`
-		Volume1 string          `json:"volumeToken1"`
+	PancakeToken struct {
+		Id string `json:"id"`
 	}
 
-	// only the quote price is required
-	// the inverse price is calculated by
-	// the feeder automatically if needed
-	CamelotPairData struct {
-		Id    string `json:"id"`
-		Price string `json:"token1Price"`
+	PancakeHourData struct {
+		Time    int64  `json:"periodStartUnix"`
+		Volume0 string `json:"volumeToken0"`
+		Volume1 string `json:"volumeToken1"`
 	}
 )
 
-func NewCamelotProvider(
+func NewPancakeProvider(
 	ctx context.Context,
 	logger zerolog.Logger,
 	endpoints Endpoint,
 	pairs ...types.CurrencyPair,
-) (*CamelotProvider, error) {
-	provider := &CamelotProvider{}
+) (*PancakeProvider, error) {
+	provider := &PancakeProvider{}
 	provider.Init(
 		ctx,
 		endpoints,
@@ -110,18 +97,18 @@ func NewCamelotProvider(
 	return provider, nil
 }
 
-func (p *CamelotProvider) GetAvailablePairs() (map[string]struct{}, error) {
+func (p *PancakeProvider) GetAvailablePairs() (map[string]struct{}, error) {
 	return p.getAvailablePairsFromContracts()
 }
 
-func (p *CamelotProvider) Poll() error {
-	if p.endpoints.Name != ProviderCamelotV2 && p.endpoints.Name != ProviderCamelotV3 {
+func (p *PancakeProvider) Poll() error {
+	if p.endpoints.Name != ProviderPancakeV3Bsc {
 		return nil
 	}
 
 	offset := 3600
 	if p.volumes == nil {
-		p.volumes = map[string][]CamelotVolume{}
+		p.volumes = map[string][]PancakeVolume{}
 		offset = 23 * 3600
 	}
 
@@ -141,7 +128,7 @@ func (p *CamelotProvider) Poll() error {
 
 	var (
 		prices  map[string]sdk.Dec
-		volumes map[string][]CamelotVolume
+		volumes map[string][]PancakeVolume
 	)
 
 	prices, volumes, _ = p.query(query)
@@ -197,29 +184,24 @@ func (p *CamelotProvider) Poll() error {
 	return nil
 }
 
-func (p *CamelotProvider) query(
+func (p *PancakeProvider) query(
 	query string,
 ) (
 	prices map[string]sdk.Dec,
-	volumes map[string][]CamelotVolume,
+	volumes map[string][]PancakeVolume,
 	err error,
 ) {
-	var (
-		version string
-		path    string
-	)
+	// version string
+	var path string
 
 	switch p.endpoints.Name {
-	case ProviderCamelotV2:
-		version = "v2"
-		path = "/subgraphs/name/camelotlabs/camelot-amm"
-	case ProviderCamelotV3:
-		version = "v3"
-		path = "/subgraphs/name/camelotlabs/camelot-amm-v3"
+	case ProviderPancakeV3Bsc:
+		// version = "v3"
+		path = "/subgraphs/name/pancakeswap/exchange-v3-bsc"
 	}
 
 	prices = map[string]sdk.Dec{}
-	volumes = map[string][]CamelotVolume{}
+	volumes = map[string][]PancakeVolume{}
 
 	request, err := json.Marshal(CamelotQuery{Query: query})
 	if err != nil {
@@ -231,7 +213,7 @@ func (p *CamelotProvider) query(
 		return nil, nil, err
 	}
 
-	var response CamelotQueryResponse
+	var response PancakeQueryResponse
 	err = json.Unmarshal(content, &response)
 	if err != nil {
 		p.logger.Error().
@@ -240,48 +222,32 @@ func (p *CamelotProvider) query(
 		return nil, nil, err
 	}
 
-	if version == "v2" {
-		for _, volume := range response.Data.PairsHourData {
-			contract := volume.Pair.Id
+	for _, pool := range response.Data.Pools {
+		contract := pool.Id
 
-			_, found := volumes[contract]
-			if !found {
-				volumes[contract] = []CamelotVolume{}
-			}
-			volumes[contract] = append(volumes[contract], CamelotVolume{
+		_, found := volumes[contract]
+		if !found {
+			volumes[contract] = []PancakeVolume{}
+		}
+
+		for _, volume := range pool.HourData {
+			volumes[contract] = append(volumes[contract], PancakeVolume{
 				Date:   volume.Time,
 				Token0: strToDec(volume.Volume0),
 				Token1: strToDec(volume.Volume1),
 			})
 		}
+	}
 
-		for _, pair := range response.Data.Pairs {
-			prices[pair.Id] = strToDec(pair.Price)
-		}
-	} else {
-		for _, volume := range response.Data.PoolsHourData {
-			contract := volume.Pool.Id
-
-			_, found := volumes[contract]
-			if !found {
-				volumes[contract] = []CamelotVolume{}
-			}
-			volumes[contract] = append(volumes[contract], CamelotVolume{
-				Date:   volume.Time,
-				Token0: strToDec(volume.Volume0),
-				Token1: strToDec(volume.Volume1),
-			})
-		}
-
-		for _, pool := range response.Data.Pools {
-			prices[pool.Id] = strToDec(pool.Price)
-		}
+	for _, pool := range response.Data.Pools {
+		price := strToDec(pool.SqrtPrice)
+		prices[pool.Id] = price.Power(2).Quo(sdk.NewDec(2).Power(192))
 	}
 
 	return prices, volumes, nil
 }
 
-func (p *CamelotProvider) getQuery(
+func (p *PancakeProvider) getQuery(
 	contracts []string,
 	offset int,
 ) (string, error) {
@@ -291,63 +257,29 @@ func (p *CamelotProvider) getQuery(
 	query := ""
 
 	switch p.endpoints.Name {
-	case ProviderCamelotV2:
+	case ProviderPancakeV3Bsc:
 		query = fmt.Sprintf(`
 		{
-			pairHourDatas(
-				where: {
-					pair_in: [%s],
-					hourStartUnix_gte: %d
-				}
-			) {
-				hourStartUnix,
-				hourlyVolumeToken0,
-				hourlyVolumeToken1,
-				pair {
-					id
-				}
-			}
-			pairs(
-				where: {
-					id_in: [%s]
-				}
-			) {
-				id,
-				token1Price
-			}
-		}`,
-			addresses,
-			timestamp,
-			addresses,
-		)
-	case ProviderCamelotV3:
-		query = fmt.Sprintf(`
-		{
-			poolHourDatas(
-				where: {
-					pool_in: [%s],
-					periodStartUnix_gte: %d
-				}
-			) {
-				periodStartUnix,
-				volumeToken0,
-				volumeToken1,
-				pool {
-					id
-				}
-			}
 			pools(
-				where: {
-					id_in: [%s]
+				where:{
+			  		id_in: [%s]
 				}
 			) {
-				id,
-				token1Price
-			}
+			  	id,
+				sqrtPrice,
+			  	poolHourData(
+					where: {
+						periodStartUnix_gte: %d
+			  		}
+				) {
+					periodStartUnix,
+					volumeToken0,
+					volumeToken1
+			  	}
+				}
 		}`,
 			addresses,
 			timestamp,
-			addresses,
 		)
 	}
 
@@ -358,16 +290,16 @@ func (p *CamelotProvider) getQuery(
 	return query, nil
 }
 
-func (p *CamelotProvider) updateVolumes(volumes map[string][]CamelotVolume) error {
+func (p *PancakeProvider) updateVolumes(volumes map[string][]PancakeVolume) error {
 	startHour := time.Now().Truncate(1 * time.Hour).Unix()
 
 	for contract := range volumes {
 		_, found := p.volumes[contract]
 		if !found {
-			p.volumes[contract] = make([]CamelotVolume, 24)
+			p.volumes[contract] = make([]PancakeVolume, 24)
 		}
 
-		tmp := map[int64]CamelotVolume{}
+		tmp := map[int64]PancakeVolume{}
 		for _, volume := range p.volumes[contract] {
 			tmp[volume.Date] = volume
 		}
@@ -379,7 +311,7 @@ func (p *CamelotProvider) updateVolumes(volumes map[string][]CamelotVolume) erro
 		for i := 0; i < 24; i++ {
 			timestamp := startHour - int64(i)*3600
 			volume := tmp[timestamp]
-			p.volumes[contract][i] = CamelotVolume{
+			p.volumes[contract][i] = PancakeVolume{
 				Date:   timestamp,
 				Token0: volume.Token0,
 				Token1: volume.Token1,
@@ -390,7 +322,7 @@ func (p *CamelotProvider) updateVolumes(volumes map[string][]CamelotVolume) erro
 	return nil
 }
 
-func (p *CamelotProvider) getVolume(contract string, tokenId int) (sdk.Dec, error) {
+func (p *PancakeProvider) getVolume(contract string, tokenId int) (sdk.Dec, error) {
 	value := sdk.NewDec(0)
 	volumes, found := p.volumes[contract]
 	if !found {
@@ -420,7 +352,7 @@ func (p *CamelotProvider) getVolume(contract string, tokenId int) (sdk.Dec, erro
 	return value, nil
 }
 
-func (p *CamelotProvider) init() error {
+func (p *PancakeProvider) init() error {
 	// lowercase contracts, needed for thegraph api calls
 	for symbol, contract := range p.contracts {
 		p.contracts[symbol] = strings.ToLower(contract)
