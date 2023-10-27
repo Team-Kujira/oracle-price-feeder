@@ -74,6 +74,7 @@ var (
 		provider.ProviderAstroportNeutron:   {},
 		provider.ProviderAstroportTerra2:    {},
 		provider.ProviderAstroportInjective: {},
+		provider.ProviderPancakeV3Bsc:       {},
 	}
 
 	SupportedDerivatives = map[string]struct{}{
