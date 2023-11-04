@@ -36,6 +36,7 @@ const (
 	ProviderCamelotV3          Name = "camelotv3"
 	ProviderOsmosis            Name = "osmosis"
 	ProviderOsmosisV2          Name = "osmosisv2"
+	ProviderPancakeV3Bsc       Name = "pancakev3_bsc"
 	ProviderHuobi              Name = "huobi"
 	ProviderOkx                Name = "okx"
 	ProviderGate               Name = "gate"
@@ -366,6 +367,8 @@ func (e *Endpoint) SetDefaults() {
 		defaults = osmosisDefaultEndpoints
 	case ProviderOsmosisV2:
 		defaults = osmosisv2DefaultEndpoints
+	case ProviderPancakeV3Bsc:
+		defaults = PancakeV3BscDefaultEndpoints
 	case ProviderPhemex:
 		defaults = phemexDefaultEndpoints
 	case ProviderPoloniex:
