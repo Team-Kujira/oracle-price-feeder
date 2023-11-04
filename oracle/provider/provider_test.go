@@ -1,10 +1,13 @@
 package provider
 
 import (
-	"price-feeder/oracle/types"
+	"testing"
 	"time"
 
+	"price-feeder/oracle/types"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -58,3 +61,27 @@ var (
 		"BTCUSDT":  testBtcTicker,
 	}
 )
+
+func TestStrToDec(t *testing.T) {
+	t.Run("float", func(t *testing.T) {
+		dec := strToDec("3.3")
+		require.Equal(t, sdk.MustNewDecFromStr("3.3"), dec)
+	})
+
+	t.Run("long_precision", func(t *testing.T) {
+		dec := strToDec("3.323454654756344465786786524")
+		exp, _ := sdk.NewDecFromStr("3.323454654756344465")
+
+		require.Equal(t, exp, dec)
+	})
+
+	t.Run("non_number", func(t *testing.T) {
+		dec := strToDec("x")
+		require.Equal(t, sdk.Dec{}, dec)
+	})
+
+	t.Run("empty_string", func(t *testing.T) {
+		dec := strToDec("")
+		require.Equal(t, sdk.Dec{}, dec)
+	})
+}
