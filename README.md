@@ -28,6 +28,7 @@ The list of current supported providers:
 - [MEXC](https://www.mexc.com/)
 - [Okx](https://www.okx.com/)
 - [Osmosis](https://app.osmosis.zone/)
+- [PancakeSwap (Ethereum)](https://pancakeswap.finance)
 - [Phemex](https://phemex.com)
 - [Poloniex](https://poloniex.com)
 - [Pyth](https://pyth.network)

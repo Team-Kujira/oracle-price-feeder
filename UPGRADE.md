@@ -1,5 +1,21 @@
 # Upgrade
 
+## v0.8.x
+
+### Breaking Changes
+
+#### go v1.20
+
+Required go version is now `1.20`
+
+#### osmosis
+
+This provider has been removed (osmosisv2 is still available)
+
+#### bkex
+
+This provider has been removed
+
 ## v0.7.x
 
 ### Breaking Changes
