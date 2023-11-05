@@ -87,18 +87,6 @@ type (
 	}
 )
 
-func (a AstroportAsset) Get() string {
-	if a.Token.ContractAddress != "" {
-		return a.Token.ContractAddress
-	}
-
-	if a.NativeToken.Denom != "" {
-		return a.NativeToken.Denom
-	}
-
-	return ""
-}
-
 func NewAstroportProvider(
 	ctx context.Context,
 	logger zerolog.Logger,
@@ -119,10 +107,6 @@ func NewAstroportProvider(
 
 	availablePairs, _ := provider.GetAvailablePairs()
 	provider.setPairs(pairs, availablePairs, nil)
-
-	fmt.Println(availablePairs)
-	fmt.Println(provider.pairs)
-	fmt.Println(provider.inverse)
 
 	provider.denoms = provider.getDenoms()
 
@@ -212,8 +196,6 @@ func (p *AstroportProvider) Poll() error {
 }
 
 func (p *AstroportProvider) GetAvailablePairs() (map[string]struct{}, error) {
-	fmt.Println("AVAILABLE PAIRS")
-	fmt.Println(p.getAvailablePairsFromContracts())
 	return p.getAvailablePairsFromContracts()
 }
 
@@ -252,21 +234,13 @@ func (p *AstroportProvider) getDenoms() map[string]AstroportAsset {
 			continue
 		}
 
-		fmt.Println(pairResponse.Data)
-
-		fmt.Println(pair)
-
 		_, found := p.pairs[pair.String()]
 		if !found {
 			pair = pair.Swap()
 		}
 
-		fmt.Println(found)
-
 		assets[pair.Base] = pairResponse.Data.AssetInfos[0]
 		assets[pair.Quote] = pairResponse.Data.AssetInfos[1]
-
-		fmt.Println(assets)
 	}
 
 	return assets
