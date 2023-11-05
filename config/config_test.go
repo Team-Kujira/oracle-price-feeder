@@ -180,8 +180,8 @@ providers = [
 
 [[currency_pairs]]
 base = "STATOM"
-quote = "USDT"
-providers = ["osmosis"]
+quote = "ATOM"
+providers = ["osmosisv2"]
 derivative = "twap"
 derivative_period = "30m"
 

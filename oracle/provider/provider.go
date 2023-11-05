@@ -135,6 +135,12 @@ func (p *provider) Init(
 	p.ctx = ctx
 	p.endpoints = endpoints
 	p.endpoints.SetDefaults()
+
+	// remove trailing slashes
+	for i, url := range p.endpoints.Urls {
+		p.endpoints.Urls[i] = strings.TrimRight(url, "/")
+	}
+
 	p.logger = logger.With().Str("provider", p.endpoints.Name.String()).Logger()
 	p.tickers = map[string]types.TickerPrice{}
 	p.http = newDefaultHTTPClient()
@@ -232,14 +238,24 @@ func (p *provider) httpPost(path string, body []byte) ([]byte, error) {
 func (p *provider) httpRequest(path string, method string, body []byte, headers map[string]string) ([]byte, error) {
 	res, err := p.makeHttpRequest(p.httpBase+path, method, body, headers)
 	if err != nil {
-		p.logger.Warn().
-			Str("endpoint", p.httpBase).
-			Str("path", path).
-			Msg("trying alternate http endpoints")
-		for _, endpoint := range p.endpoints.Urls {
-			if endpoint == p.httpBase {
-				continue
+		index := 0
+		urls := []string{}
+
+		for i, url := range p.endpoints.Urls {
+			if p.httpBase == url {
+				index = i
+				break
 			}
+		}
+
+		urls = append(urls, p.endpoints.Urls[index+1:]...)
+		urls = append(urls, p.endpoints.Urls[:index]...)
+
+		for _, endpoint := range urls {
+			p.logger.Warn().
+				Str("endpoint", endpoint).
+				Msg("trying alternate http endpoints")
+
 			res, err = p.makeHttpRequest(endpoint+path, method, body, headers)
 			if err == nil {
 				p.logger.Info().Str("endpoint", endpoint).Msg("selected alternate http endpoint")

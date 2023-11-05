@@ -31,12 +31,18 @@ var (
 	testTvwapPrice2 = sdk.NewDec(10)
 
 	testHistoricalTickers4 = []types.TickerPrice{
-		{Price: sdk.NewDec(5), Volume: sdk.NewDec(2), Time: time.Unix(0, 0)},
-		{Price: sdk.NewDec(5), Volume: sdk.NewDec(2), Time: time.Unix(200, 0)},
-		{Price: sdk.NewDec(5), Volume: sdk.NewDec(2), Time: time.Unix(400, 0)},
+		{Price: sdk.NewDec(5), Volume: sdk.ZeroDec(), Time: time.Unix(2, 0)},
+		{Price: sdk.NewDec(8), Volume: sdk.ZeroDec(), Time: time.Unix(4, 0)},
+		{Price: sdk.NewDec(2), Volume: sdk.ZeroDec(), Time: time.Unix(6, 0)},
+		{Price: sdk.NewDec(7), Volume: sdk.ZeroDec(), Time: time.Unix(10, 0)},
+		{Price: sdk.NewDec(4), Volume: sdk.ZeroDec(), Time: time.Unix(12, 0)},
+		{Price: sdk.NewDec(5), Volume: sdk.ZeroDec(), Time: time.Unix(14, 0)},
+		{Price: sdk.NewDec(1), Volume: sdk.ZeroDec(), Time: time.Unix(16, 0)},
+		{Price: sdk.NewDec(3), Volume: sdk.ZeroDec(), Time: time.Unix(18, 0)},
 	}
-	testTvwapStart4 = time.Unix(0, 0)
-	testTvwapEnd4   = time.Unix(200, 0)
+	testTvwapStart4 = time.Unix(3, 0)
+	testTvwapEnd4   = time.Unix(17, 0)
+	testTvwapPrice4 = sdk.MustNewDecFromStr("4.384615384615384615")
 
 	testHistoricalTickers5 = []types.TickerPrice{
 		{Price: sdk.MustNewDecFromStr("1662.000000000000000000"), Volume: sdk.MustNewDecFromStr("92845.781140000000000000"), Time: time.Unix(1675374725, 0)},
@@ -89,6 +95,10 @@ func TestTvwapDerivative_tvwap(t *testing.T) {
 	result2, _, err := Twap(testHistoricalTickers2, testTvwapStart2, testTvwapEnd2)
 	require.NoError(t, err)
 	require.Equal(t, testTvwapPrice2, result2)
+
+	result4, _, err := Twap(testHistoricalTickers4, testTvwapStart4, testTvwapEnd4)
+	require.NoError(t, err)
+	require.Equal(t, testTvwapPrice4, result4)
 
 	result5, _, err := Twap(testHistoricalTickers5, testTvwapStart5, testTvwapEnd5)
 	require.NoError(t, err)

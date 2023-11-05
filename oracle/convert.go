@@ -1,9 +1,10 @@
 package oracle
 
 import (
+	"sort"
+
 	"price-feeder/oracle/provider"
 	"price-feeder/oracle/types"
-	"sort"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/rs/zerolog"
@@ -21,7 +22,6 @@ func convertTickersToUSD(
 	deviationThresholds map[string]sdk.Dec,
 	providerMinOverrides map[string]int,
 ) (map[string]sdk.Dec, error) {
-
 	if len(providerPrices) == 0 {
 		return nil, nil
 	}
