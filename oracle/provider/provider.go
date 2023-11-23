@@ -623,6 +623,10 @@ func checkHTTPStatus(resp *http.Response) error {
 }
 
 func strToDec(str string) sdk.Dec {
+	if len(str) == 0 {
+		return sdk.Dec{}
+	}
+
 	if strings.Contains(str, ".") {
 		split := strings.Split(str, ".")
 		if len(split[1]) > 18 {
@@ -630,11 +634,16 @@ func strToDec(str string) sdk.Dec {
 			str = split[0] + "." + split[1][0:18]
 		}
 	}
-	return sdk.MustNewDecFromStr(str)
+	dec, err := sdk.NewDecFromStr(str)
+	if err != nil {
+		dec = sdk.Dec{}
+	}
+
+	return dec
 }
 
 func floatToDec(f float64) sdk.Dec {
-	return sdk.MustNewDecFromStr(strconv.FormatFloat(f, 'f', -1, 64))
+	return strToDec(strconv.FormatFloat(f, 'f', -1, 64))
 }
 
 func invertDec(d sdk.Dec) sdk.Dec {
