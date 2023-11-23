@@ -642,6 +642,10 @@ func checkHTTPStatus(resp *http.Response) error {
 }
 
 func strToDec(str string) sdk.Dec {
+	if len(str) == 0 {
+		return sdk.Dec{}
+	}
+
 	if strings.Contains(str, ".") {
 		split := strings.Split(str, ".")
 		if len(split[1]) > 18 {
