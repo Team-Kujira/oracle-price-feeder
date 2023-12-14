@@ -63,6 +63,8 @@ const (
 	ProviderIdxOsmosis         Name = "idxosmosis"
 	ProviderZero               Name = "zero"
 	ProviderUniswapV3          Name = "uniswapv3"
+	ProviderWhitewhaleMigaloo  Name = "whitewhale_migaloo"
+	ProviderWhitewhaleTerra2   Name = "whitewhale_terra2"
 )
 
 type (
@@ -377,6 +379,10 @@ func (e *Endpoint) SetDefaults() {
 		defaults = pythDefaultEndpoints
 	case ProviderUniswapV3:
 		defaults = uniswapv3DefaultEndpoints
+	case ProviderWhitewhaleMigaloo:
+		defaults = WhitewhaleMigalooDefaultEndpoints
+	case ProviderWhitewhaleTerra2:
+		defaults = WhitewhaleTerra2DefaultEndpoints
 	case ProviderXt:
 		defaults = xtDefaultEndpoints
 	case ProviderZero:

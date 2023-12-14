@@ -446,9 +446,14 @@ func NewProvider(
 	providerLogger := logger.With().Str("provider", providerName.String()).Logger()
 	switch providerName {
 
-	case provider.ProviderAstroportNeutron, provider.ProviderAstroportTerra2, provider.ProviderAstroportInjective:
+	case
+		provider.ProviderAstroportNeutron,
+		provider.ProviderAstroportTerra2,
+		provider.ProviderAstroportInjective:
 		return provider.NewAstroportProvider(ctx, providerLogger, endpoint, providerPairs...)
-	case provider.ProviderBinance, provider.ProviderBinanceUS:
+	case
+		provider.ProviderBinance,
+		provider.ProviderBinanceUS:
 		return provider.NewBinanceProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderBitfinex:
 		return provider.NewBitfinexProvider(ctx, providerLogger, endpoint, providerPairs...)
@@ -508,6 +513,10 @@ func NewProvider(
 		return provider.NewPythProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderUniswapV3:
 		return provider.NewUniswapV3Provider(ctx, providerLogger, endpoint, providerPairs...)
+	case
+		provider.ProviderWhitewhaleMigaloo,
+		provider.ProviderWhitewhaleTerra2:
+		return provider.NewWhitewhaleProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderXt:
 		return provider.NewXtProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderZero:
