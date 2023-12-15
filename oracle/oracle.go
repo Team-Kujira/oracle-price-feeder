@@ -514,8 +514,14 @@ func NewProvider(
 	case provider.ProviderUniswapV3:
 		return provider.NewUniswapV3Provider(ctx, providerLogger, endpoint, providerPairs...)
 	case
-		provider.ProviderWhitewhaleMigaloo,
-		provider.ProviderWhitewhaleTerra2:
+		provider.ProviderWhitewhaleCmdx,
+		provider.ProviderWhitewhaleHuahua,
+		provider.ProviderWhitewhaleInj,
+		provider.ProviderWhitewhaleJuno,
+		provider.ProviderWhitewhaleLunc,
+		provider.ProviderWhitewhaleLuna,
+		provider.ProviderWhitewhaleSei,
+		provider.ProviderWhitewhaleWhale:
 		return provider.NewWhitewhaleProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderXt:
 		return provider.NewXtProvider(ctx, providerLogger, endpoint, providerPairs...)

@@ -15,14 +15,45 @@ import (
 )
 
 var (
-	_                                 Provider = (*WhitewhaleProvider)(nil)
-	WhitewhaleMigalooDefaultEndpoints          = Endpoint{
-		Name:         ProviderWhitewhaleMigaloo,
+	_ Provider = (*WhitewhaleProvider)(nil)
+
+	whitewhaleCmdxDefaultEndpoints = Endpoint{
+		Name:         ProviderWhitewhaleCmdx,
 		Urls:         []string{},
 		PollInterval: 6 * time.Second,
 	}
-	WhitewhaleTerra2DefaultEndpoints = Endpoint{
-		Name:         ProviderWhitewhaleTerra2,
+	whitewhaleHuahuaDefaultEndpoints = Endpoint{
+		Name:         ProviderWhitewhaleHuahua,
+		Urls:         []string{},
+		PollInterval: 6 * time.Second,
+	}
+	whitewhaleInjDefaultEndpoints = Endpoint{
+		Name:         ProviderWhitewhaleInj,
+		Urls:         []string{},
+		PollInterval: 6 * time.Second,
+	}
+	whitewhaleJunoDefaultEndpoints = Endpoint{
+		Name:         ProviderWhitewhaleJuno,
+		Urls:         []string{},
+		PollInterval: 6 * time.Second,
+	}
+	whitewhaleLuncDefaultEndpoints = Endpoint{
+		Name:         ProviderWhitewhaleLunc,
+		Urls:         []string{},
+		PollInterval: 6 * time.Second,
+	}
+	whitewhaleLunaDefaultEndpoints = Endpoint{
+		Name:         ProviderWhitewhaleLuna,
+		Urls:         []string{},
+		PollInterval: 6 * time.Second,
+	}
+	whitewhaleSeiDefaultEndpoints = Endpoint{
+		Name:         ProviderWhitewhaleSei,
+		Urls:         []string{},
+		PollInterval: 6 * time.Second,
+	}
+	whitewhaleWhaleDefaultEndpoints = Endpoint{
+		Name:         ProviderWhitewhaleWhale,
 		Urls:         []string{},
 		PollInterval: 6 * time.Second,
 	}
@@ -127,7 +158,7 @@ func NewWhitewhaleProvider(
 
 func (p *WhitewhaleProvider) Poll() error {
 	if len(p.assets) == 0 {
-		p.logger.Warn().Msg("no known assets founds")
+		p.logger.Warn().Msg("no known assets found")
 		return nil
 	}
 

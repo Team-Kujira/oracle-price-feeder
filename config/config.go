@@ -73,8 +73,14 @@ var (
 		provider.ProviderAstroportTerra2:    {},
 		provider.ProviderAstroportInjective: {},
 		provider.ProviderPancakeV3Bsc:       {},
-		provider.ProviderWhitewhaleMigaloo:  {},
-		provider.ProviderWhitewhaleTerra2:   {},
+		provider.ProviderWhitewhaleCmdx:     {},
+		provider.ProviderWhitewhaleHuahua:   {},
+		provider.ProviderWhitewhaleInj:      {},
+		provider.ProviderWhitewhaleJuno:     {},
+		provider.ProviderWhitewhaleLunc:     {},
+		provider.ProviderWhitewhaleLuna:     {},
+		provider.ProviderWhitewhaleSei:      {},
+		provider.ProviderWhitewhaleWhale:    {},
 	}
 
 	SupportedDerivatives = map[string]struct{}{
