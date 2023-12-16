@@ -38,6 +38,11 @@ const (
 	tickerSleep = 1000 * time.Millisecond
 )
 
+type ProviderWeight struct {
+	Type   string
+	Weight map[string]sdk.Dec
+}
+
 // PreviousPrevote defines a structure for defining the previous prevote
 // submitted on-chain.
 type PreviousPrevote struct {
@@ -75,6 +80,7 @@ type Oracle struct {
 	derivativePairs      map[string][]types.CurrencyPair
 	derivativeSymbols    map[string]struct{}
 	contractAddresses    map[string]map[string]string
+	providerWeights      map[string]ProviderWeight
 
 	mtx             sync.RWMutex
 	lastPriceSyncTS time.Time
@@ -97,6 +103,7 @@ func New(
 	healthchecksConfig []config.Healthchecks,
 	history history.PriceHistory,
 	contractAddresses map[string]map[string]string,
+	providerWeights map[string]ProviderWeight,
 ) *Oracle {
 	providerPairs := make(map[provider.Name][]types.CurrencyPair)
 	for _, pair := range currencyPairs {
@@ -138,6 +145,7 @@ func New(
 		derivativeSymbols:    derivativeDenoms,
 		history:              history,
 		contractAddresses:    contractAddresses,
+		providerWeights:      providerWeights,
 	}
 }
 
@@ -343,6 +351,7 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 		o.providerPairs,
 		o.deviations,
 		o.providerMinOverrides,
+		o.providerWeights,
 	)
 	if err != nil {
 		return err
@@ -377,6 +386,7 @@ func GetComputedPrices(
 	providerPairs map[provider.Name][]types.CurrencyPair,
 	deviations map[string]sdk.Dec,
 	providerMinOverrides map[string]int,
+	providerWeights map[string]ProviderWeight,
 ) (prices map[string]sdk.Dec, err error) {
 	rates, err := convertTickersToUSD(
 		logger,
@@ -384,6 +394,7 @@ func GetComputedPrices(
 		providerPairs,
 		deviations,
 		providerMinOverrides,
+		providerWeights,
 	)
 	if err != nil {
 		return nil, err

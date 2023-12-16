@@ -231,6 +231,28 @@ func priceFeederCmdHandler(cmd *cobra.Command, args []string) error {
 		derivatives[name] = d
 	}
 
+	providerWeights := map[string]oracle.ProviderWeight{}
+	for denom, weighting := range cfg.ProviderWeights {
+		newWeighting := oracle.ProviderWeight{
+			Type:   "simple",
+			Weight: map[string]sdk.Dec{},
+		}
+
+		for name, override := range weighting.Weight {
+			if override < 0 {
+				return fmt.Errorf("override must be >= 0")
+			}
+
+			value, err := sdk.NewDecFromStr(fmt.Sprintf("%f", override))
+			if err != nil {
+				return err
+			}
+			newWeighting.Weight[name] = value
+		}
+
+		providerWeights[denom] = newWeighting
+	}
+
 	oracle := oracle.New(
 		logger,
 		oracleClient,
@@ -245,6 +267,7 @@ func priceFeederCmdHandler(cmd *cobra.Command, args []string) error {
 		cfg.Healthchecks,
 		history,
 		cfg.ContractAdresses,
+		providerWeights,
 	)
 
 	telemetryCfg := telemetry.Config{}

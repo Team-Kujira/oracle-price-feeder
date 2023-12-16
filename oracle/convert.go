@@ -21,6 +21,7 @@ func convertTickersToUSD(
 	providerPairs map[provider.Name][]types.CurrencyPair,
 	deviationThresholds map[string]sdk.Dec,
 	providerMinOverrides map[string]int,
+	providerWeights map[string]ProviderWeight,
 ) (map[string]sdk.Dec, error) {
 	if len(providerPrices) == 0 {
 		return nil, nil

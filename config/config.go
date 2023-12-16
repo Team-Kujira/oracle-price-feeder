@@ -99,6 +99,7 @@ type (
 		CurrencyPairs        []CurrencyPair               `toml:"currency_pairs" validate:"required,gt=0,dive,required"`
 		Deviations           []Deviation                  `toml:"deviation_thresholds"`
 		ProviderMinOverrides []ProviderMinOverrides       `toml:"provider_min_overrides"`
+		ProviderWeights      map[string]ProviderWeight    `toml:"provider_weight"`
 		Account              Account                      `toml:"account" validate:"required,gt=0,dive,required"`
 		Keyring              Keyring                      `toml:"keyring" validate:"required,gt=0,dive,required"`
 		RPC                  RPC                          `toml:"rpc" validate:"required,gt=0,dive,required"`
@@ -146,6 +147,11 @@ type (
 	ProviderMinOverrides struct {
 		Denoms    []string `toml:"denoms" validate:"required"`
 		Providers uint     `toml:"providers" validate:"required"`
+	}
+
+	ProviderWeight struct {
+		Type   string             `toml:"type"`
+		Weight map[string]float64 `toml:"weight" validate:"required"`
 	}
 
 	// Account defines account related configuration that is related to the

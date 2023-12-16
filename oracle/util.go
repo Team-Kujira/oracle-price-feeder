@@ -2,6 +2,8 @@ package oracle
 
 import (
 	"fmt"
+
+	"price-feeder/oracle/provider"
 	"price-feeder/oracle/types"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -73,4 +75,27 @@ func StandardDeviation(prices []sdk.Dec) (sdk.Dec, sdk.Dec, error) {
 	}
 
 	return deviation, mean, nil
+}
+
+func SetWeighting(
+	rates map[provider.Name]types.TickerPrice,
+	weightings map[string]sdk.Dec,
+) (
+	map[provider.Name]types.TickerPrice,
+	error,
+) {
+	if len(weightings) == 0 {
+		return rates, nil
+	}
+
+	for name, volume := range weightings {
+		providerName := provider.Name(name)
+		ticker, found := rates[providerName]
+		if found {
+			ticker.Volume = volume
+			rates[providerName] = ticker
+		}
+	}
+
+	return nil, nil
 }
