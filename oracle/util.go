@@ -77,18 +77,18 @@ func StandardDeviation(prices []sdk.Dec) (sdk.Dec, sdk.Dec, error) {
 	return deviation, mean, nil
 }
 
-func SetWeighting(
+func SetWeight(
 	rates map[provider.Name]types.TickerPrice,
-	weightings map[string]sdk.Dec,
+	weight ProviderWeight,
 ) (
 	map[provider.Name]types.TickerPrice,
 	error,
 ) {
-	if len(weightings) == 0 {
+	if len(weight.Weight) == 0 {
 		return rates, nil
 	}
 
-	for name, volume := range weightings {
+	for name, volume := range weight.Weight {
 		providerName := provider.Name(name)
 		ticker, found := rates[providerName]
 		if found {
@@ -97,5 +97,5 @@ func SetWeighting(
 		}
 	}
 
-	return nil, nil
+	return rates, nil
 }

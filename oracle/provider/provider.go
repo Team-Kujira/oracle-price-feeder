@@ -513,7 +513,12 @@ func (p *provider) setPairs(
 	return nil
 }
 
-func (p *provider) setTickerPrice(symbol string, price sdk.Dec, volume sdk.Dec, timestamp time.Time) {
+func (p *provider) setTickerPrice(
+	symbol string,
+	price sdk.Dec,
+	volume sdk.Dec,
+	timestamp time.Time,
+) {
 	if price.IsNil() || price.LTE(sdk.ZeroDec()) {
 		p.logger.Warn().
 			Str("symbol", symbol).

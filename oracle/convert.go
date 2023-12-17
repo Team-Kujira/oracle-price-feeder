@@ -54,6 +54,25 @@ func convertTickersToUSD(
 		}
 	}
 
+	// override volume data
+	for _, pair := range pairs {
+		base := pair.Base
+		weight, found := providerWeights[base]
+		if !found {
+			continue
+		}
+
+		symbol := pair.String()
+		tickers := providerPricesBySymbol[symbol]
+
+		tickers, err := SetWeight(tickers, weight)
+		if err != nil {
+			return nil, err
+		}
+
+		providerPricesBySymbol[symbol] = tickers
+	}
+
 	// calculate USD values
 
 	// more than 6 conversions for the USD price is probably not very accurate

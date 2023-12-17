@@ -127,6 +127,7 @@ func New(
 			}
 		}
 	}
+
 	return &Oracle{
 		logger:               logger.With().Str("module", "oracle").Logger(),
 		closer:               pfsync.NewCloser(),
