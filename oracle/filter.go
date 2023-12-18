@@ -50,14 +50,16 @@ func FilterTickerDeviations(
 			telemetry.NewLabel("symbol", symbol),
 		}
 
+		margin := deviation.Mul(deviationThreshold)
+
 		telemetry.SetGaugeWithLabels(
 			[]string{"deviation", "high"},
-			float32(mean.Add(deviation).MustFloat64()),
+			float32(mean.Add(margin).MustFloat64()),
 			labels,
 		)
 		telemetry.SetGaugeWithLabels(
 			[]string{"deviation", "low"},
-			float32(mean.Sub(deviation).MustFloat64()),
+			float32(mean.Sub(margin).MustFloat64()),
 			labels,
 		)
 	}
