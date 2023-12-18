@@ -114,6 +114,7 @@ type (
 		HeightPollInterval   string                       `toml:"height_poll_interval"`
 		HistoryDb            string                       `toml:"history_db"`
 		ContractAdresses     map[string]map[string]string `toml:"contract_addresses"`
+		UrlSets              map[string]UrlSet            `toml:"url_set"`
 	}
 
 	// Server defines the API server configuration.
@@ -216,10 +217,15 @@ type (
 	ProviderEndpoints struct {
 		Name          provider.Name `toml:"name" validate:"required"`
 		Urls          []string      `toml:"urls"`
+		UrlSet        string        `toml:"url_set"`
 		Websocket     string        `toml:"websocket"`
 		WebsocketPath string        `toml:"websocket_path"`
 		PollInterval  string        `toml:"poll_interval"`
 		Contracts     []string      `toml:"contracts"`
+	}
+
+	UrlSet struct {
+		Urls []string `toml:"urls"`
 	}
 )
 
@@ -236,9 +242,14 @@ func telemetryValidation(sl validator.StructLevel) {
 func endpointValidation(sl validator.StructLevel) {
 	endpoint := sl.Current().Interface().(ProviderEndpoints)
 
-	if len(endpoint.Name) < 1 || (len(endpoint.Urls) < 1 && len(endpoint.Websocket) < 1) {
-		sl.ReportError(endpoint, "endpoint", "Endpoint", "unsupportedEndpointType", "")
+	if len(endpoint.Name) < 1 {
+		sl.ReportError(endpoint, "name", "Name", "name is empty", "")
 	}
+
+	if len(endpoint.Urls) < 1 && len(endpoint.UrlSet) < 1 {
+		sl.ReportError(endpoint, "urls", "Urls", "urls or url_set empty", "")
+	}
+
 	if _, ok := SupportedProviders[endpoint.Name]; !ok {
 		sl.ReportError(endpoint.Name, "name", "Name", "unsupportedEndpointProvider", "")
 	}
@@ -251,7 +262,9 @@ func (c Config) Validate() error {
 	return validate.Struct(c)
 }
 
-func (p ProviderEndpoints) ToEndpoint() (provider.Endpoint, error) {
+func (p ProviderEndpoints) ToEndpoint(
+	sets map[string]UrlSet,
+) (provider.Endpoint, error) {
 	var pollInterval time.Duration
 	if p.PollInterval != "" {
 		interval, err := time.ParseDuration(p.PollInterval)
@@ -261,9 +274,20 @@ func (p ProviderEndpoints) ToEndpoint() (provider.Endpoint, error) {
 		pollInterval = interval
 	}
 
+	urls := p.Urls
+	set, found := sets[p.UrlSet]
+	if found {
+		urls = set.Urls
+	}
+
+	if len(urls) == 0 {
+		err := fmt.Errorf("no urls provided for '%s'", p.Name)
+		return provider.Endpoint{}, err
+	}
+
 	e := provider.Endpoint{
 		Name:          p.Name,
-		Urls:          p.Urls,
+		Urls:          urls,
 		Websocket:     p.Websocket,
 		WebsocketPath: p.WebsocketPath,
 		PollInterval:  pollInterval,

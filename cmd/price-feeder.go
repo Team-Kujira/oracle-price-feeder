@@ -187,7 +187,7 @@ func priceFeederCmdHandler(cmd *cobra.Command, args []string) error {
 
 	endpoints := make(map[provider.Name]provider.Endpoint, len(cfg.ProviderEndpoints))
 	for _, e := range cfg.ProviderEndpoints {
-		endpoint, err := e.ToEndpoint()
+		endpoint, err := e.ToEndpoint(cfg.UrlSets)
 		if err != nil {
 			return err
 		}
