@@ -187,7 +187,7 @@ func priceFeederCmdHandler(cmd *cobra.Command, args []string) error {
 
 	endpoints := make(map[provider.Name]provider.Endpoint, len(cfg.ProviderEndpoints))
 	for _, e := range cfg.ProviderEndpoints {
-		endpoint, err := e.ToEndpoint()
+		endpoint, err := e.ToEndpoint(cfg.UrlSets)
 		if err != nil {
 			return err
 		}
@@ -231,6 +231,28 @@ func priceFeederCmdHandler(cmd *cobra.Command, args []string) error {
 		derivatives[name] = d
 	}
 
+	providerWeights := map[string]oracle.ProviderWeight{}
+	for denom, weights := range cfg.ProviderWeights {
+		newWeight := oracle.ProviderWeight{
+			Type:   "simple",
+			Weight: map[string]sdk.Dec{},
+		}
+
+		for providerName, value := range weights {
+			if value < 0 {
+				return fmt.Errorf("override must be >= 0")
+			}
+
+			value, err := sdk.NewDecFromStr(fmt.Sprintf("%f", value))
+			if err != nil {
+				return err
+			}
+			newWeight.Weight[providerName] = value
+		}
+
+		providerWeights[denom] = newWeight
+	}
+
 	oracle := oracle.New(
 		logger,
 		oracleClient,
@@ -245,6 +267,7 @@ func priceFeederCmdHandler(cmd *cobra.Command, args []string) error {
 		cfg.Healthchecks,
 		history,
 		cfg.ContractAdresses,
+		providerWeights,
 	)
 
 	telemetryCfg := telemetry.Config{}

@@ -39,6 +39,7 @@ func TestSuccessFilterTickerDeviations(t *testing.T) {
 		pair.String(),
 		providerTickers,
 		sdk.Dec{},
+		false,
 	)
 
 	_, ok := pricesFiltered[provider.ProviderCoinbase]
@@ -52,6 +53,7 @@ func TestSuccessFilterTickerDeviations(t *testing.T) {
 		pair.String(),
 		providerTickers,
 		customDeviation,
+		false,
 	)
 
 	_, ok = pricesFilteredCustom[provider.ProviderCoinbase]
@@ -88,6 +90,7 @@ func TestSuccessFilterTickerDeviations2(t *testing.T) {
 		pair.String(),
 		tickerPrices,
 		sdk.NewDec(1),
+		false,
 	)
 
 	require.NoError(t, err)
@@ -102,5 +105,4 @@ func TestSuccessFilterTickerDeviations2(t *testing.T) {
 		require.True(t, found)
 		require.Equal(t, tickerPrice, filteredPrice)
 	}
-
 }

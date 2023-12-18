@@ -38,6 +38,11 @@ const (
 	tickerSleep = 1000 * time.Millisecond
 )
 
+type ProviderWeight struct {
+	Type   string
+	Weight map[string]sdk.Dec
+}
+
 // PreviousPrevote defines a structure for defining the previous prevote
 // submitted on-chain.
 type PreviousPrevote struct {
@@ -75,6 +80,7 @@ type Oracle struct {
 	derivativePairs      map[string][]types.CurrencyPair
 	derivativeSymbols    map[string]struct{}
 	contractAddresses    map[string]map[string]string
+	providerWeights      map[string]ProviderWeight
 
 	mtx             sync.RWMutex
 	lastPriceSyncTS time.Time
@@ -97,6 +103,7 @@ func New(
 	healthchecksConfig []config.Healthchecks,
 	history history.PriceHistory,
 	contractAddresses map[string]map[string]string,
+	providerWeights map[string]ProviderWeight,
 ) *Oracle {
 	providerPairs := make(map[provider.Name][]types.CurrencyPair)
 	for _, pair := range currencyPairs {
@@ -120,6 +127,7 @@ func New(
 			}
 		}
 	}
+
 	return &Oracle{
 		logger:               logger.With().Str("module", "oracle").Logger(),
 		closer:               pfsync.NewCloser(),
@@ -138,6 +146,7 @@ func New(
 		derivativeSymbols:    derivativeDenoms,
 		history:              history,
 		contractAddresses:    contractAddresses,
+		providerWeights:      providerWeights,
 	}
 }
 
@@ -343,6 +352,7 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 		o.providerPairs,
 		o.deviations,
 		o.providerMinOverrides,
+		o.providerWeights,
 	)
 	if err != nil {
 		return err
@@ -377,6 +387,7 @@ func GetComputedPrices(
 	providerPairs map[provider.Name][]types.CurrencyPair,
 	deviations map[string]sdk.Dec,
 	providerMinOverrides map[string]int,
+	providerWeights map[string]ProviderWeight,
 ) (prices map[string]sdk.Dec, err error) {
 	rates, err := convertTickersToUSD(
 		logger,
@@ -384,6 +395,7 @@ func GetComputedPrices(
 		providerPairs,
 		deviations,
 		providerMinOverrides,
+		providerWeights,
 	)
 	if err != nil {
 		return nil, err
@@ -446,9 +458,14 @@ func NewProvider(
 	providerLogger := logger.With().Str("provider", providerName.String()).Logger()
 	switch providerName {
 
-	case provider.ProviderAstroportNeutron, provider.ProviderAstroportTerra2, provider.ProviderAstroportInjective:
+	case
+		provider.ProviderAstroportNeutron,
+		provider.ProviderAstroportTerra2,
+		provider.ProviderAstroportInjective:
 		return provider.NewAstroportProvider(ctx, providerLogger, endpoint, providerPairs...)
-	case provider.ProviderBinance, provider.ProviderBinanceUS:
+	case
+		provider.ProviderBinance,
+		provider.ProviderBinanceUS:
 		return provider.NewBinanceProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderBitfinex:
 		return provider.NewBitfinexProvider(ctx, providerLogger, endpoint, providerPairs...)
@@ -508,6 +525,16 @@ func NewProvider(
 		return provider.NewPythProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderUniswapV3:
 		return provider.NewUniswapV3Provider(ctx, providerLogger, endpoint, providerPairs...)
+	case
+		provider.ProviderWhitewhaleCmdx,
+		provider.ProviderWhitewhaleHuahua,
+		provider.ProviderWhitewhaleInj,
+		provider.ProviderWhitewhaleJuno,
+		provider.ProviderWhitewhaleLunc,
+		provider.ProviderWhitewhaleLuna,
+		provider.ProviderWhitewhaleSei,
+		provider.ProviderWhitewhaleWhale:
+		return provider.NewWhitewhaleProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderXt:
 		return provider.NewXtProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderZero:

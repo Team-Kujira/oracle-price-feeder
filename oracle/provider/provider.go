@@ -63,6 +63,14 @@ const (
 	ProviderIdxOsmosis         Name = "idxosmosis"
 	ProviderZero               Name = "zero"
 	ProviderUniswapV3          Name = "uniswapv3"
+	ProviderWhitewhaleCmdx     Name = "whitewhale_cmdx"
+	ProviderWhitewhaleHuahua   Name = "whitewhale_huahua"
+	ProviderWhitewhaleInj      Name = "whitewhale_inj"
+	ProviderWhitewhaleJuno     Name = "whitewhale_juno"
+	ProviderWhitewhaleLunc     Name = "whitewhale_lunc"
+	ProviderWhitewhaleLuna     Name = "whitewhale_luna"
+	ProviderWhitewhaleSei      Name = "whitewhale_sei"
+	ProviderWhitewhaleWhale    Name = "whitewhale_whale"
 )
 
 type (
@@ -377,6 +385,22 @@ func (e *Endpoint) SetDefaults() {
 		defaults = pythDefaultEndpoints
 	case ProviderUniswapV3:
 		defaults = uniswapv3DefaultEndpoints
+	case ProviderWhitewhaleCmdx:
+		defaults = whitewhaleCmdxDefaultEndpoints
+	case ProviderWhitewhaleHuahua:
+		defaults = whitewhaleHuahuaDefaultEndpoints
+	case ProviderWhitewhaleInj:
+		defaults = whitewhaleInjDefaultEndpoints
+	case ProviderWhitewhaleJuno:
+		defaults = whitewhaleJunoDefaultEndpoints
+	case ProviderWhitewhaleLunc:
+		defaults = whitewhaleLuncDefaultEndpoints
+	case ProviderWhitewhaleLuna:
+		defaults = whitewhaleLunaDefaultEndpoints
+	case ProviderWhitewhaleSei:
+		defaults = whitewhaleSeiDefaultEndpoints
+	case ProviderWhitewhaleWhale:
+		defaults = whitewhaleWhaleDefaultEndpoints
 	case ProviderXt:
 		defaults = xtDefaultEndpoints
 	case ProviderZero:
@@ -489,7 +513,12 @@ func (p *provider) setPairs(
 	return nil
 }
 
-func (p *provider) setTickerPrice(symbol string, price sdk.Dec, volume sdk.Dec, timestamp time.Time) {
+func (p *provider) setTickerPrice(
+	symbol string,
+	price sdk.Dec,
+	volume sdk.Dec,
+	timestamp time.Time,
+) {
 	if price.IsNil() || price.LTE(sdk.ZeroDec()) {
 		p.logger.Warn().
 			Str("symbol", symbol).
