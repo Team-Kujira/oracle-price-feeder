@@ -132,7 +132,7 @@ func convertTickersToUSD(
 				}
 
 				filtered, err := FilterTickerDeviations(
-					logger, symbol, rates, maxDeviation,
+					logger, symbol, rates, maxDeviation, false,
 				)
 				if err != nil {
 					if len(rates) >= 3 {
@@ -194,7 +194,7 @@ func convertTickersToUSD(
 
 		threshold := deviationThresholds[denom]
 		filtered, err := FilterTickerDeviations(
-			logger, denom, tickers, threshold,
+			logger, denom, tickers, threshold, true,
 		)
 		if err != nil {
 			minimum, found := providerMinOverrides[denom]

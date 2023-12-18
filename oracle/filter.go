@@ -5,6 +5,7 @@ import (
 
 	"price-feeder/oracle/types"
 
+	"github.com/armon/go-metrics"
 	"github.com/cosmos/cosmos-sdk/telemetry"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/rs/zerolog"
@@ -28,6 +29,7 @@ func FilterTickerDeviations(
 	symbol string,
 	tickerPrices map[provider.Name]types.TickerPrice,
 	deviationThreshold sdk.Dec,
+	stats bool,
 ) (map[provider.Name]types.TickerPrice, error) {
 	if deviationThreshold.IsNil() {
 		deviationThreshold = defaultDeviationThreshold
@@ -41,6 +43,23 @@ func FilterTickerDeviations(
 	deviation, mean, err := StandardDeviation(prices)
 	if err != nil {
 		return tickerPrices, err
+	}
+
+	if stats {
+		labels := []metrics.Label{
+			telemetry.NewLabel("symbol", symbol),
+		}
+
+		telemetry.SetGaugeWithLabels(
+			[]string{"deviation", "high"},
+			float32(mean.Add(deviation).MustFloat64()),
+			labels,
+		)
+		telemetry.SetGaugeWithLabels(
+			[]string{"deviation", "low"},
+			float32(mean.Sub(deviation).MustFloat64()),
+			labels,
+		)
 	}
 
 	// We accept any prices that are within (2 * T)𝜎, or for which we couldn't get 𝜎.
