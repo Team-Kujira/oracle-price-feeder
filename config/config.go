@@ -95,26 +95,26 @@ var (
 type (
 	// Config defines all necessary price-feeder configuration parameters.
 	Config struct {
-		Server               Server                       `toml:"server"`
-		CurrencyPairs        []CurrencyPair               `toml:"currency_pairs" validate:"required,gt=0,dive,required"`
-		Deviations           []Deviation                  `toml:"deviation_thresholds"`
-		ProviderMinOverrides []ProviderMinOverrides       `toml:"provider_min_overrides"`
-		ProviderWeights      map[string]ProviderWeight    `toml:"provider_weight"`
-		Account              Account                      `toml:"account" validate:"required,gt=0,dive,required"`
-		Keyring              Keyring                      `toml:"keyring" validate:"required,gt=0,dive,required"`
-		RPC                  RPC                          `toml:"rpc" validate:"required,gt=0,dive,required"`
-		Telemetry            Telemetry                    `toml:"telemetry"`
-		GasAdjustment        float64                      `toml:"gas_adjustment" validate:"required"`
-		GasPrices            string                       `toml:"gas_prices" validate:"required"`
-		ProviderTimeout      string                       `toml:"provider_timeout"`
-		ProviderEndpoints    []ProviderEndpoints          `toml:"provider_endpoints" validate:"dive"`
-		EnableServer         bool                         `toml:"enable_server"`
-		EnableVoter          bool                         `toml:"enable_voter"`
-		Healthchecks         []Healthchecks               `toml:"healthchecks" validate:"dive"`
-		HeightPollInterval   string                       `toml:"height_poll_interval"`
-		HistoryDb            string                       `toml:"history_db"`
-		ContractAdresses     map[string]map[string]string `toml:"contract_addresses"`
-		UrlSets              map[string]UrlSet            `toml:"url_set"`
+		Server               Server                        `toml:"server"`
+		CurrencyPairs        []CurrencyPair                `toml:"currency_pairs" validate:"required,gt=0,dive,required"`
+		Deviations           []Deviation                   `toml:"deviation_thresholds"`
+		ProviderMinOverrides []ProviderMinOverrides        `toml:"provider_min_overrides"`
+		ProviderWeights      map[string]map[string]float64 `toml:"provider_weight"`
+		Account              Account                       `toml:"account" validate:"required,gt=0,dive,required"`
+		Keyring              Keyring                       `toml:"keyring" validate:"required,gt=0,dive,required"`
+		RPC                  RPC                           `toml:"rpc" validate:"required,gt=0,dive,required"`
+		Telemetry            Telemetry                     `toml:"telemetry"`
+		GasAdjustment        float64                       `toml:"gas_adjustment" validate:"required"`
+		GasPrices            string                        `toml:"gas_prices" validate:"required"`
+		ProviderTimeout      string                        `toml:"provider_timeout"`
+		ProviderEndpoints    []ProviderEndpoints           `toml:"provider_endpoints" validate:"dive"`
+		EnableServer         bool                          `toml:"enable_server"`
+		EnableVoter          bool                          `toml:"enable_voter"`
+		Healthchecks         []Healthchecks                `toml:"healthchecks" validate:"dive"`
+		HeightPollInterval   string                        `toml:"height_poll_interval"`
+		HistoryDb            string                        `toml:"history_db"`
+		ContractAdresses     map[string]map[string]string  `toml:"contract_addresses"`
+		UrlSets              map[string]UrlSet             `toml:"url_set"`
 	}
 
 	// Server defines the API server configuration.
@@ -148,11 +148,6 @@ type (
 	ProviderMinOverrides struct {
 		Denoms    []string `toml:"denoms" validate:"required"`
 		Providers uint     `toml:"providers" validate:"required"`
-	}
-
-	ProviderWeight struct {
-		Type   string             `toml:"type"`
-		Weight map[string]float64 `toml:"weight" validate:"required"`
 	}
 
 	// Account defines account related configuration that is related to the
