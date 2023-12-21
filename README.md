@@ -114,12 +114,12 @@ Url sets are named arrays of endpoint urls, that can be reused in endpoint confi
 ```toml
 [url_set.rpc_kujira]
 urls = [
-  "https://rpc.cosmos.directory/kujira",
+  "https://rest.cosmos.directory/kujira",
 ]
 
 [[provider_endpoints]]
 name = "finv2"
-url_set = "rpc_kujira"
+url_set = "rest_kujira"
 ```
 
 ### `provider_endpoints`
@@ -130,7 +130,7 @@ The provider_endpoints option enables validators to setup their own API endpoint
 [[provider_endpoints]]
 name = "finv2"
 urls = [
-  "https://rpc.cosmos.directory/kujira",
+  "https://rest.cosmos.directory/kujira",
 ]
 ```
 
