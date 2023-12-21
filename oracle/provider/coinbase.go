@@ -126,5 +126,19 @@ func (p *CoinbaseProvider) GetAvailablePairs() (map[string]struct{}, error) {
 }
 
 func currencyPairToCoinbaseSymbol(pair types.CurrencyPair) string {
-	return pair.Join("-")
+	mapping := map[string]string{
+		"AXL": "WAXL",
+	}
+
+	base, found := mapping[pair.Base]
+	if !found {
+		base = pair.Base
+	}
+
+	quote, found := mapping[pair.Quote]
+	if !found {
+		quote = pair.Quote
+	}
+
+	return base + "-" + quote
 }

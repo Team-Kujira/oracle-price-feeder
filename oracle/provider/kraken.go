@@ -63,7 +63,7 @@ func NewKrakenProvider(
 	)
 
 	availablePairs, _ := provider.GetAvailablePairs()
-	provider.setPairs(pairs, availablePairs, currencyPairToHitKrakenSymbol)
+	provider.setPairs(pairs, availablePairs, currencyPairToKrakenSymbol)
 
 	go startPolling(provider, provider.endpoints.PollInterval, logger)
 	return provider, nil
@@ -125,7 +125,7 @@ func (p *KrakenProvider) GetAvailablePairs() (map[string]struct{}, error) {
 	return symbols, nil
 }
 
-func currencyPairToHitKrakenSymbol(pair types.CurrencyPair) string {
+func currencyPairToKrakenSymbol(pair types.CurrencyPair) string {
 	symbols := map[string]string{
 		"USDTUSD": "USDTZUSD",
 		"ETCETH":  "XETCXETH",
@@ -176,6 +176,7 @@ func currencyPairToHitKrakenSymbol(pair types.CurrencyPair) string {
 		"USDJPY":  "ZUSDZJPY",
 	}
 	mapping := map[string]string{
+		"AXL":  "WAXL",
 		"BTC":  "XBT",
 		"LUNC": "LUNA",
 		"LUNA": "LUNA2",

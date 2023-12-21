@@ -52,7 +52,7 @@ func NewMexcProvider(
 	)
 
 	availablePairs, _ := provider.GetAvailablePairs()
-	provider.setPairs(pairs, availablePairs, nil)
+	provider.setPairs(pairs, availablePairs, currencyPairToMexcSymbol)
 
 	go startPolling(provider, provider.endpoints.PollInterval, logger)
 	return provider, nil
@@ -110,4 +110,22 @@ func (p *MexcProvider) GetAvailablePairs() (map[string]struct{}, error) {
 	}
 
 	return symbols, nil
+}
+
+func currencyPairToMexcSymbol(pair types.CurrencyPair) string {
+	mapping := map[string]string{
+		"AXL": "WAXL",
+	}
+
+	base, found := mapping[pair.Base]
+	if !found {
+		base = pair.Base
+	}
+
+	quote, found := mapping[pair.Quote]
+	if !found {
+		quote = pair.Quote
+	}
+
+	return base + quote
 }
