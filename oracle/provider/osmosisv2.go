@@ -114,6 +114,12 @@ func (p *OsmosisV2Provider) Poll() error {
 
 			price, err = p.queryConcentratedLiquidityPool(pair, poolId)
 			if err != nil {
+				p.logger.Error().
+					Str("pair", pair.String()).
+					Str("pool", poolId).
+					Err(err).
+					Msg("")
+
 				return err
 			}
 		} else {
@@ -194,9 +200,12 @@ func (p *OsmosisV2Provider) queryConcentratedLiquidityPool(
 		return sdk.Dec{}, err
 	}
 
-	price := strToDec(response.Pool.SqrtPrice).Power(2)
+	price := strToDec(response.Pool.SqrtPrice)
+	if price.IsNil() {
+		return price, fmt.Errorf("could not parse sqrt price")
+	}
 
-	return price, nil
+	return price.Power(2), nil
 }
 
 // Get denoms for "legacy" pools, set map for concentrated liquidity

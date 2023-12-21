@@ -107,6 +107,7 @@ func (ots *OracleTestSuite) SetupSuite() {
 		},
 		history,
 		nil,
+		nil,
 	)
 }
 
@@ -399,6 +400,7 @@ func TestSuccessGetComputedPricesTickers(t *testing.T) {
 		providerPair,
 		make(map[string]sdk.Dec),
 		providerMinOverrides,
+		nil,
 	)
 
 	require.NoError(t, err, "It should successfully get computed ticker prices")
@@ -481,6 +483,7 @@ func TestGetComputedPricesTickersConversion(t *testing.T) {
 		providerPair,
 		make(map[string]sdk.Dec),
 		providerMinOverrides,
+		nil,
 	)
 
 	require.NoError(t, err,

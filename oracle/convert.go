@@ -21,6 +21,7 @@ func convertTickersToUSD(
 	providerPairs map[provider.Name][]types.CurrencyPair,
 	deviationThresholds map[string]sdk.Dec,
 	providerMinOverrides map[string]int,
+	providerWeights map[string]ProviderWeight,
 ) (map[string]sdk.Dec, error) {
 	if len(providerPrices) == 0 {
 		return nil, nil
@@ -51,6 +52,25 @@ func convertTickersToUSD(
 				pairs = append(pairs, currencyPair)
 			}
 		}
+	}
+
+	// override volume data
+	for _, pair := range pairs {
+		base := pair.Base
+		weight, found := providerWeights[base]
+		if !found {
+			continue
+		}
+
+		symbol := pair.String()
+		tickers := providerPricesBySymbol[symbol]
+
+		tickers, err := SetWeight(tickers, weight)
+		if err != nil {
+			return nil, err
+		}
+
+		providerPricesBySymbol[symbol] = tickers
 	}
 
 	// calculate USD values
@@ -112,7 +132,7 @@ func convertTickersToUSD(
 				}
 
 				filtered, err := FilterTickerDeviations(
-					logger, symbol, rates, maxDeviation,
+					logger, symbol, rates, maxDeviation, false,
 				)
 				if err != nil {
 					if len(rates) >= 3 {
@@ -174,7 +194,7 @@ func convertTickersToUSD(
 
 		threshold := deviationThresholds[denom]
 		filtered, err := FilterTickerDeviations(
-			logger, denom, tickers, threshold,
+			logger, denom, tickers, threshold, true,
 		)
 		if err != nil {
 			minimum, found := providerMinOverrides[denom]
