@@ -112,7 +112,7 @@ providers = 1
 Url sets are named arrays of endpoint urls, that can be reused in endpoint configurations.
 
 ```toml
-[url_set.rpc_kujira]
+[url_set.rest_kujira]
 urls = [
   "https://rest.cosmos.directory/kujira",
 ]
