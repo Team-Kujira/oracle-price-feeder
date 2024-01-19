@@ -33,6 +33,8 @@ BUILD_FLAGS := -ldflags '$(ldflags)'
 CGO_FLAG = CGO_ENABLED=0
 ifeq ($(shell uname),Linux)
   CGO_FLAG = CGO_ENABLED=1
+else ifeq ($(shell uname),Darwin)
+	CGO_FLAG = CGO_ENABLED=1
 endif
 
 build: go.sum
