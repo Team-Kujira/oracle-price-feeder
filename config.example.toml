@@ -25,18 +25,6 @@ global_labels = [["chain-id", "kaiyo-1"]]
 service_name = "price-feeder"
 type = "prometheus"
 
-[account]
-address = "kujira..."
-chain_id = "kaiyo-1"
-validator = "kujiravaloper..."
-prefix = "kujira"
-# Optional
-fee_granter = "kujira..."
-
-[keyring]
-backend = "file"
-dir = "/home/<user>/.kujira"
-
 [[healthchecks]]
 url = "https://hc-ping.com/HEALTHCHECK-UUID"
 
