@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"io"
@@ -12,8 +11,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Team-Kujira/core/app/params"
-	input "github.com/cosmos/cosmos-sdk/client/input"
 	"github.com/mitchellh/mapstructure"
 
 	"github.com/gorilla/mux"
@@ -23,7 +20,6 @@ import (
 
 	"price-feeder/config"
 	"price-feeder/oracle"
-	"price-feeder/oracle/client"
 	"price-feeder/oracle/derivative"
 	"price-feeder/oracle/history"
 	"price-feeder/oracle/provider"
@@ -40,8 +36,6 @@ const (
 
 	flagLogLevel  = "log-level"
 	flagLogFormat = "log-format"
-
-	envVariablePass = "PRICE_FEEDER_PASS"
 )
 
 var rootCmd = &cobra.Command{
@@ -113,50 +107,11 @@ func priceFeederCmdHandler(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	params.SetAddressPrefixes()
-
 	ctx, cancel := context.WithCancel(cmd.Context())
 	g, ctx := errgroup.WithContext(ctx)
 
 	// listen for and trap any OS signal to gracefully shutdown and exit
 	trapSignal(cancel, logger)
-
-	rpcTimeout, err := time.ParseDuration(cfg.RPC.RPCTimeout)
-	if err != nil {
-		return fmt.Errorf("failed to parse RPC timeout: %w", err)
-	}
-
-	// Gather pass via env variable || std input
-	keyringPass, err := getKeyringPassword()
-	if err != nil {
-		return err
-	}
-
-	heightPollInterval, err := time.ParseDuration(cfg.HeightPollInterval)
-	if err != nil {
-		return fmt.Errorf("failed to parse height poll interval: %w", err)
-	}
-
-	oracleClient, err := client.NewOracleClient(
-		ctx,
-		logger,
-		cfg.Account.ChainID,
-		cfg.Keyring.Backend,
-		cfg.Keyring.Dir,
-		keyringPass,
-		cfg.RPC.TMRPCEndpoint,
-		rpcTimeout,
-		cfg.Account.Address,
-		cfg.Account.Validator,
-		cfg.Account.FeeGranter,
-		cfg.RPC.GRPCEndpoint,
-		cfg.GasAdjustment,
-		cfg.GasPrices,
-		heightPollInterval,
-	)
-	if err != nil {
-		return err
-	}
 
 	providerTimeout, err := time.ParseDuration(cfg.ProviderTimeout)
 	if err != nil {
@@ -255,7 +210,6 @@ func priceFeederCmdHandler(cmd *cobra.Command, args []string) error {
 
 	oracle := oracle.New(
 		logger,
-		oracleClient,
 		providerPairs,
 		providerTimeout,
 		deviations,
@@ -297,16 +251,6 @@ func priceFeederCmdHandler(cmd *cobra.Command, args []string) error {
 	// Block main process until all spawned goroutines have gracefully exited and
 	// signal has been captured in the main process or if an error occurs.
 	return g.Wait()
-}
-
-func getKeyringPassword() (string, error) {
-	reader := bufio.NewReader(os.Stdin)
-
-	pass := os.Getenv(envVariablePass)
-	if pass == "" {
-		return input.GetString("Enter keyring password", reader)
-	}
-	return pass, nil
 }
 
 // trapSignal will listen for any OS signal and invoke Done on the main

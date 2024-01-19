@@ -100,8 +100,6 @@ type (
 		Deviations           []Deviation                   `toml:"deviation_thresholds"`
 		ProviderMinOverrides []ProviderMinOverrides        `toml:"provider_min_overrides"`
 		ProviderWeights      map[string]map[string]float64 `toml:"provider_weight"`
-		Account              Account                       `toml:"account" validate:"required,gt=0,dive,required"`
-		Keyring              Keyring                       `toml:"keyring" validate:"required,gt=0,dive,required"`
 		RPC                  RPC                           `toml:"rpc" validate:"required,gt=0,dive,required"`
 		Telemetry            Telemetry                     `toml:"telemetry"`
 		GasAdjustment        float64                       `toml:"gas_adjustment" validate:"required"`
@@ -148,22 +146,6 @@ type (
 	ProviderMinOverrides struct {
 		Denoms    []string `toml:"denoms" validate:"required"`
 		Providers uint     `toml:"providers" validate:"required"`
-	}
-
-	// Account defines account related configuration that is related to the
-	// network and transaction signing functionality.
-	Account struct {
-		ChainID    string `toml:"chain_id" validate:"required"`
-		Address    string `toml:"address" validate:"required"`
-		Validator  string `toml:"validator" validate:"required"`
-		FeeGranter string `toml:"fee_granter"`
-		Prefix     string `toml:"prefix" validate:"required"`
-	}
-
-	// Keyring defines the required keyring configuration.
-	Keyring struct {
-		Backend string `toml:"backend" validate:"required"`
-		Dir     string `toml:"dir" validate:"required"`
 	}
 
 	// RPC defines RPC configuration of both the gRPC and Tendermint nodes.

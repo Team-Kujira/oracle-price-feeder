@@ -22,16 +22,6 @@ func TestValidate(t *testing.T) {
 			CurrencyPairs: []config.CurrencyPair{
 				{Base: "ATOM", Quote: "USDT", Providers: []provider.Name{provider.ProviderKraken}},
 			},
-			Account: config.Account{
-				Address:   "fromaddr",
-				Validator: "valaddr",
-				ChainID:   "chain-id",
-				Prefix:    "chain",
-			},
-			Keyring: config.Keyring{
-				Backend: "test",
-				Dir:     "/Users/username/.kujira",
-			},
 			RPC: config.RPC{
 				TMRPCEndpoint: "http://localhost:26657",
 				GRPCEndpoint:  "localhost:9090",
