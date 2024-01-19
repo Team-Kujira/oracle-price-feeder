@@ -1,8 +1,3 @@
-gas_adjustment = 1.7
-gas_prices = "0.00125ukuji"
-enable_server = true
-enable_voter = true
-
 history_db = "/var/tmp/feeder.db"
 
 [server]
@@ -10,11 +5,6 @@ listen_addr = "0.0.0.0:7171"
 read_timeout = "20s"
 verbose_cors = true
 write_timeout = "20s"
-
-[rpc]
-grpc_endpoint = "localhost:9090"
-rpc_timeout = "100ms"
-tmrpc_endpoint = "http://localhost:26657"
 
 [telemetry]
 enable_hostname = true

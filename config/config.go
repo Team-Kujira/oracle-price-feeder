@@ -100,14 +100,9 @@ type (
 		Deviations           []Deviation                   `toml:"deviation_thresholds"`
 		ProviderMinOverrides []ProviderMinOverrides        `toml:"provider_min_overrides"`
 		ProviderWeights      map[string]map[string]float64 `toml:"provider_weight"`
-		RPC                  RPC                           `toml:"rpc" validate:"required,gt=0,dive,required"`
 		Telemetry            Telemetry                     `toml:"telemetry"`
-		GasAdjustment        float64                       `toml:"gas_adjustment" validate:"required"`
-		GasPrices            string                        `toml:"gas_prices" validate:"required"`
 		ProviderTimeout      string                        `toml:"provider_timeout"`
 		ProviderEndpoints    []ProviderEndpoints           `toml:"provider_endpoints" validate:"dive"`
-		EnableServer         bool                          `toml:"enable_server"`
-		EnableVoter          bool                          `toml:"enable_voter"`
 		Healthchecks         []Healthchecks                `toml:"healthchecks" validate:"dive"`
 		HeightPollInterval   string                        `toml:"height_poll_interval"`
 		HistoryDb            string                        `toml:"history_db"`
@@ -146,13 +141,6 @@ type (
 	ProviderMinOverrides struct {
 		Denoms    []string `toml:"denoms" validate:"required"`
 		Providers uint     `toml:"providers" validate:"required"`
-	}
-
-	// RPC defines RPC configuration of both the gRPC and Tendermint nodes.
-	RPC struct {
-		TMRPCEndpoint string `toml:"tmrpc_endpoint" validate:"required"`
-		GRPCEndpoint  string `toml:"grpc_endpoint" validate:"required"`
-		RPCTimeout    string `toml:"rpc_timeout" validate:"required"`
 	}
 
 	// Telemetry defines the configuration options for application telemetry.

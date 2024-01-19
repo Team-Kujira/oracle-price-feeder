@@ -234,19 +234,15 @@ func priceFeederCmdHandler(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if cfg.EnableServer {
-		g.Go(func() error {
-			// start the process that observes and publishes exchange prices
-			return startPriceFeeder(ctx, logger, cfg, oracle, metrics)
-		})
-	}
+	g.Go(func() error {
+		// start the process that observes and publishes exchange prices
+		return startPriceFeeder(ctx, logger, cfg, oracle, metrics)
+	})
 
-	if cfg.EnableVoter {
-		g.Go(func() error {
-			// start the process that calculates oracle prices and votes
-			return startPriceOracle(ctx, logger, oracle)
-		})
-	}
+	g.Go(func() error {
+		// start the process that calculates oracle prices and votes
+		return startPriceOracle(ctx, logger, oracle)
+	})
 
 	// Block main process until all spawned goroutines have gracefully exited and
 	// signal has been captured in the main process or if an error occurs.

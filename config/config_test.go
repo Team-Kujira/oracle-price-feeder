@@ -22,11 +22,6 @@ func TestValidate(t *testing.T) {
 			CurrencyPairs: []config.CurrencyPair{
 				{Base: "ATOM", Quote: "USDT", Providers: []provider.Name{provider.ProviderKraken}},
 			},
-			RPC: config.RPC{
-				TMRPCEndpoint: "http://localhost:26657",
-				GRPCEndpoint:  "localhost:9090",
-				RPCTimeout:    "100ms",
-			},
 			Telemetry: config.Telemetry{
 				ServiceName:             "price-feeder",
 				Enabled:                 true,
@@ -36,8 +31,6 @@ func TestValidate(t *testing.T) {
 				GlobalLabels:            make([][]string, 1),
 				PrometheusRetentionTime: 120,
 			},
-			GasAdjustment: 1.5,
-			GasPrices:     "0.00125ukuji",
 			Healthchecks: []config.Healthchecks{
 				{URL: "https://hc-ping.com/HEALTHCHECK-UUID", Timeout: "200ms"},
 			},
@@ -174,22 +167,6 @@ quote = "ATOM"
 providers = ["osmosisv2"]
 derivative = "twap"
 derivative_period = "30m"
-
-[account]
-address = "kujira15nejfgcaanqpw25ru4arvfd0fwy6j8clccvwx4"
-validator = "kujiravalcons14rjlkfzp56733j5l5nfk6fphjxymgf8mj04d5p"
-chain_id = "kujira-local-testnet"
-prefix = "kujira"
-
-[keyring]
-backend = "test"
-dir = "/Users/username/.kujira"
-pass = "keyringPassword"
-
-[rpc]
-tmrpc_endpoint = "http://localhost:26657"
-grpc_endpoint = "localhost:9090"
-rpc_timeout = "100ms"
 
 [telemetry]
 service_name = "price-feeder"
