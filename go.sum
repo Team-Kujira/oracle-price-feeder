@@ -657,6 +657,8 @@ github.com/mgechev/revive v1.2.4/go.mod h1:iAWlQishqCuj4yhV24FTnKSXGpbAA+0SckXB8
 github.com/mimoo/StrobeGo v0.0.0-20181016162300-f8f6d4d2b643/go.mod h1:43+3pMjjKimDBf5Kr4ZFNGbLql1zKkbImw+fZbw3geM=
 github.com/mimoo/StrobeGo v0.0.0-20210601165009-122bf33a46e0 h1:QRUSJEgZn2Snx0EmT/QLXibWjSUDjKWvXIT19NBVp94=
 github.com/mimoo/StrobeGo v0.0.0-20210601165009-122bf33a46e0/go.mod h1:43+3pMjjKimDBf5Kr4ZFNGbLql1zKkbImw+fZbw3geM=
+github.com/miscreant/miscreant.go v0.0.0-20200214223636-26d376326b75 h1:cUVxyR+UfmdEAZGJ8IiKld1O0dbGotEnkMolG5hfMSY=
+github.com/miscreant/miscreant.go v0.0.0-20200214223636-26d376326b75/go.mod h1:pBbZyGwC5i16IBkjVKoy/sznA8jPD/K9iedwe1ESE6w=
 github.com/mitchellh/go-homedir v1.1.0 h1:lukF9ziXFxDFPkA1vsr5zpc1XuPDn/wFntq5mG+4E0Y=
 github.com/mitchellh/go-homedir v1.1.0/go.mod h1:SfyaCUpYCn1Vlf4IUYiD9fPX4A5wJrkLzIz1N1q0pr0=
 github.com/mitchellh/mapstructure v1.1.2/go.mod h1:FVVH3fgwuzCH5S8UJGiWEs2h04kUh9fWfEaFds41c1Y=

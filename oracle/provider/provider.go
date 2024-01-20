@@ -58,6 +58,7 @@ const (
 	ProviderCrypto             Name = "crypto"
 	ProviderCurve              Name = "curve"
 	ProviderMock               Name = "mock"
+	ProviderShade              Name = "shade"
 	ProviderStride             Name = "stride"
 	ProviderXt                 Name = "xt"
 	ProviderIdxOsmosis         Name = "idxosmosis"
@@ -383,6 +384,8 @@ func (e *Endpoint) SetDefaults() {
 		defaults = poloniexDefaultEndpoints
 	case ProviderPyth:
 		defaults = pythDefaultEndpoints
+	case ProviderShade:
+		defaults = shadeDefaultEndpoints
 	case ProviderUniswapV3:
 		defaults = uniswapv3DefaultEndpoints
 	case ProviderWhitewhaleCmdx:
@@ -688,6 +691,10 @@ func strToDec(str string) sdk.Dec {
 	}
 
 	return dec
+}
+
+func uintToDec(u uint64) sdk.Dec {
+	return strToDec(strconv.FormatUint(u, 10))
 }
 
 func floatToDec(f float64) sdk.Dec {

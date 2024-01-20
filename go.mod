@@ -14,11 +14,13 @@ require (
 	github.com/gorilla/websocket v1.5.0
 	github.com/justinas/alice v1.2.0
 	github.com/mattn/go-sqlite3 v1.14.16
+	github.com/miscreant/miscreant.go v0.0.0-20200214223636-26d376326b75
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/rs/cors v1.8.3
 	github.com/rs/zerolog v1.30.0
 	github.com/spf13/cobra v1.7.0
 	github.com/stretchr/testify v1.8.4
+	golang.org/x/crypto v0.12.0
 	golang.org/x/sync v0.2.0
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -217,7 +219,6 @@ require (
 	go.uber.org/goleak v1.1.12 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
 	go.uber.org/zap v1.23.0 // indirect
-	golang.org/x/crypto v0.12.0 // indirect
 	golang.org/x/exp v0.0.0-20230711153332-06a737ee72cb // indirect
 	golang.org/x/exp/typeparams v0.0.0-20220827204233-334a2380cb91 // indirect
 	golang.org/x/mod v0.11.0 // indirect
