@@ -64,6 +64,7 @@ var (
 		provider.ProviderCurve:              {},
 		provider.ProviderMock:               {},
 		provider.ProviderStride:             {},
+		provider.ProviderShade:              {},
 		provider.ProviderXt:                 {},
 		provider.ProviderIdxOsmosis:         {},
 		provider.ProviderPyth:               {},

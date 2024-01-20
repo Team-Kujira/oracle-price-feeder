@@ -523,6 +523,8 @@ func NewProvider(
 		return provider.NewPoloniexProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderPyth:
 		return provider.NewPythProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderShade:
+		return provider.NewShadeProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderUniswapV3:
 		return provider.NewUniswapV3Provider(ctx, providerLogger, endpoint, providerPairs...)
 	case
