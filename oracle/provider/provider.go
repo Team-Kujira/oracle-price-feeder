@@ -52,6 +52,7 @@ const (
 	ProviderPyth               Name = "pyth"
 	ProviderPhemex             Name = "phemex"
 	ProviderLbank              Name = "lbank"
+	ProviderUpbit              Name = "upbit"
 	ProviderKucoin             Name = "kucoin"
 	ProviderBybit              Name = "bybit"
 	ProviderMexc               Name = "mexc"
