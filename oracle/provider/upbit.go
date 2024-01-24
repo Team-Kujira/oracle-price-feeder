@@ -66,11 +66,13 @@ func NewUpbitProvider(
 
 func (p *UpbitProvider) getTickers() ([]UpbitTicker, error) {
 	markets := []string{}
-	for _, pair := range p.getAllPairs() {
-		markets = append(markets, currencyPairToUpbitSymbol(pair))
+	for symbol := range p.getAllPairs() {
+		markets = append(markets, symbol)
 	}
 
-	content, err := p.httpGet("/v1/ticker?markets=" + strings.Join(markets, ","))
+	path := "/v1/ticker?markets=" + strings.Join(markets, ",")
+
+	content, err := p.httpGet(path)
 	if err != nil {
 		return nil, err
 	}
@@ -90,6 +92,8 @@ func (p *UpbitProvider) Poll() error {
 		return err
 	}
 
+	timestamp := time.Now()
+
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 
@@ -97,8 +101,6 @@ func (p *UpbitProvider) Poll() error {
 		if !p.isPair(ticker.Symbol) {
 			continue
 		}
-
-		timestamp := time.UnixMilli(ticker.Time)
 
 		p.setTickerPrice(
 			ticker.Symbol,
@@ -149,6 +151,8 @@ func currencyPairToUpbitSymbol(pair types.CurrencyPair) string {
 	// if !found {
 	// 	quote = pair.Quote
 	// }
+
+	pair = pair.Swap()
 
 	return pair.Join("-")
 }

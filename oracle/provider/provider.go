@@ -158,6 +158,8 @@ func (p *provider) Init(
 
 	p.contracts = endpoints.ContractAddresses
 
+	p.logger.Info().Msg("starting provider...")
+
 	if p.endpoints.Websocket != "" {
 		websocketUrl := url.URL{
 			Scheme: "wss",
@@ -389,6 +391,8 @@ func (e *Endpoint) SetDefaults() {
 		defaults = shadeDefaultEndpoints
 	case ProviderUniswapV3:
 		defaults = uniswapv3DefaultEndpoints
+	case ProviderUpbit:
+		defaults = upbitDefaultEndpoints
 	case ProviderWhitewhaleCmdx:
 		defaults = whitewhaleCmdxDefaultEndpoints
 	case ProviderWhitewhaleHuahua:
