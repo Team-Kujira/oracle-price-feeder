@@ -34,6 +34,7 @@ type (
 	FinV2Provider struct {
 		provider
 		contracts map[string]string
+		delta     map[string]int64
 	}
 
 	FinV2BookResponse struct {
@@ -47,6 +48,14 @@ type (
 
 	FinV2Order struct {
 		Price string `json:"quote_price"`
+	}
+
+	FinV2ConfigResponse struct {
+		Data FinV2Config `json:"data"`
+	}
+
+	FinV2Config struct {
+		Delta int64 `json:"decimal_delta"`
 	}
 )
 
@@ -70,6 +79,8 @@ func NewFinV2Provider(
 
 	availablePairs, _ := provider.GetAvailablePairs()
 	provider.setPairs(pairs, availablePairs, nil)
+
+	provider.delta = map[string]int64{}
 
 	go startPolling(provider, provider.endpoints.PollInterval, logger)
 	return provider, nil
@@ -114,7 +125,17 @@ func (p *FinV2Provider) Poll() error {
 		base := strToDec(bookResponse.Data.Base[0].Price)
 		quote := strToDec(bookResponse.Data.Quote[0].Price)
 
+		delta, err := p.getDecimalDelta(contract)
+		if err != nil {
+			continue
+		}
+
 		price := base.Add(quote).QuoInt64(2)
+		if delta < 0 {
+			price = price.Quo(uintToDec(10).Power(uint64(delta * -1)))
+		} else {
+			price = price.Mul(uintToDec(10).Power(uint64(delta)))
+		}
 
 		p.setTickerPrice(
 			symbol,
@@ -129,4 +150,36 @@ func (p *FinV2Provider) Poll() error {
 
 func (p *FinV2Provider) GetAvailablePairs() (map[string]struct{}, error) {
 	return p.getAvailablePairsFromContracts()
+}
+
+func (p *FinV2Provider) getDecimalDelta(contract string) (int64, error) {
+	delta, found := p.delta[contract]
+	if found {
+		return delta, nil
+	}
+
+	// {"config":{}}
+	path := fmt.Sprintf(
+		"/cosmwasm/wasm/v1/contract/%s/smart/eyJjb25maWciOnt9fQ==",
+		contract,
+	)
+
+	content, err := p.httpGet(path)
+	if err != nil {
+		return 0, err
+	}
+
+	var response FinV2ConfigResponse
+
+	err = json.Unmarshal(content, &response)
+	if err != nil {
+		p.logger.Err(err).Msg("")
+		return 0, nil
+	}
+
+	delta = response.Data.Delta
+
+	p.delta[contract] = delta
+
+	return delta, nil
 }
