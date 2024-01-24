@@ -693,6 +693,10 @@ func strToDec(str string) sdk.Dec {
 	return dec
 }
 
+func int64ToDec(i int64) sdk.Dec {
+	return strToDec(strconv.FormatInt(i, 10))
+}
+
 func uintToDec(u uint64) sdk.Dec {
 	return strToDec(strconv.FormatUint(u, 10))
 }

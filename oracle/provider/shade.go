@@ -45,6 +45,7 @@ type (
 		nonce     []byte
 		cipher    *miscreant.Cipher
 		hashes    map[string]string
+		decimals  map[string]uint64
 	}
 
 	ShadeCodeHashResponse struct {
@@ -60,17 +61,25 @@ type (
 	}
 
 	ShadePairInfo struct {
-		Amount0    string          `json:"amount_0"`
-		Amount1    string          `json:"amount_1"`
-		StableInfo ShadeStableInfo `json:"stable_info"`
+		Amount0 string       `json:"amount_0"`
+		Amount1 string       `json:"amount_1"`
+		Pair    [2]ShadePair `json:"pair"`
 	}
 
-	ShadeStableInfo struct {
-		StableToken0Data ShadeStableTokenData `json:"stable_token0_data"`
-		StableToken1Data ShadeStableTokenData `json:"stable_token1_data"`
+	ShadePair struct {
+		CustomToken ShadeCustomToken `json:"custom_token"`
 	}
 
-	ShadeStableTokenData struct {
+	ShadeCustomToken struct {
+		Contract string `json:"contract_addr"`
+		Hash     string `json:"token_code_hash"`
+	}
+
+	ShadeTokenInfoResponse struct {
+		TokenInfo ShadeTokenInfo `json:"token_info"`
+	}
+
+	ShadeTokenInfo struct {
 		Decimals uint64 `json:"decimals"`
 	}
 )
@@ -123,60 +132,39 @@ func (p *ShadeProvider) Poll() error {
 			continue
 		}
 
-		query, err := p.encryptQuery(`{"get_pair_info":{}}`, hash)
+		content, err := p.query(contract, hash, `{"get_pair_info":{}}`)
 		if err != nil {
 			p.logger.Err(err).Msg("")
 			continue
 		}
 
-		path := fmt.Sprintf(
-			"/compute/v1beta1/query/%s?query=%s",
-			contract, query,
-		)
-
-		content, err := p.httpGet(path)
-		if err != nil {
-			return err
-		}
-
-		var response ShadeResponse
+		var response ShadePairInfoResponse
 		err = json.Unmarshal(content, &response)
 		if err != nil {
-			return err
-		}
-
-		data, err := base64.StdEncoding.DecodeString(response.Data)
-		if err != nil {
 			p.logger.Err(err).Msg("")
 			continue
 		}
 
-		decrypted, err := p.cipher.Open(nil, data, []byte{})
+		token0 := response.PairInfo.Pair[0].CustomToken
+		token1 := response.PairInfo.Pair[1].CustomToken
+
+		decimals0, err := p.getDecimals(token0.Contract, token0.Hash)
 		if err != nil {
-			p.logger.Err(err).Msg("")
 			continue
 		}
 
-		// Decode base64 string to get the original byte slice.
-		decoded, err := base64.StdEncoding.DecodeString(string(decrypted))
+		decimals1, err := p.getDecimals(token1.Contract, token1.Hash)
 		if err != nil {
-			p.logger.Err(err).Msg("")
 			continue
 		}
 
-		var pairInfoResponse ShadePairInfoResponse
-		err = json.Unmarshal(decoded, &pairInfoResponse)
-		if err != nil {
-			p.logger.Err(err).Msg("")
-			continue
-		}
+		amount0 := strToDec(response.PairInfo.Amount0)
+		amount1 := strToDec(response.PairInfo.Amount1)
 
-		amount0 := strToDec(pairInfoResponse.PairInfo.Amount0)
-		amount1 := strToDec(pairInfoResponse.PairInfo.Amount1)
-		decimals0 := uintToDec(pairInfoResponse.PairInfo.StableInfo.StableToken0Data.Decimals)
-		decimals1 := uintToDec(pairInfoResponse.PairInfo.StableInfo.StableToken1Data.Decimals)
+		amount0 = amount0.Quo(uintToDec(10).Power(decimals0))
+		amount1 = amount1.Quo(uintToDec(10).Power(decimals1))
 
-		price := amount1.Quo(decimals1).Quo(amount0.Quo(decimals0))
+		price := amount1.Quo(amount0)
 
 		p.setTickerPrice(
 			symbol,
@@ -255,15 +243,21 @@ func (p *ShadeProvider) init() {
 		}
 		p.hashes[contract] = hash
 	}
+
+	p.decimals = map[string]uint64{}
 }
 
-func (p *ShadeProvider) encryptQuery(message, codeHash string) (string, error) {
+func (p *ShadeProvider) query(
+	contract string,
+	codeHash string,
+	message string,
+) ([]byte, error) {
 	plaintext := codeHash + message
 
 	ciphertext, err := p.cipher.Seal(nil, []byte(plaintext), []byte{})
 	if err != nil {
 		p.logger.Err(err).Msg("")
-		panic(err)
+		return nil, err
 	}
 
 	bz := append(p.nonce, append(p.pubKey[:], ciphertext...)...)
@@ -271,7 +265,44 @@ func (p *ShadeProvider) encryptQuery(message, codeHash string) (string, error) {
 	query := base64.StdEncoding.EncodeToString(bz)
 	query = url.QueryEscape(query)
 
-	return query, nil
+	path := fmt.Sprintf(
+		"/compute/v1beta1/query/%s?query=%s",
+		contract, query,
+	)
+
+	content, err := p.httpGet(path)
+	if err != nil {
+		p.logger.Err(err).Msg("")
+		return nil, err
+	}
+
+	var response ShadeResponse
+	err = json.Unmarshal(content, &response)
+	if err != nil {
+		p.logger.Err(err).Msg("")
+		return nil, err
+	}
+
+	data, err := base64.StdEncoding.DecodeString(response.Data)
+	if err != nil {
+		p.logger.Err(err).Msg("")
+		return nil, err
+	}
+
+	decrypted, err := p.cipher.Open(nil, data, []byte{})
+	if err != nil {
+		p.logger.Err(err).Msg("")
+		return nil, err
+	}
+
+	// Decode base64 string to get the original byte slice.
+	decoded, err := base64.StdEncoding.DecodeString(string(decrypted))
+	if err != nil {
+		p.logger.Err(err).Msg("")
+		return nil, err
+	}
+
+	return decoded, nil
 }
 
 func (p *ShadeProvider) getCodeHash(contract string) (string, error) {
@@ -293,4 +324,35 @@ func (p *ShadeProvider) getCodeHash(contract string) (string, error) {
 	}
 
 	return response.CodeHash, nil
+}
+
+func (p *ShadeProvider) getDecimals(contract, hash string) (uint64, error) {
+	decimals, found := p.decimals[contract]
+	if found {
+		return decimals, nil
+	}
+
+	content, err := p.query(contract, hash, `{"token_info":{}}`)
+	if err != nil {
+		return 0, err
+	}
+
+	var response ShadeTokenInfoResponse
+
+	err = json.Unmarshal(content, &response)
+	if err != nil {
+		return 0, err
+	}
+
+	decimals = response.TokenInfo.Decimals
+
+	if decimals < 1 {
+		err = fmt.Errorf("decimal not found")
+		p.logger.Error().Err(err).Msg("")
+		return 0, err
+	}
+
+	p.decimals[contract] = decimals
+
+	return decimals, nil
 }
