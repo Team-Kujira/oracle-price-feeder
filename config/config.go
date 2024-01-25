@@ -52,6 +52,7 @@ var (
 		provider.ProviderCoinbase:           {},
 		provider.ProviderCrypto:             {},
 		provider.ProviderCurve:              {},
+		provider.ProviderDexter:             {},
 		provider.ProviderFin:                {},
 		provider.ProviderFinV2:              {},
 		provider.ProviderGate:               {},

@@ -421,6 +421,8 @@ func NewProvider(
 		return provider.NewCryptoProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderCurve:
 		return provider.NewCurveProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderDexter:
+		return provider.NewDexterProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderFin:
 		return provider.NewFinProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderFinV2:
