@@ -3,6 +3,8 @@ package provider
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -24,54 +26,55 @@ const (
 	staleTickersCutoff   = 1 * time.Minute
 	providerCandlePeriod = 10 * time.Minute
 
-	ProviderAstroportTerra2    Name = "astroport_terra2"
-	ProviderAstroportNeutron   Name = "astroport_neutron"
 	ProviderAstroportInjective Name = "astroport_injective"
-	ProviderFin                Name = "fin"
-	ProviderFinV2              Name = "finv2"
-	ProviderKraken             Name = "kraken"
+	ProviderAstroportNeutron   Name = "astroport_neutron"
+	ProviderAstroportTerra2    Name = "astroport_terra2"
 	ProviderBinance            Name = "binance"
 	ProviderBinanceUS          Name = "binanceus"
+	ProviderBitfinex           Name = "bitfinex"
+	ProviderBitforex           Name = "bitforex"
+	ProviderBitget             Name = "bitget"
+	ProviderBitmart            Name = "bitmart"
+	ProviderBitstamp           Name = "bitstamp"
+	ProviderBkex               Name = "bkex"
+	ProviderBybit              Name = "bybit"
 	ProviderCamelotV2          Name = "camelotv2"
 	ProviderCamelotV3          Name = "camelotv3"
+	ProviderCoinbase           Name = "coinbase"
+	ProviderCrypto             Name = "crypto"
+	ProviderCurve              Name = "curve"
+	ProviderDexter             Name = "dexter"
+	ProviderFin                Name = "fin"
+	ProviderFinV2              Name = "finv2"
+	ProviderGate               Name = "gate"
+	ProviderHitBtc             Name = "hitbtc"
+	ProviderHuobi              Name = "huobi"
+	ProviderIdxOsmosis         Name = "idxosmosis"
+	ProviderKraken             Name = "kraken"
+	ProviderKucoin             Name = "kucoin"
+	ProviderLbank              Name = "lbank"
+	ProviderMexc               Name = "mexc"
+	ProviderMock               Name = "mock"
+	ProviderOkx                Name = "okx"
 	ProviderOsmosis            Name = "osmosis"
 	ProviderOsmosisV2          Name = "osmosisv2"
 	ProviderPancakeV3Bsc       Name = "pancakev3_bsc"
-	ProviderHuobi              Name = "huobi"
-	ProviderOkx                Name = "okx"
-	ProviderGate               Name = "gate"
-	ProviderCoinbase           Name = "coinbase"
-	ProviderBitget             Name = "bitget"
-	ProviderBitmart            Name = "bitmart"
-	ProviderBkex               Name = "bkex"
-	ProviderBitfinex           Name = "bitfinex"
-	ProviderBitforex           Name = "bitforex"
-	ProviderBitstamp           Name = "bitstamp"
-	ProviderHitBtc             Name = "hitbtc"
+	ProviderPhemex             Name = "phemex"
 	ProviderPoloniex           Name = "poloniex"
 	ProviderPyth               Name = "pyth"
 	ProviderShade              Name = "shade"
-	ProviderPhemex             Name = "phemex"
-	ProviderLbank              Name = "lbank"
-	ProviderKucoin             Name = "kucoin"
-	ProviderBybit              Name = "bybit"
-	ProviderMexc               Name = "mexc"
-	ProviderCrypto             Name = "crypto"
-	ProviderCurve              Name = "curve"
-	ProviderMock               Name = "mock"
 	ProviderStride             Name = "stride"
-	ProviderXt                 Name = "xt"
-	ProviderIdxOsmosis         Name = "idxosmosis"
-	ProviderZero               Name = "zero"
 	ProviderUniswapV3          Name = "uniswapv3"
 	ProviderWhitewhaleCmdx     Name = "whitewhale_cmdx"
 	ProviderWhitewhaleHuahua   Name = "whitewhale_huahua"
 	ProviderWhitewhaleInj      Name = "whitewhale_inj"
 	ProviderWhitewhaleJuno     Name = "whitewhale_juno"
-	ProviderWhitewhaleLunc     Name = "whitewhale_lunc"
 	ProviderWhitewhaleLuna     Name = "whitewhale_luna"
+	ProviderWhitewhaleLunc     Name = "whitewhale_lunc"
 	ProviderWhitewhaleSei      Name = "whitewhale_sei"
 	ProviderWhitewhaleWhale    Name = "whitewhale_whale"
+	ProviderXt                 Name = "xt"
+	ProviderZero               Name = "zero"
 )
 
 type (
@@ -233,6 +236,30 @@ func (p *provider) CurrencyPairToProviderPair(pair types.CurrencyPair) string {
 	return pair.String()
 }
 
+func (p *provider) wasmQuery(contract, message string) ([]byte, error) {
+	buffer := new(bytes.Buffer)
+	err := json.Compact(buffer, []byte(message))
+	if err != nil {
+		p.logger.Err(err).Msg("")
+		return nil, err
+	}
+
+	query := base64.StdEncoding.EncodeToString(buffer.Bytes())
+
+	path := fmt.Sprintf(
+		"/cosmwasm/wasm/v1/contract/%s/smart/%s",
+		contract, query,
+	)
+
+	content, err := p.httpGet(path)
+	if err != nil {
+		p.logger.Err(err).Msg("")
+		return nil, err
+	}
+
+	return content, nil
+}
+
 func (p *provider) httpGet(path string) ([]byte, error) {
 	return p.httpRequest(path, "GET", nil, nil)
 }
@@ -348,6 +375,8 @@ func (e *Endpoint) SetDefaults() {
 		defaults = cryptoDefaultEndpoints
 	case ProviderCurve:
 		defaults = curveDefaultEndpoints
+	case ProviderDexter:
+		defaults = dexterDefaultEndpoints
 	case ProviderFin:
 		defaults = finDefaultEndpoints
 	case ProviderFinV2:
