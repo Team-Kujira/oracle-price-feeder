@@ -141,7 +141,7 @@ func (p *ShadeProvider) Poll() error {
 							"token_code_hash": "%s"
 						}
 					},
-					"amount":"%d"
+					"amount": "%d"
 				},
 				"exclude_fee": true
 			}
@@ -165,6 +165,11 @@ func (p *ShadeProvider) Poll() error {
 		}
 
 		price := strToDec(response.Simulation.Price)
+
+		_, found = p.pairs[pair.String()]
+		if !found {
+			price = uintToDec(1).Quo(price)
+		}
 
 		factor, err := computeDecimalsFactor(base.Decimals, quote.Decimals)
 		if err != nil {
@@ -259,6 +264,11 @@ func (p *ShadeProvider) init() {
 		tokens, err := p.getPairInfo(contract, hash)
 		if err != nil {
 			continue
+		}
+
+		_, found := p.pairs[pair.String()]
+		if !found {
+			pair = pair.Swap()
 		}
 
 		denoms := []string{
