@@ -27,7 +27,6 @@ var (
 		Name:         ProviderShade,
 		Urls:         []string{},
 		PollInterval: 6 * time.Second,
-		// ContractAddresses: map[string]string{},
 	}
 )
 
