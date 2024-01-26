@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/url"
 	"time"
 
@@ -129,6 +130,8 @@ func (p *ShadeProvider) Poll() error {
 			continue
 		}
 
+		amount := int64(math.Pow10(int(base.Decimals)))
+
 		message := fmt.Sprintf(`{
 			"swap_simulation": {
 				"offer": {
@@ -138,11 +141,11 @@ func (p *ShadeProvider) Poll() error {
 							"token_code_hash": "%s"
 						}
 					},
-					"amount":"1000000"
+					"amount":"%d"
 				},
 				"exclude_fee": true
 			}
-		}`, base.Address, base.Hash)
+		}`, base.Address, base.Hash, amount)
 
 		content, err := p.query(contract, hash, message)
 		if err != nil {
@@ -163,12 +166,12 @@ func (p *ShadeProvider) Poll() error {
 
 		price := strToDec(response.Simulation.Price)
 
-		delta := base.Decimals - quote.Decimals
-		if delta < 0 {
-			price = price.Quo(uintToDec(10).Power(uint64(delta * -1)))
-		} else {
-			price = price.Mul(uintToDec(10).Power(uint64(delta)))
+		factor, err := computeDecimalsFactor(base.Decimals, quote.Decimals)
+		if err != nil {
+			continue
 		}
+
+		price = price.Mul(factor)
 
 		p.setTickerPrice(
 			symbol,

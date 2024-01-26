@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"time"
 
 	"price-feeder/oracle/types"
@@ -22,12 +23,13 @@ var (
 )
 
 type (
-	// Astroport defines an oracle provider using on chain data from
-	// chain specific api nodes
+	// Dexter defines an oracle provider using on chain data from persistence
+	// api nodes
 	DexterProvider struct {
 		provider
 		contracts map[string]string
 		denoms    map[string]string
+		decimals  map[string]int64
 	}
 )
 
@@ -93,6 +95,25 @@ func (p *DexterProvider) Poll() error {
 			continue
 		}
 
+		decimals0, found := p.decimals[offer]
+		if !found {
+			p.logger.Error().
+				Str("denom", ask).
+				Msg("decimals not found")
+			continue
+		}
+
+		decimals1, found := p.decimals[ask]
+		if !found {
+			p.logger.Error().
+				Str("denom", ask).
+				Msg("decimals not found")
+			continue
+		}
+
+		// amount := uintToDec(10).Power(uint64(decimals0))
+		amount := int64(math.Pow10(int(decimals0)))
+
 		message := fmt.Sprintf(`{
 			"on_swap": {
 				"offer_asset": {
@@ -108,13 +129,13 @@ func (p *DexterProvider) Poll() error {
 				"swap_type": {
 					"give_in": {}
 				},
-				"amount": "1000000",
+				"amount": "%d",
 				"max_spread": null,
 				"belief_price": "100"
 			}
-		}`, offer, ask)
+		}`, offer, ask, amount)
 
-		content, err := p.wasmQuery(contract, message)
+		content, err := p.wasmSmartQuery(contract, message)
 		if err != nil {
 			continue
 		}
@@ -130,12 +151,18 @@ func (p *DexterProvider) Poll() error {
 		amountIn := response.Data.TradeParams.AmountIn
 		amountOut := response.Data.TradeParams.AmountOut
 
-		if amountIn == "" || amountOut == "" {
+		if amountIn == "" || amountIn == "0" || amountOut == "" || amountOut == "0" {
 			p.logger.Error().Msg("error simulating swap")
 			continue
 		}
 
+		factor, err := computeDecimalsFactor(decimals0, decimals1)
+		if err != nil {
+			continue
+		}
+
 		price := strToDec(amountOut).Quo(strToDec(amountIn))
+		price = price.Mul(factor)
 
 		_, found = p.pairs[pair.String()]
 		if !found {
@@ -159,6 +186,7 @@ func (p *DexterProvider) GetAvailablePairs() (map[string]struct{}, error) {
 
 func (p *DexterProvider) getDenoms() map[string]string {
 	assets := map[string]string{}
+	p.decimals = map[string]int64{}
 
 	// {"assets": [{"info": {"native_token": {"denom": "uxprt"}}}, {...}]}
 	type Response struct {
@@ -182,7 +210,7 @@ func (p *DexterProvider) getDenoms() map[string]string {
 			continue
 		}
 
-		content, err := p.wasmQuery(contract, `{"config":{}}`)
+		content, err := p.wasmSmartQuery(contract, `{"config":{}}`)
 		if err != nil {
 			continue
 		}
@@ -200,9 +228,39 @@ func (p *DexterProvider) getDenoms() map[string]string {
 			pair = pair.Swap()
 		}
 
-		assets[pair.Base] = response.Data.Assets[0].Info.Token.Denom
-		assets[pair.Quote] = response.Data.Assets[1].Info.Token.Denom
+		symbols := []string{
+			pair.Base,
+			pair.Quote,
+		}
+
+		for i := 0; i < 2; i++ {
+			denom := response.Data.Assets[i].Info.Token.Denom
+			symbol := symbols[i]
+			assets[symbol] = denom
+
+			decimals, err := p.getDecimals(contract, denom)
+			if err != nil {
+				continue
+			}
+			p.decimals[denom] = decimals
+		}
 	}
 
 	return assets
+}
+
+func (p *provider) getDecimals(contract, denom string) (int64, error) {
+	message := fmt.Sprintf("\nprecisions%s", denom)
+	content, err := p.wasmRawQuery(contract, message)
+	if err != nil {
+		return -1, err
+	}
+
+	var decimals int64
+	err = json.Unmarshal(content, &decimals)
+	if err != nil {
+		return -1, err
+	}
+
+	return decimals, nil
 }

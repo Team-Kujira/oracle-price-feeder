@@ -247,7 +247,39 @@ func (p *provider) compactJsonString(message string) (string, error) {
 	return buffer.String(), nil
 }
 
-func (p *provider) wasmQuery(contract, message string) ([]byte, error) {
+func (p *provider) wasmRawQuery(contract, message string) ([]byte, error) {
+	bz := append([]byte{0}, []byte(message)...)
+	query := base64.StdEncoding.EncodeToString(bz)
+
+	path := fmt.Sprintf(
+		"/cosmwasm/wasm/v1/contract/%s/raw/%s",
+		contract, query,
+	)
+
+	content, err := p.httpGet(path)
+	if err != nil {
+		p.logger.Err(err).Msg("")
+		return nil, err
+	}
+
+	var response struct {
+		Data string `json:"data"`
+	}
+
+	err = json.Unmarshal(content, &response)
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := base64.StdEncoding.DecodeString(response.Data)
+	if err != nil {
+		return nil, err
+	}
+
+	return data, nil
+}
+
+func (p *provider) wasmSmartQuery(contract, message string) ([]byte, error) {
 	message, err := p.compactJsonString(message)
 	if err != nil {
 		return nil, err
@@ -748,4 +780,18 @@ func invertDec(d sdk.Dec) sdk.Dec {
 		return sdk.ZeroDec()
 	}
 	return sdk.NewDec(1).Quo(d)
+}
+
+func computeDecimalsFactor(base, quote int64) (sdk.Dec, error) {
+	delta := base - quote
+	factor := uintToDec(1)
+	if delta == 0 {
+		return factor, nil
+	} else if delta < 0 {
+		factor = factor.Quo(uintToDec(10).Power(uint64(delta * -1)))
+	} else {
+		factor = uintToDec(10).Power(uint64(delta))
+	}
+
+	return factor, nil
 }
