@@ -236,15 +236,24 @@ func (p *provider) CurrencyPairToProviderPair(pair types.CurrencyPair) string {
 	return pair.String()
 }
 
-func (p *provider) wasmQuery(contract, message string) ([]byte, error) {
+func (p *provider) compactJsonString(message string) (string, error) {
 	buffer := new(bytes.Buffer)
 	err := json.Compact(buffer, []byte(message))
 	if err != nil {
 		p.logger.Err(err).Msg("")
+		return "", err
+	}
+
+	return buffer.String(), nil
+}
+
+func (p *provider) wasmQuery(contract, message string) ([]byte, error) {
+	message, err := p.compactJsonString(message)
+	if err != nil {
 		return nil, err
 	}
 
-	query := base64.StdEncoding.EncodeToString(buffer.Bytes())
+	query := base64.StdEncoding.EncodeToString([]byte(message))
 
 	path := fmt.Sprintf(
 		"/cosmwasm/wasm/v1/contract/%s/smart/%s",
