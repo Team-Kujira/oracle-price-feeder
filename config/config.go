@@ -73,6 +73,7 @@ var (
 		provider.ProviderShade:              {},
 		provider.ProviderStride:             {},
 		provider.ProviderUniswapV3:          {},
+		provider.ProviderUnstake:            {},
 		provider.ProviderWhitewhaleCmdx:     {},
 		provider.ProviderWhitewhaleHuahua:   {},
 		provider.ProviderWhitewhaleInj:      {},

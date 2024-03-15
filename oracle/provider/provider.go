@@ -65,6 +65,7 @@ const (
 	ProviderShade              Name = "shade"
 	ProviderStride             Name = "stride"
 	ProviderUniswapV3          Name = "uniswapv3"
+	ProviderUnstake            Name = "unstake"
 	ProviderWhitewhaleCmdx     Name = "whitewhale_cmdx"
 	ProviderWhitewhaleHuahua   Name = "whitewhale_huahua"
 	ProviderWhitewhaleInj      Name = "whitewhale_inj"
@@ -458,6 +459,8 @@ func (e *Endpoint) SetDefaults() {
 		defaults = shadeDefaultEndpoints
 	case ProviderUniswapV3:
 		defaults = uniswapv3DefaultEndpoints
+	case ProviderUnstake:
+		defaults = unstakeDefaultEndpoints
 	case ProviderWhitewhaleCmdx:
 		defaults = whitewhaleCmdxDefaultEndpoints
 	case ProviderWhitewhaleHuahua:
