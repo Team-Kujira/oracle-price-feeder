@@ -253,8 +253,8 @@ func (p *PancakeProvider) query(
 		d192 := decimal.NewFromInt(192)
 
 		dec = dec.Pow(d2).Div(d2.Pow(d192))
+		price := strToDec(dec.String())
 
-		price := strToDec(dec.Pow(d2).Div(d2.Pow(d192)).String())
 		prices[pool.Id] = price
 	}
 
