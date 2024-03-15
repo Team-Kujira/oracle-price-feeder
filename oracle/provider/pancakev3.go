@@ -11,6 +11,7 @@ import (
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/rs/zerolog"
+	"github.com/shopspring/decimal"
 )
 
 var (
@@ -240,8 +241,21 @@ func (p *PancakeProvider) query(
 	}
 
 	for _, pool := range response.Data.Pools {
-		price := strToDec(pool.SqrtPrice)
-		prices[pool.Id] = price.Power(2).Quo(sdk.NewDec(2).Power(192))
+		dec, err := decimal.NewFromString(pool.SqrtPrice)
+		if err != nil {
+			p.logger.Error().
+				Err(err).
+				Msg("failed parsing sqrt price")
+			return nil, nil, err
+		}
+
+		d2 := decimal.NewFromInt(2)
+		d192 := decimal.NewFromInt(192)
+
+		dec = dec.Pow(d2).Div(d2.Pow(d192))
+		price := strToDec(dec.String())
+
+		prices[pool.Id] = price
 	}
 
 	return prices, volumes, nil

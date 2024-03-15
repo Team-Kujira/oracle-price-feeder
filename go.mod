@@ -3,6 +3,7 @@ module price-feeder
 go 1.20
 
 require (
+	cosmossdk.io/math v1.1.2
 	github.com/BurntSushi/toml v1.2.1
 	github.com/Team-Kujira/core v0.9.1
 	github.com/armon/go-metrics v0.4.1
@@ -19,6 +20,7 @@ require (
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/rs/cors v1.8.3
 	github.com/rs/zerolog v1.30.0
+	github.com/shopspring/decimal v1.3.1
 	github.com/sirkon/goproxy v1.4.8
 	github.com/spf13/cobra v1.7.0
 	github.com/stretchr/testify v1.8.4
@@ -40,7 +42,6 @@ require (
 	cosmossdk.io/depinject v1.0.0-alpha.4 // indirect
 	cosmossdk.io/errors v1.0.0 // indirect
 	cosmossdk.io/log v1.2.1 // indirect
-	cosmossdk.io/math v1.1.2 // indirect
 	cosmossdk.io/simapp v0.0.0-20230224204036-a6adb0821462 // indirect
 	cosmossdk.io/tools/rosetta v0.2.1 // indirect
 	filippo.io/edwards25519 v1.0.0 // indirect
