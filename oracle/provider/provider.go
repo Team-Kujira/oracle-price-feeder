@@ -31,6 +31,7 @@ const (
 	ProviderAstroportTerra2    Name = "astroport_terra2"
 	ProviderBinance            Name = "binance"
 	ProviderBinanceUS          Name = "binanceus"
+	ProviderBingx              Name = "bingx"
 	ProviderBitfinex           Name = "bitfinex"
 	ProviderBitforex           Name = "bitforex"
 	ProviderBitget             Name = "bitget"
@@ -396,6 +397,8 @@ func (e *Endpoint) SetDefaults() {
 		defaults = bitfinexDefaultEndpoints
 	case ProviderBinanceUS:
 		defaults = binanceUSDefaultEndpoints
+	case ProviderBingx:
+		defaults = bingxDefaultEndpoints
 	case ProviderBitget:
 		defaults = bitgetDefaultEndpoints
 	case ProviderBitmart:
