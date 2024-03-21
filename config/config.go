@@ -41,6 +41,7 @@ var (
 		provider.ProviderAstroportTerra2:    {},
 		provider.ProviderBinance:            {},
 		provider.ProviderBinanceUS:          {},
+		provider.ProviderBingx:              {},
 		provider.ProviderBitfinex:           {},
 		provider.ProviderBitforex:           {},
 		provider.ProviderBitget:             {},
