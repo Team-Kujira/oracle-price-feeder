@@ -125,6 +125,21 @@ func (p *FinV2Provider) Poll() error {
 		base := strToDec(bookResponse.Data.Base[0].Price)
 		quote := strToDec(bookResponse.Data.Quote[0].Price)
 
+		var low, high sdk.Dec
+
+		if base.LT(quote) {
+			low = base
+			high = quote
+		} else {
+			low = quote
+			high = base
+		}
+
+		if high.GT(low.Mul(floatToDec(1.05))) {
+			p.logger.Error().Msg("spread too large")
+			continue
+		}
+
 		delta, err := p.getDecimalDelta(contract)
 		if err != nil {
 			continue
