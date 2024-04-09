@@ -2,6 +2,7 @@ package derivative
 
 import (
 	"fmt"
+	"sort"
 	"time"
 
 	"price-feeder/oracle/history"
@@ -14,6 +15,7 @@ import (
 const (
 	twapMaxTimeDeltaSeconds      = int64(120)
 	twapMinHistoryPeriodFraction = 0.8
+	twapMaxPriceDeviation        = 0.05
 )
 
 type (
@@ -100,13 +102,32 @@ func Twap(
 
 	discardedTime := int64(0)
 
-	for i, ticker := range tickers {
+	threshold := sdk.MustNewDecFromStr(fmt.Sprintf("%f", twapMaxPriceDeviation))
+
+	filtered := []types.TickerPrice{}
+	for _, ticker := range tickers {
 		if ticker.Time.Before(start) {
 			continue
 		}
 		if ticker.Time.After(end) {
 			break
 		}
+
+		filtered = append(filtered, ticker)
+	}
+
+	tickers = filtered
+
+	median, err := weightedMedian(tickers)
+	if err != nil {
+		return sdk.Dec{}, 0, err
+	}
+
+	if median.IsZero() {
+		return sdk.Dec{}, 0, fmt.Errorf("median is 0")
+	}
+
+	for i, ticker := range tickers {
 
 		nextIndex := i + 1
 		if nextIndex >= len(tickers) || tickers[nextIndex].Time.After(end) {
@@ -117,6 +138,15 @@ func Twap(
 
 		if timeDelta > twapMaxTimeDeltaSeconds {
 			discardedTime = discardedTime + timeDelta
+			continue
+		}
+
+		// check if price has a big spike
+		max := median.Add(median.Mul(threshold))
+		min := median.Sub(median.Mul(threshold))
+
+		if ticker.Price.GT(max) || ticker.Price.LT(min) {
+			// that's too much, ignore
 			continue
 		}
 
@@ -136,4 +166,42 @@ func Twap(
 	}
 
 	return priceTotal.QuoInt64(timeTotal), 0, nil
+}
+
+func weightedMedian(tickers []types.TickerPrice) (sdk.Dec, error) {
+	type Price struct {
+		Price  sdk.Dec
+		Weight int64
+	}
+
+	if len(tickers) < 2 {
+		return sdk.ZeroDec(), nil
+	}
+
+	prices := []Price{}
+
+	for i := 1; i < len(tickers); i++ {
+		weight := tickers[i].Time.Unix() - tickers[i-1].Time.Unix()
+		prices = append(prices, Price{
+			Price:  tickers[i].Price,
+			Weight: weight,
+		})
+	}
+
+	sort.Slice(prices, func(i, j int) bool {
+		return prices[i].Price.LT(prices[j].Price)
+	})
+
+	// weighted median
+	total := tickers[len(tickers)-1].Time.Unix() - tickers[0].Time.Unix()
+	pivot := 0
+
+	for _, price := range prices {
+		pivot += int(price.Weight)
+		if pivot > int(total/2) {
+			return price.Price, nil
+		}
+	}
+
+	return sdk.ZeroDec(), nil
 }
