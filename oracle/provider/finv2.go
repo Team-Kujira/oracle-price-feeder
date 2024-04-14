@@ -135,8 +135,12 @@ func (p *FinV2Provider) Poll() error {
 			high = base
 		}
 
-		if high.GT(low.Mul(floatToDec(1.05))) {
-			p.logger.Error().Msg("spread too large")
+		if high.GT(low.Mul(floatToDec(1.1))) {
+			spread := high.Sub(low).Quo(low)
+			p.logger.Error().
+				Str("spread", spread.String()).
+				Str("symbol", symbol).
+				Msg("spread too large")
 			continue
 		}
 
