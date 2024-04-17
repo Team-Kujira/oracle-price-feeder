@@ -37,8 +37,8 @@ type (
 		BaseVolume  string `json:"base_volume"`     // ex.: "4875.4890980000"
 		QuoteVolume string `json:"target_volume"`   // ex.: "4875.4890980000"
 		Base        string `json:"base_currency"`   // ex.: "LUNA"
-		Quote       string `json:"target_currency"` // ex.: "axlUSDC"
-		Symbol      string `json:"ticker_id"`       // ex.: "LUNA_axlUSDC"
+		Quote       string `json:"target_currency"` // ex.: "USDC"
+		Symbol      string `json:"ticker_id"`       // ex.: "LUNA_USDC"
 	}
 )
 
@@ -123,8 +123,8 @@ func (p *FinProvider) GetAvailablePairs() (map[string]struct{}, error) {
 
 func currencyPairToFinSymbol(pair types.CurrencyPair) string {
 	mapping := map[string]string{
-		"USDC": "axlUSDC",
 		"USDT": "axlUSDT",
+		"DYM":  "ADYM",
 	}
 
 	base, found := mapping[pair.Base]
