@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"price-feeder/oracle/types"
@@ -37,8 +38,8 @@ type (
 		BaseVolume  string `json:"base_volume"`     // ex.: "4875.4890980000"
 		QuoteVolume string `json:"target_volume"`   // ex.: "4875.4890980000"
 		Base        string `json:"base_currency"`   // ex.: "LUNA"
-		Quote       string `json:"target_currency"` // ex.: "axlUSDC"
-		Symbol      string `json:"ticker_id"`       // ex.: "LUNA_axlUSDC"
+		Quote       string `json:"target_currency"` // ex.: "USDC"
+		Symbol      string `json:"ticker_id"`       // ex.: "LUNA_USDC"
 	}
 )
 
@@ -75,6 +76,10 @@ func (p *FinProvider) getTickers() (FinTickersResponse, error) {
 	err = json.Unmarshal(content, &tickersResponse)
 	if err != nil {
 		return FinTickersResponse{}, err
+	}
+
+	for i, ticker := range tickersResponse.Tickers {
+		tickersResponse.Tickers[i].Symbol = strings.ToUpper(ticker.Symbol)
 	}
 
 	return tickersResponse, nil
@@ -123,8 +128,8 @@ func (p *FinProvider) GetAvailablePairs() (map[string]struct{}, error) {
 
 func currencyPairToFinSymbol(pair types.CurrencyPair) string {
 	mapping := map[string]string{
-		"USDC": "axlUSDC",
-		"USDT": "axlUSDT",
+		"USDT": "AXLUSDT",
+		"DYM":  "ADYM",
 	}
 
 	base, found := mapping[pair.Base]
