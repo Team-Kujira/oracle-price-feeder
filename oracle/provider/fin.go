@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"price-feeder/oracle/types"
@@ -77,6 +78,10 @@ func (p *FinProvider) getTickers() (FinTickersResponse, error) {
 		return FinTickersResponse{}, err
 	}
 
+	for i, ticker := range tickersResponse.Tickers {
+		tickersResponse.Tickers[i].Symbol = strings.ToUpper(ticker.Symbol)
+	}
+
 	return tickersResponse, nil
 }
 
@@ -123,7 +128,7 @@ func (p *FinProvider) GetAvailablePairs() (map[string]struct{}, error) {
 
 func currencyPairToFinSymbol(pair types.CurrencyPair) string {
 	mapping := map[string]string{
-		"USDT": "axlUSDT",
+		"USDT": "AXLUSDT",
 		"DYM":  "ADYM",
 	}
 
