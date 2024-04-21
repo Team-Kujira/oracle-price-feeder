@@ -42,6 +42,7 @@ const (
 	ProviderCamelotV2          Name = "camelotv2"
 	ProviderCamelotV3          Name = "camelotv3"
 	ProviderCoinbase           Name = "coinbase"
+	ProviderCoinex             Name = "coinex"
 	ProviderCrypto             Name = "crypto"
 	ProviderCurve              Name = "curve"
 	ProviderDexter             Name = "dexter"
@@ -54,6 +55,7 @@ const (
 	ProviderKraken             Name = "kraken"
 	ProviderKucoin             Name = "kucoin"
 	ProviderLbank              Name = "lbank"
+	ProviderMaya               Name = "maya"
 	ProviderMexc               Name = "mexc"
 	ProviderMock               Name = "mock"
 	ProviderOkx                Name = "okx"
@@ -415,6 +417,8 @@ func (e *Endpoint) SetDefaults() {
 		defaults = camelotV3DefaultEndpoints
 	case ProviderCoinbase:
 		defaults = coinbaseDefaultEndpoints
+	case ProviderCoinex:
+		defaults = coinexDefaultEndpoints
 	case ProviderCrypto:
 		defaults = cryptoDefaultEndpoints
 	case ProviderCurve:
@@ -441,6 +445,8 @@ func (e *Endpoint) SetDefaults() {
 		defaults = lbankDefaultEndpoints
 	case ProviderMexc:
 		defaults = mexcDefaultEndpoints
+	case ProviderMaya:
+		defaults = mayaDefaultEndpoints
 	case ProviderMock:
 		defaults = mockDefaultEndpoints
 	case ProviderOkx:

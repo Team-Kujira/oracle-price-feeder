@@ -485,6 +485,8 @@ func NewProvider(
 		return provider.NewCamelotProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderCoinbase:
 		return provider.NewCoinbaseProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderCoinex:
+		return provider.NewCoinexProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderCrypto:
 		return provider.NewCryptoProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderCurve:
@@ -509,6 +511,8 @@ func NewProvider(
 		return provider.NewKucoinProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderLbank:
 		return provider.NewLbankProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderMaya:
+		return provider.NewMayaProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderMexc:
 		return provider.NewMexcProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderMock:
