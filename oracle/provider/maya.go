@@ -3,7 +3,6 @@ package provider
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"time"
 
 	"price-feeder/oracle/types"
@@ -74,8 +73,6 @@ func (p *MayaProvider) getPools() ([]MayaPool, error) {
 		return nil, err
 	}
 
-	fmt.Println(pools)
-
 	return pools, nil
 }
 
@@ -90,10 +87,6 @@ func (p *MayaProvider) Poll() error {
 
 	timestamp := time.Now()
 
-	fmt.Println(p.pairs)
-	fmt.Println(p.inverse)
-	fmt.Println(p.contracts)
-
 	mapping := map[string]string{}
 	for symbol, contract := range p.contracts {
 		mapping[contract] = symbol
@@ -107,12 +100,8 @@ func (p *MayaProvider) Poll() error {
 			continue
 		}
 
-		fmt.Println(pool)
-
 		price := strToDec(pool.Price)
 		volume := strToDec(pool.Volume).Quo(precision).Quo(price)
-
-		fmt.Println(symbol, price, volume)
 
 		p.setTickerPrice(
 			symbol,
