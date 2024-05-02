@@ -14,14 +14,9 @@ import (
 var (
 	_                           Provider = (*VelodromeV2Provider)(nil)
 	velodromev2DefaultEndpoints          = Endpoint{
-		Name: ProviderUniswapV3,
-		Urls: []string{
-			"https://optimism.llamarpc.com",
-		},
+		Name:         ProviderVelodromeV2,
+		Urls:         []string{},
 		PollInterval: 10 * time.Second,
-		// ContractAddresses: map[string]string{
-		// 	"WSTETHWETH": "0x109830a1AAaD605BbF02a9dFA7B0B92EC2FB7dAa",
-		// },
 	}
 )
 
@@ -31,6 +26,7 @@ type (
 	VelodromeV2Provider struct {
 		provider
 		decimals map[string]uint64
+		symbols  map[string]string
 	}
 
 	VelodromeV2Response struct {
@@ -65,8 +61,11 @@ func NewVelodromeV2Provider(
 }
 
 func (p *VelodromeV2Provider) Poll() error {
-	types := []string{
-		"uint160", "int24", "uint16", "uint16", "uint16", "uint8", "bool",
+	types := []string{"uint256"}
+
+	hash, err := keccak256("quote(address,uint256,uint256)")
+	if err != nil {
+		return err
 	}
 
 	p.mtx.Lock()
@@ -81,7 +80,10 @@ func (p *VelodromeV2Provider) Poll() error {
 			continue
 		}
 
-		data := fmt.Sprintf("3850c7bd%064d", 0)
+		data := fmt.Sprintf(
+			// symbol has 0x prefix, dropping that
+			"%s%064s%064d%064d", hash[:8], p.symbols[pair.Base][2:], 1, 1,
+		)
 		response, err := p.doEthCall(contract, data)
 		if err != nil {
 			p.logger.Err(err)
@@ -93,8 +95,6 @@ func (p *VelodromeV2Provider) Poll() error {
 			p.logger.Err(err)
 			continue
 		}
-
-		sqrtx96 := strToDec(fmt.Sprintf("%v", decoded[0]))
 
 		base := pair.Base
 		quote := pair.Quote
@@ -117,7 +117,7 @@ func (p *VelodromeV2Provider) Poll() error {
 				Msg("no decimals found")
 		}
 
-		price := sqrtx96.Power(2).Quo(sdk.NewDec(2).Power(192))
+		price := strToDec(fmt.Sprintf("%v", decoded[0]))
 
 		var diff uint64
 		if decimalsBase >= decimalsQuote {
@@ -145,42 +145,39 @@ func (p *VelodromeV2Provider) GetAvailablePairs() (map[string]struct{}, error) {
 	return p.getAvailablePairsFromContracts()
 }
 
-// token0() 0dfe1681
-// token1() d21220a7
-// decimals() 313ce567
-
-func (p *VelodromeV2Provider) getTokenAddress(
+func (p *VelodromeV2Provider) getTokenAddresses(
 	contract string,
-	index int64,
-) (string, error) {
-	if index < 0 || index > 1 {
-		return "", fmt.Errorf("index must be either 0 or 1")
-	}
-
-	hash, err := keccak256(fmt.Sprintf("token%d", index))
+) ([]string, error) {
+	hash, err := keccak256("tokens()")
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	data := fmt.Sprintf("%s%064d", hash, 0)
+	data := fmt.Sprintf("%s%064d", hash[:8], 0)
 
 	result, err := p.doEthCall(contract, data)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	types := []string{"address"}
+	types := []string{"address", "address"}
 
 	decoded, err := decodeEthData(result, types)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	return fmt.Sprintf("%v", decoded[0]), nil
+	addresses := make([]string, 2)
+	for i := 0; i < 2; i++ {
+		addresses[i] = fmt.Sprintf("%v", decoded[i])
+	}
+
+	return addresses, nil
 }
 
 func (p *VelodromeV2Provider) setDecimals() {
 	p.decimals = map[string]uint64{}
+	p.symbols = map[string]string{}
 
 	for _, pair := range p.getAllPairs() {
 		contract, err := p.getContractAddress(pair)
@@ -201,22 +198,21 @@ func (p *VelodromeV2Provider) setDecimals() {
 
 		denoms := []string{base, quote}
 
-		// get decimals for token0 and token1
-		for i := int64(0); i < 2; i++ {
-			tokenAddress, err := p.getTokenAddress(contract, i)
-			if err != nil {
-				p.logger.Error().Err(err)
-				continue
-			}
+		addresses, err := p.getTokenAddresses(contract)
+		if err != nil {
+			continue
+		}
 
+		for i, address := range addresses {
 			denom := denoms[i]
+			p.symbols[denom] = address
 
 			_, found = p.decimals[denom]
 			if !found {
 				p.logger.Info().
 					Str("denom", denom).
 					Msg("get decimals")
-				decimals, err := p.getEthDecimals(tokenAddress)
+				decimals, err := p.getEthDecimals(address)
 				if err != nil {
 					p.logger.Error().Err(err)
 					continue

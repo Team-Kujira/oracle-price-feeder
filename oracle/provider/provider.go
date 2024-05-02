@@ -72,6 +72,7 @@ const (
 	ProviderShade              Name = "shade"
 	ProviderStride             Name = "stride"
 	ProviderUniswapV3          Name = "uniswapv3"
+	ProviderVelodromeV2        Name = "velodromev2"
 	ProviderWhitewhaleCmdx     Name = "whitewhale_cmdx"
 	ProviderWhitewhaleHuahua   Name = "whitewhale_huahua"
 	ProviderWhitewhaleInj      Name = "whitewhale_inj"
@@ -473,6 +474,8 @@ func (e *Endpoint) SetDefaults() {
 		defaults = shadeDefaultEndpoints
 	case ProviderUniswapV3:
 		defaults = uniswapv3DefaultEndpoints
+	case ProviderVelodromeV2:
+		defaults = velodromev2DefaultEndpoints
 	case ProviderWhitewhaleCmdx:
 		defaults = whitewhaleCmdxDefaultEndpoints
 	case ProviderWhitewhaleHuahua:
@@ -737,9 +740,7 @@ func (p *provider) doEthCall(address, data string) (string, error) {
 		Result string `json:"result"` // Encoded data ex.: 0x0000000000000...
 	}
 
-	if !strings.HasPrefix(data, "0x") {
-		data = "0x" + data
-	}
+	data = "0x" + strings.ReplaceAll(data, "0x", "")
 
 	body := Body{
 		Jsonrpc: "2.0",
@@ -756,17 +757,20 @@ func (p *provider) doEthCall(address, data string) (string, error) {
 
 	bz, err := json.Marshal(body)
 	if err != nil {
+		p.logger.Err(err).Msg("")
 		return "", err
 	}
 
 	content, err := p.httpPost("", bz)
 	if err != nil {
+		p.logger.Err(err).Msg("")
 		return "", err
 	}
 
 	var response Response
 	err = json.Unmarshal(content, &response)
 	if err != nil {
+		p.logger.Err(err).Msg("")
 		return "", err
 	}
 

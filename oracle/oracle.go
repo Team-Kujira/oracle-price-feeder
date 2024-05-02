@@ -537,6 +537,8 @@ func NewProvider(
 		return provider.NewShadeProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderUniswapV3:
 		return provider.NewUniswapV3Provider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderVelodromeV2:
+		return provider.NewVelodromeV2Provider(ctx, providerLogger, endpoint, providerPairs...)
 	case
 		provider.ProviderWhitewhaleCmdx,
 		provider.ProviderWhitewhaleHuahua,
