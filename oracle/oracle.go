@@ -499,6 +499,8 @@ func NewProvider(
 		return provider.NewFinV2Provider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderGate:
 		return provider.NewGateProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderHelix:
+		return provider.NewHelixProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderHitBtc:
 		return provider.NewHitBtcProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderHuobi:

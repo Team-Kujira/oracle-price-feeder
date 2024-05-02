@@ -2,9 +2,7 @@ package provider
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"strconv"
 	"time"
 
 	"price-feeder/oracle/types"
@@ -14,14 +12,11 @@ import (
 )
 
 var (
-	_                         Provider = (*UniswapV3Provider)(nil)
-	uniswapv3DefaultEndpoints          = Endpoint{
+	_                           Provider = (*VelodromeV2Provider)(nil)
+	velodromev2DefaultEndpoints          = Endpoint{
 		Name: ProviderUniswapV3,
 		Urls: []string{
-			"https://ethereum.publicnode.com",
-			"https://eth-mainnet.public.blastapi.io",
-			"https://eth.llamarpc.com",
-			"https://rpc.ankr.com/eth",
+			"https://optimism.llamarpc.com",
 		},
 		PollInterval: 10 * time.Second,
 		// ContractAddresses: map[string]string{
@@ -31,25 +26,25 @@ var (
 )
 
 type (
-	// UniswapV3Provider defines an oracle provider calling uniswap pools
-	// directly on ethereum
-	UniswapV3Provider struct {
+	// VelodromeV2Provider defines an oracle provider calling velodrome pools
+	// directly on optimism
+	VelodromeV2Provider struct {
 		provider
 		decimals map[string]uint64
 	}
 
-	UniswapV3Response struct {
+	VelodromeV2Response struct {
 		Result string `json:"result"` // Encoded data ex.: 0x0000000000000...
 	}
 )
 
-func NewUniswapV3Provider(
+func NewVelodromeV2Provider(
 	ctx context.Context,
 	logger zerolog.Logger,
 	endpoints Endpoint,
 	pairs ...types.CurrencyPair,
-) (*UniswapV3Provider, error) {
-	provider := &UniswapV3Provider{}
+) (*VelodromeV2Provider, error) {
+	provider := &VelodromeV2Provider{}
 	provider.Init(
 		ctx,
 		endpoints,
@@ -69,7 +64,7 @@ func NewUniswapV3Provider(
 	return provider, nil
 }
 
-func (p *UniswapV3Provider) Poll() error {
+func (p *VelodromeV2Provider) Poll() error {
 	types := []string{
 		"uint160", "int24", "uint16", "uint16", "uint16", "uint8", "bool",
 	}
@@ -93,7 +88,7 @@ func (p *UniswapV3Provider) Poll() error {
 			continue
 		}
 
-		decoded, err := decodeEthData(response.Result, types)
+		decoded, err := decodeEthData(response, types)
 		if err != nil {
 			p.logger.Err(err)
 			continue
@@ -146,7 +141,7 @@ func (p *UniswapV3Provider) Poll() error {
 	return nil
 }
 
-func (p *UniswapV3Provider) GetAvailablePairs() (map[string]struct{}, error) {
+func (p *VelodromeV2Provider) GetAvailablePairs() (map[string]struct{}, error) {
 	return p.getAvailablePairsFromContracts()
 }
 
@@ -154,67 +149,29 @@ func (p *UniswapV3Provider) GetAvailablePairs() (map[string]struct{}, error) {
 // token1() d21220a7
 // decimals() 313ce567
 
-func (p *UniswapV3Provider) doEthCall(address string, data string) (UniswapV3Response, error) {
-	type Body struct {
-		Jsonrpc string        `json:"jsonrpc"`
-		Method  string        `json:"method"`
-		Params  []interface{} `json:"params"`
-		Id      int64         `json:"id"`
-	}
-
-	type Transaction struct {
-		To   string `json:"to"`
-		Data string `json:"data"`
-	}
-
-	body := Body{
-		Jsonrpc: "2.0",
-		Method:  "eth_call",
-		Params: []interface{}{
-			Transaction{
-				To:   address,
-				Data: "0x" + data,
-			},
-			"latest",
-		},
-		Id: 1,
-	}
-
-	bz, err := json.Marshal(body)
-	if err != nil {
-		return UniswapV3Response{}, err
-	}
-
-	content, err := p.httpPost("", bz)
-	if err != nil {
-		return UniswapV3Response{}, err
-	}
-
-	var response UniswapV3Response
-	err = json.Unmarshal(content, &response)
-	if err != nil {
-		return UniswapV3Response{}, err
-	}
-
-	return response, nil
-}
-
-func (p *UniswapV3Provider) getUniswapV3Token(contract string, index int64) (string, error) {
+func (p *VelodromeV2Provider) getTokenAddress(
+	contract string,
+	index int64,
+) (string, error) {
 	if index < 0 || index > 1 {
 		return "", fmt.Errorf("index must be either 0 or 1")
 	}
 
-	hash := []string{"0dfe1681", "d21220a7"}[index]
+	hash, err := keccak256(fmt.Sprintf("token%d", index))
+	if err != nil {
+		return "", err
+	}
+
 	data := fmt.Sprintf("%s%064d", hash, 0)
 
-	response, err := p.doEthCall(contract, data)
+	result, err := p.doEthCall(contract, data)
 	if err != nil {
 		return "", err
 	}
 
 	types := []string{"address"}
 
-	decoded, err := decodeEthData(response.Result, types)
+	decoded, err := decodeEthData(result, types)
 	if err != nil {
 		return "", err
 	}
@@ -222,30 +179,7 @@ func (p *UniswapV3Provider) getUniswapV3Token(contract string, index int64) (str
 	return fmt.Sprintf("%v", decoded[0]), nil
 }
 
-func (p *UniswapV3Provider) getUniswapV3Decimals(contract string) (uint64, error) {
-	data := fmt.Sprintf("313ce567%064d", 0)
-
-	response, err := p.doEthCall(contract, data)
-	if err != nil {
-		return 0, err
-	}
-
-	types := []string{"uint8"}
-
-	decoded, err := decodeEthData(response.Result, types)
-	if err != nil {
-		return 0, err
-	}
-
-	decimals, err := strconv.ParseUint(fmt.Sprintf("%v", decoded[0]), 10, 8)
-	if err != nil {
-		return 0, err
-	}
-
-	return decimals, nil
-}
-
-func (p *UniswapV3Provider) setDecimals() {
+func (p *VelodromeV2Provider) setDecimals() {
 	p.decimals = map[string]uint64{}
 
 	for _, pair := range p.getAllPairs() {
@@ -269,7 +203,7 @@ func (p *UniswapV3Provider) setDecimals() {
 
 		// get decimals for token0 and token1
 		for i := int64(0); i < 2; i++ {
-			tokenAddress, err := p.getUniswapV3Token(contract, i)
+			tokenAddress, err := p.getTokenAddress(contract, i)
 			if err != nil {
 				p.logger.Error().Err(err)
 				continue
@@ -282,7 +216,7 @@ func (p *UniswapV3Provider) setDecimals() {
 				p.logger.Info().
 					Str("denom", denom).
 					Msg("get decimals")
-				decimals, err := p.getUniswapV3Decimals(tokenAddress)
+				decimals, err := p.getEthDecimals(tokenAddress)
 				if err != nil {
 					p.logger.Error().Err(err)
 					continue

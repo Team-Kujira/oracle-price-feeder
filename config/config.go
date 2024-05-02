@@ -58,6 +58,7 @@ var (
 		provider.ProviderFin:                {},
 		provider.ProviderFinV2:              {},
 		provider.ProviderGate:               {},
+		provider.ProviderHelix:              {},
 		provider.ProviderHitBtc:             {},
 		provider.ProviderHuobi:              {},
 		provider.ProviderIdxOsmosis:         {},

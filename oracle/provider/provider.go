@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -18,7 +19,9 @@ import (
 	"price-feeder/oracle/types"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/rs/zerolog"
+	"golang.org/x/crypto/sha3"
 )
 
 const (
@@ -49,6 +52,7 @@ const (
 	ProviderFin                Name = "fin"
 	ProviderFinV2              Name = "finv2"
 	ProviderGate               Name = "gate"
+	ProviderHelix              Name = "helix"
 	ProviderHitBtc             Name = "hitbtc"
 	ProviderHuobi              Name = "huobi"
 	ProviderIdxOsmosis         Name = "idxosmosis"
@@ -431,6 +435,8 @@ func (e *Endpoint) SetDefaults() {
 		defaults = finV2DefaultEndpoints
 	case ProviderGate:
 		defaults = gateDefaultEndpoints
+	case ProviderHelix:
+		defaults = helixDefaultEndpoints
 	case ProviderHitBtc:
 		defaults = hitbtcDefaultEndpoints
 	case ProviderIdxOsmosis:
@@ -712,6 +718,135 @@ func (p *provider) getContractAddress(pair types.CurrencyPair) (string, error) {
 	return "", err
 }
 
+// EVM specific
+
+func (p *provider) doEthCall(address, data string) (string, error) {
+	type Body struct {
+		Jsonrpc string        `json:"jsonrpc"`
+		Method  string        `json:"method"`
+		Params  []interface{} `json:"params"`
+		Id      int64         `json:"id"`
+	}
+
+	type Transaction struct {
+		To   string `json:"to"`
+		Data string `json:"data"`
+	}
+
+	type Response struct {
+		Result string `json:"result"` // Encoded data ex.: 0x0000000000000...
+	}
+
+	if !strings.HasPrefix(data, "0x") {
+		data = "0x" + data
+	}
+
+	body := Body{
+		Jsonrpc: "2.0",
+		Method:  "eth_call",
+		Params: []interface{}{
+			Transaction{
+				To:   address,
+				Data: data,
+			},
+			"latest",
+		},
+		Id: 1,
+	}
+
+	bz, err := json.Marshal(body)
+	if err != nil {
+		return "", err
+	}
+
+	content, err := p.httpPost("", bz)
+	if err != nil {
+		return "", err
+	}
+
+	var response Response
+	err = json.Unmarshal(content, &response)
+	if err != nil {
+		return "", err
+	}
+
+	return response.Result, nil
+}
+
+func (p *provider) getEthDecimals(contract string) (uint64, error) {
+	hash, err := keccak256("decimals()")
+	if err != nil {
+		return 0, err
+	}
+
+	data := fmt.Sprintf("%0.8s%064d", hash, 0)
+
+	result, err := p.doEthCall(contract, data)
+	if err != nil {
+		return 0, err
+	}
+
+	types := []string{"uint8"}
+
+	decoded, err := decodeEthData(result, types)
+	if err != nil {
+		return 0, err
+	}
+
+	decimals, err := strconv.ParseUint(fmt.Sprintf("%v", decoded[0]), 10, 8)
+	if err != nil {
+		return 0, err
+	}
+
+	return decimals, nil
+}
+
+func decodeEthData(data string, types []string) ([]interface{}, error) {
+	type AbiOutput struct {
+		Name         string `json:"name"`
+		Type         string `json:"type"`
+		InternalType string `json:"internalType"`
+	}
+
+	type AbiDefinition struct {
+		Name    string      `json:"name"`
+		Type    string      `json:"type"`
+		Outputs []AbiOutput `json:"outputs"`
+	}
+
+	outputs := []AbiOutput{}
+	for _, t := range types {
+		outputs = append(outputs, AbiOutput{
+			Name:         "",
+			Type:         t,
+			InternalType: t,
+		})
+	}
+
+	definition, err := json.Marshal([]AbiDefinition{{
+		Name:    "fn",
+		Type:    "function",
+		Outputs: outputs,
+	}})
+	if err != nil {
+		return nil, err
+	}
+
+	abi, err := abi.JSON(strings.NewReader(string(definition)))
+	if err != nil {
+		return nil, err
+	}
+
+	data = strings.TrimPrefix(data, "0x")
+
+	decoded, err := hex.DecodeString(data)
+	if err != nil {
+		return nil, err
+	}
+
+	return abi.Unpack("fn", decoded)
+}
+
 // String cast provider name to string.
 func (n Name) String() string {
 	return string(n)
@@ -803,4 +938,13 @@ func computeDecimalsFactor(base, quote int64) (sdk.Dec, error) {
 	}
 
 	return factor, nil
+}
+
+func keccak256(s string) (string, error) {
+	hash := sha3.NewLegacyKeccak256()
+	_, err := hash.Write([]byte(s))
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", hash.Sum(nil)), nil
 }
