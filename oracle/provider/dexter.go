@@ -129,9 +129,7 @@ func (p *DexterProvider) Poll() error {
 				"swap_type": {
 					"give_in": {}
 				},
-				"amount": "%d",
-				"max_spread": null,
-				"belief_price": "100"
+				"amount": "%d"
 			}
 		}`, offer, ask, amount)
 
