@@ -3,6 +3,7 @@ package oracle
 import (
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"encoding/hex"
 	"fmt"
 	"math"
@@ -81,6 +82,7 @@ type Oracle struct {
 	derivativeSymbols    map[string]struct{}
 	contractAddresses    map[string]map[string]string
 	providerWeights      map[string]ProviderWeight
+	volumeDatabase       *sql.DB
 
 	mtx             sync.RWMutex
 	lastPriceSyncTS time.Time
@@ -104,6 +106,7 @@ func New(
 	history history.PriceHistory,
 	contractAddresses map[string]map[string]string,
 	providerWeights map[string]ProviderWeight,
+	volumeDatabase *sql.DB,
 ) *Oracle {
 	providerPairs := make(map[provider.Name][]types.CurrencyPair)
 	for _, pair := range currencyPairs {
@@ -147,6 +150,7 @@ func New(
 		history:              history,
 		contractAddresses:    contractAddresses,
 		providerWeights:      providerWeights,
+		volumeDatabase:       volumeDatabase,
 	}
 }
 
@@ -225,10 +229,11 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 		priceProvider, found := o.priceProviders[providerName]
 		if !found {
 			endpoint := o.endpoints[providerName]
-			contractAddresses, _ := o.contractAddresses[providerName.String()]
+			contractAddresses := o.contractAddresses[providerName.String()]
 			endpoint.ContractAddresses = contractAddresses
 
 			newProvider, err := NewProvider(
+				o.volumeDatabase,
 				ctx,
 				providerName,
 				o.logger,
@@ -448,6 +453,7 @@ func (o *Oracle) GetParams(ctx context.Context) (oracletypes.Params, error) {
 }
 
 func NewProvider(
+	db *sql.DB,
 	ctx context.Context,
 	providerName provider.Name,
 	logger zerolog.Logger,
@@ -496,7 +502,7 @@ func NewProvider(
 	case provider.ProviderFin:
 		return provider.NewFinProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderFinV2:
-		return provider.NewFinV2Provider(ctx, providerLogger, endpoint, providerPairs...)
+		return provider.NewFinV2Provider(db, ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderGate:
 		return provider.NewGateProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderHelix:

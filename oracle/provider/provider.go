@@ -3,6 +3,8 @@ package provider
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -114,6 +116,7 @@ type (
 		tickers   map[string]types.TickerPrice
 		contracts map[string]string
 		websocket *WebsocketController
+		db        *sql.DB
 	}
 
 	PollingProvider interface {
@@ -253,6 +256,155 @@ func (p *provider) compactJsonString(message string) (string, error) {
 	}
 
 	return buffer.String(), nil
+}
+
+func (p *provider) getCosmosTx(hash string) (types.CosmosTx, error) {
+	type (
+		Attribute struct {
+			Key   string `json:"key"`
+			Value string `json:"value"`
+		}
+
+		Event struct {
+			Type       string      `json:"type"`
+			Attributes []Attribute `json:"attributes"`
+		}
+
+		TxResponse struct {
+			Code   int64   `json:"code"`
+			Height string  `json:"height"`
+			Time   string  `json:"timestamp"`
+			Events []Event `json:"events"`
+		}
+
+		Response struct {
+			TxResponse TxResponse `json:"tx_response"`
+		}
+	)
+
+	var tx types.CosmosTx
+
+	path := fmt.Sprintf("/cosmos/tx/v1beta1/txs/%s", hash)
+
+	content, err := p.httpGet(path)
+	if err != nil {
+		return tx, err
+	}
+
+	var response Response
+
+	err = json.Unmarshal(content, &response)
+	if err != nil {
+		return tx, err
+	}
+
+	timestamp, err := time.Parse(time.RFC3339, response.TxResponse.Time)
+	if err != nil {
+		return tx, err
+	}
+
+	height, err := strconv.ParseUint(response.TxResponse.Height, 10, 64)
+	if err != nil {
+		return tx, err
+	}
+
+	events := make([]types.CosmosTxEvent, len(response.TxResponse.Events))
+	for i, event := range response.TxResponse.Events {
+		events[i] = types.CosmosTxEvent{
+			Type:       event.Type,
+			Attributes: map[string]string{},
+		}
+
+		for _, attribute := range event.Attributes {
+			events[i].Attributes[attribute.Key] = attribute.Value
+		}
+	}
+
+	tx = types.CosmosTx{
+		Code:   response.TxResponse.Code,
+		Time:   timestamp,
+		Height: height,
+		Events: events,
+	}
+
+	return tx, nil
+}
+
+func (p *provider) getCosmosHeight() (uint64, error) {
+	path := "/cosmos/base/tendermint/v1beta1/blocks/latest"
+	content, err := p.httpGet(path)
+	if err != nil {
+		return 0, err
+	}
+
+	var response types.CosmosBlockResponse
+
+	err = json.Unmarshal(content, &response)
+	if err != nil {
+		return 0, err
+	}
+
+	height, err := strconv.ParseUint(response.Block.Header.Height, 10, 64)
+	if err != nil {
+		return 0, err
+	}
+
+	return height, nil
+}
+
+func (p *provider) getCosmosTxs(height uint64) ([]types.CosmosTx, time.Time, error) {
+	var timestamp time.Time
+	if height == 0 {
+		return nil, timestamp, fmt.Errorf("height is 0")
+	}
+
+	var response types.CosmosBlockResponse
+
+	path := fmt.Sprintf("/cosmos/tx/v1beta1/txs/block/%d", height)
+	content, err := p.httpGet(path)
+	if err != nil {
+		return nil, timestamp, err
+	}
+
+	err = json.Unmarshal(content, &response)
+	if err != nil {
+		return nil, timestamp, err
+	}
+
+	timestamp, err = time.Parse(time.RFC3339, response.Block.Header.Time)
+	if err != nil {
+		return nil, timestamp, err
+	}
+
+	hashes := []string{}
+
+	for i, tx := range response.Txs {
+		for _, message := range tx.Body.Messages {
+			if message.Type == "/cosmwasm.wasm.v1.MsgExecuteContract" {
+				data, err := base64.StdEncoding.DecodeString(
+					response.Block.Data.Txs[i],
+				)
+				if err != nil {
+					return nil, timestamp, err
+				}
+
+				hash := sha256.New()
+				hash.Write(data)
+				hashes = append(hashes, fmt.Sprintf("%X", hash.Sum(nil)))
+			}
+		}
+	}
+
+	txs := []types.CosmosTx{}
+	for _, hash := range hashes {
+		tx, err := p.getCosmosTx(hash)
+		if err != nil {
+			return nil, timestamp, err
+		}
+		txs = append(txs, tx)
+	}
+
+	return txs, timestamp, nil
 }
 
 func (p *provider) wasmRawQuery(contract, message string) ([]byte, error) {
@@ -701,6 +853,20 @@ func (p *provider) getAvailablePairsFromContracts() (map[string]struct{}, error)
 	return symbols, nil
 }
 
+func (p *provider) getPair(symbol string) (types.CurrencyPair, error) {
+	pair, found := p.pairs[symbol]
+	if found {
+		return pair, nil
+	}
+
+	pair, found = p.inverse[symbol]
+	if found {
+		return pair.Swap(), nil
+	}
+
+	return pair, p.errorf("pair not found")
+}
+
 func (p *provider) getContractAddress(pair types.CurrencyPair) (string, error) {
 	address, found := p.contracts[pair.String()]
 	if found {
@@ -803,6 +969,16 @@ func (p *provider) getEthDecimals(contract string) (uint64, error) {
 	}
 
 	return decimals, nil
+}
+
+func (p *provider) error(err error) error {
+	p.logger.Err(err).Msg("")
+	return err
+}
+
+func (p *provider) errorf(message string) error {
+	err := fmt.Errorf(message)
+	return p.error(err)
 }
 
 func decodeEthData(data string, types []string) ([]interface{}, error) {

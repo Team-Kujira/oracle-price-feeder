@@ -3,6 +3,7 @@ package cmd
 import (
 	"bufio"
 	"context"
+	"database/sql"
 	"fmt"
 	"io"
 	"net/http"
@@ -253,6 +254,13 @@ func priceFeederCmdHandler(cmd *cobra.Command, args []string) error {
 		providerWeights[denom] = newWeight
 	}
 
+	volumeDatabase, err := sql.Open("sqlite3", cfg.HistoryDb)
+	if err != nil {
+		logger.Err(err).
+			Str("path", cfg.HistoryDb).
+			Msg("failed to open sqlite db")
+	}
+
 	oracle := oracle.New(
 		logger,
 		oracleClient,
@@ -268,6 +276,7 @@ func priceFeederCmdHandler(cmd *cobra.Command, args []string) error {
 		history,
 		cfg.ContractAdresses,
 		providerWeights,
+		volumeDatabase,
 	)
 
 	telemetryCfg := telemetry.Config{}

@@ -2,10 +2,12 @@ package provider
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"time"
 
+	"price-feeder/oracle/provider/volume"
 	"price-feeder/oracle/types"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -35,6 +37,9 @@ type (
 		provider
 		contracts map[string]string
 		delta     map[string]int64
+		volumes   volume.VolumeHistory
+		height    uint64
+		decimals  map[string]int64 // needs to go into endpoint
 	}
 
 	FinV2BookResponse struct {
@@ -60,6 +65,7 @@ type (
 )
 
 func NewFinV2Provider(
+	db *sql.DB,
 	ctx context.Context,
 	logger zerolog.Logger,
 	endpoints Endpoint,
@@ -77,10 +83,34 @@ func NewFinV2Provider(
 
 	provider.contracts = provider.endpoints.ContractAddresses
 
+	for symbol, contract := range provider.endpoints.ContractAddresses {
+		provider.contracts[contract] = symbol
+	}
+
 	availablePairs, _ := provider.GetAvailablePairs()
 	provider.setPairs(pairs, availablePairs, nil)
 
 	provider.delta = map[string]int64{}
+
+	volumePairs := []types.CurrencyPair{}
+	for _, pair := range provider.getAllPairs() {
+		volumePairs = append(volumePairs, pair)
+	}
+
+	volumes, err := volume.NewVolumeHistory(logger, db, "finv2", volumePairs)
+	if err != nil {
+		return provider, err
+	}
+
+	provider.volumes = volumes
+
+	provider.decimals = map[string]int64{
+		"KUJI": 6,
+		"USDC": 6,
+		"USK":  6,
+		"MNTA": 6,
+		"ATOM": 6,
+	}
 
 	go startPolling(provider, provider.endpoints.PollInterval, logger)
 	return provider, nil
@@ -102,12 +132,7 @@ func (p *FinV2Provider) Poll() error {
 			continue
 		}
 
-		path := fmt.Sprintf(
-			"/cosmwasm/wasm/v1/contract/%s/smart/eyJib29rIjp7ImxpbWl0IjoxfX0K",
-			contract,
-		)
-
-		content, err := p.httpGet(path)
+		content, err := p.wasmSmartQuery(contract, `{"book":{"limit":1}}`)
 		if err != nil {
 			return err
 		}
@@ -164,6 +189,148 @@ func (p *FinV2Provider) Poll() error {
 		)
 	}
 
+	p.getVolumes(0)
+
+	return nil
+}
+
+func (p *FinV2Provider) getVolumes(height uint64) error {
+	var err error
+	var timestamp time.Time
+
+	type Denom struct {
+		Symbol   string
+		Decimals int64
+		Amount   sdk.Dec
+	}
+
+	if height == 0 {
+		height, err = p.getCosmosHeight()
+		if err != nil {
+			return p.error(err)
+		}
+	}
+
+	if height == p.height {
+		return nil
+	}
+
+	// prepare all volumes:
+	// not traded pairs have zero volume for this block
+	volumes := map[string]sdk.Dec{}
+
+	for _, pair := range p.getAllPairs() {
+		volumes[pair.Base+pair.Quote] = sdk.ZeroDec()
+		volumes[pair.Quote+pair.Base] = sdk.ZeroDec()
+	}
+
+	txs, timestamp, err := p.getCosmosTxs(height)
+	if err != nil {
+		return p.error(err)
+	}
+
+	fmt.Println("####################")
+	for _, tx := range txs {
+		fmt.Println("-- tx --")
+		trades := tx.GetEventsByType("wasm-trade")
+		for _, event := range trades {
+			fmt.Println("-- event --")
+			fmt.Println(event)
+
+			contract, found := event.Attributes["_contract_address"]
+			if !found {
+				continue
+			}
+
+			symbol, found := p.contracts[contract]
+			if !found {
+				fmt.Println(contract)
+				continue
+			}
+
+			pair, err := p.getPair(symbol)
+			if err != nil {
+				p.logger.Warn().Err(err).Msg("")
+				continue
+			}
+
+			base := Denom{
+				Symbol:   pair.Base,
+				Decimals: p.decimals[pair.Base],
+				Amount:   strToDec(event.Attributes["base_amount"]),
+			}
+
+			quote := Denom{
+				Symbol:   pair.Quote,
+				Decimals: p.decimals[pair.Quote],
+				Amount:   strToDec(event.Attributes["quote_amount"]),
+			}
+
+			if base.Decimals == 0 && quote.Decimals == 0 {
+				p.logger.Error().
+					Str("pair", pair.String()).
+					Msg("no decimals found")
+				continue
+			}
+
+			if base.Decimals == 0 || quote.Decimals == 0 {
+				delta, err := p.getDecimalDelta(contract)
+				if err != nil {
+					p.logger.Err(err).Msg("")
+					continue
+				}
+
+				if base.Decimals == 0 {
+					base.Decimals = quote.Decimals + delta
+				} else {
+					quote.Decimals = base.Decimals - delta
+				}
+			}
+
+			ten := uintToDec(10)
+
+			base.Amount = base.Amount.Quo(ten.Power(uint64(base.Decimals)))
+			quote.Amount = quote.Amount.Quo(ten.Power(uint64(quote.Decimals)))
+
+			// needed to for final volumes: {KUJIUSK: 1, USKKUJI: 2}
+			denoms := map[string]Denom{
+				pair.Base + pair.Quote: base,
+				pair.Quote + pair.Base: quote,
+			}
+
+			fmt.Println(denoms)
+
+			for symbol, denom := range denoms {
+				volume, found := volumes[symbol]
+				if !found {
+					p.logger.Error().
+						Str("symbol", symbol).
+						Msg("volume not set")
+					continue
+				}
+
+				volumes[symbol] = volume.Add(denom.Amount)
+			}
+		}
+	}
+
+	err = p.volumes.AddVolumes(height, timestamp, volumes)
+	if err != nil {
+		return err
+	}
+
+	p.volumes.Debug()
+
+	fmt.Println("height:", height)
+	for symbol, volume := range volumes {
+		if volume.IsZero() {
+			continue
+		}
+		fmt.Println(symbol, volume)
+	}
+
+	p.height = height
+
 	return nil
 }
 
@@ -177,13 +344,7 @@ func (p *FinV2Provider) getDecimalDelta(contract string) (int64, error) {
 		return delta, nil
 	}
 
-	// {"config":{}}
-	path := fmt.Sprintf(
-		"/cosmwasm/wasm/v1/contract/%s/smart/eyJjb25maWciOnt9fQ==",
-		contract,
-	)
-
-	content, err := p.httpGet(path)
+	content, err := p.wasmSmartQuery(contract, `{"config":{}}`)
 	if err != nil {
 		return 0, err
 	}
