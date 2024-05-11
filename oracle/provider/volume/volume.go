@@ -3,6 +3,7 @@ package volume
 import (
 	"database/sql"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -34,59 +35,11 @@ type TotalVolume struct {
 	Missing []uint64
 }
 
-func (v *TotalVolume) Add(volumes []Volume) {
-	if len(volumes) == 0 {
+func (v *TotalVolume) Calculate() {
+	if len(v.Volumes) < 2 {
 		return
 	}
 
-	v.Volumes = append(v.Volumes, volumes...)
-
-	sort.Slice(v.Volumes, func(i, j int) bool {
-		return v.Volumes[i].Height < v.Volumes[j].Height
-	})
-
-	// use the most recent block known
-	stop := volumes[len(volumes)-1].Time
-	start := stop - v.Period
-
-	// validate and calculate total
-	v.Missing = []uint64{}
-	valid := []Volume{}
-	total := sdk.ZeroDec()
-
-	for i, volume := range v.Volumes {
-		if volume.Time < start {
-			continue
-		}
-
-		if volume.Time > stop {
-			continue
-		}
-
-		if i != 0 {
-			// skip duplicate
-			if v.Volumes[i-1].Height == volume.Height {
-				continue
-			}
-
-			// find missing
-			height := v.Volumes[i-1].Height + 1
-			for height < volume.Height {
-				v.Missing = append(v.Missing, height)
-				height++
-			}
-		}
-
-		valid = append(valid, volume)
-		total = total.Add(volume.Value)
-
-	}
-
-	v.Total = total
-	v.Volumes = valid
-}
-
-func (v *TotalVolume) Calculate() {
 	sort.Slice(v.Volumes, func(i, j int) bool {
 		return v.Volumes[i].Height < v.Volumes[j].Height
 	})
@@ -125,7 +78,23 @@ func (v *TotalVolume) Calculate() {
 
 		valid = append(valid, volume)
 		total = total.Add(volume.Value)
+	}
 
+	first := valid[0]
+	last := valid[len(valid)-1]
+
+	blockTime := float64(last.Time-first.Time) / float64(len(valid))
+
+	expected := first.Height - uint64(math.Round(float64(first.Time-start)/blockTime))
+	fmt.Println("EXPECTED:", expected, "-", first.Height)
+
+	if expected+10 < first.Height {
+		missing := make([]uint64, first.Height-expected)
+		for i := range missing {
+			missing[i] = expected + uint64(i)
+		}
+
+		v.Missing = append(missing, v.Missing...)
 	}
 
 	v.Total = total
@@ -133,8 +102,17 @@ func (v *TotalVolume) Calculate() {
 }
 
 func (v *TotalVolume) Debug() {
+	var missing []uint64
+	amount := len(v.Missing)
+	if amount > 3 {
+		missing = v.Missing[amount-3:]
+	} else {
+		missing = v.Missing
+	}
+
 	fmt.Println("Total:", v.Total)
-	fmt.Println("Missing:", v.Missing)
+
+	fmt.Println("Missing:", missing)
 	// fmt.Println("Volumes:", v.Volumes)
 	fmt.Printf("Ratio: %d/%d\n", len(v.Missing), len(v.Volumes))
 }
@@ -147,7 +125,7 @@ type VolumeHistory struct {
 	cleanup  *sql.Stmt
 	provider string
 	period   int64 // period to sum the volumes over (24h)
-	totals   map[string]TotalVolume
+	totals   map[string]*TotalVolume
 	symbols  []string
 }
 
@@ -170,10 +148,28 @@ func NewVolumeHistory(
 		db:       db,
 		provider: provider,
 		symbols:  symbols,
-		period:   60 * 60,
+		period:   60 * 60 * 24,
 	}
 
 	return history, history.Init()
+}
+
+func (h *VolumeHistory) GetVolume(symbol string) sdk.Dec {
+	total, found := h.totals[symbol]
+	if !found {
+		return sdk.ZeroDec()
+	}
+
+	if len(total.Volumes) < 10 {
+		return sdk.ZeroDec()
+	}
+
+	// < 10%
+	if len(total.Missing)*10 > len(total.Volumes) {
+		return sdk.ZeroDec()
+	}
+
+	return total.Total
 }
 
 func (h *VolumeHistory) error(err error) error {
@@ -283,7 +279,7 @@ func (h *VolumeHistory) InitStatusFromDb() error {
 		})
 	}
 
-	h.totals = map[string]TotalVolume{}
+	h.totals = map[string]*TotalVolume{}
 	for _, symbol := range h.symbols {
 		total := TotalVolume{
 			Period: h.period,
@@ -291,10 +287,10 @@ func (h *VolumeHistory) InitStatusFromDb() error {
 
 		values, found := volumes[symbol]
 		if found {
-			total.Add(values)
+			total.Volumes = append(total.Volumes, values...)
 		}
 
-		h.totals[symbol] = total
+		h.totals[symbol] = &total
 	}
 
 	return nil
@@ -305,28 +301,25 @@ func (h *VolumeHistory) AddVolumes(
 ) error {
 	t0 := time.Now()
 	fmt.Println("ADD VOLUMES")
+
+	tmpl := `
+		INSERT OR IGNORE INTO volume_history(
+			symbol, provider, block, time, volume
+		) VALUES %s
+	`
+
+	placeholders := []string{}
+	values := []interface{}{}
+
 	for _, volume := range volumes {
 		if len(volume.Values) == 0 {
 			h.logger.Warn().Msg("no volumes provided")
 			return nil
 		}
 
-		fmt.Println(volume.Height)
-
-		tmpl := `
-		INSERT OR IGNORE INTO volume_history(
-			symbol, provider, block, time, volume
-		) VALUES %s
-	`
-		placeholders := make([]string, len(volume.Values))
-
-		for i := range placeholders {
-			placeholders[i] = "(?, ?, ?, ?, ?)"
-		}
-
-		values := []interface{}{}
-
 		for symbol, value := range volume.Values {
+			placeholders = append(placeholders, "(?, ?, ?, ?, ?)")
+
 			values = append(values, []interface{}{
 				symbol,
 				h.provider,
@@ -334,19 +327,10 @@ func (h *VolumeHistory) AddVolumes(
 				volume.Time,
 				value.String(),
 			}...)
-		}
 
-		sql := fmt.Sprintf(tmpl, strings.Join(placeholders, ", "))
-
-		_, err := h.db.Exec(sql, values...)
-		if err != nil {
-			return h.error(err)
-		}
-
-		for symbol, value := range volume.Values {
 			total, found := h.totals[symbol]
 			if !found {
-				total = TotalVolume{
+				total = &TotalVolume{
 					Period: h.period,
 					Total:  sdk.ZeroDec(),
 				}
@@ -358,8 +342,15 @@ func (h *VolumeHistory) AddVolumes(
 				Value:  value,
 			})
 
-			h.totals[symbol] = total
+			// h.totals[symbol] = total
 		}
+	}
+
+	sql := fmt.Sprintf(tmpl, strings.Join(placeholders, ", "))
+
+	_, err := h.db.Exec(sql, values...)
+	if err != nil {
+		return h.error(err)
 	}
 
 	t1 := time.Now()

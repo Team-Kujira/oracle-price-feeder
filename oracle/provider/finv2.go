@@ -118,7 +118,7 @@ func NewFinV2Provider(
 }
 
 func (p *FinV2Provider) Poll() error {
-	missing := p.volumes.GetLatestMissing(3)
+	missing := p.volumes.GetLatestMissing(7)
 	missing = append(missing, 0)
 
 	volumes := make([]volume.Volumes, len(missing))
@@ -205,10 +205,22 @@ func (p *FinV2Provider) Poll() error {
 			price = price.Mul(uintToDec(10).Power(uint64(delta)))
 		}
 
+		var volume sdk.Dec
+		// hack to get the proper volume
+		_, found := p.inverse[symbol]
+		if found {
+			volume = p.volumes.GetVolume(pair.Quote + pair.Base)
+			if !volume.IsZero() {
+				volume = volume.Quo(price)
+			}
+		} else {
+			volume = p.volumes.GetVolume(pair.String())
+		}
+
 		p.setTickerPrice(
 			symbol,
 			price,
-			sdk.ZeroDec(),
+			volume,
 			timestamp,
 		)
 	}
