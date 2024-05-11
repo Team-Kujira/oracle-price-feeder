@@ -113,10 +113,34 @@ func NewFinV2Provider(
 	}
 
 	go startPolling(provider, provider.endpoints.PollInterval, logger)
+
 	return provider, nil
 }
 
 func (p *FinV2Provider) Poll() error {
+	missing := p.volumes.GetLatestMissing(3)
+	missing = append(missing, 0)
+
+	volumes := make([]volume.Volumes, len(missing))
+
+	// wg := sync.WaitGroup
+	// mtx := sync.Mutex
+
+	for i, height := range missing {
+		var err error
+		volumes[i], err = p.getVolumes(height)
+		time.Sleep(time.Millisecond * 250)
+		if err != nil {
+			p.logger.Err(err)
+			continue
+		}
+	}
+
+	err := p.volumes.AddVolumes(volumes)
+	if err != nil {
+		p.logger.Err(err)
+	}
+
 	timestamp := time.Now()
 
 	p.mtx.Lock()
@@ -189,14 +213,17 @@ func (p *FinV2Provider) Poll() error {
 		)
 	}
 
-	p.getVolumes(0)
+	p.volumes.Debug("KUJIUSDC")
 
 	return nil
 }
 
-func (p *FinV2Provider) getVolumes(height uint64) error {
+func (p *FinV2Provider) getVolumes(height uint64) (volume.Volumes, error) {
+	p.logger.Info().Uint64("height", height).Msg("get volumes")
+
 	var err error
 	var timestamp time.Time
+	var volumes volume.Volumes
 
 	type Denom struct {
 		Symbol   string
@@ -207,26 +234,26 @@ func (p *FinV2Provider) getVolumes(height uint64) error {
 	if height == 0 {
 		height, err = p.getCosmosHeight()
 		if err != nil {
-			return p.error(err)
+			return volumes, p.error(err)
 		}
 	}
 
 	if height == p.height {
-		return nil
+		return volumes, nil
 	}
 
 	// prepare all volumes:
 	// not traded pairs have zero volume for this block
-	volumes := map[string]sdk.Dec{}
+	values := map[string]sdk.Dec{}
 
 	for _, pair := range p.getAllPairs() {
-		volumes[pair.Base+pair.Quote] = sdk.ZeroDec()
-		volumes[pair.Quote+pair.Base] = sdk.ZeroDec()
+		values[pair.Base+pair.Quote] = sdk.ZeroDec()
+		values[pair.Quote+pair.Base] = sdk.ZeroDec()
 	}
 
 	txs, timestamp, err := p.getCosmosTxs(height)
 	if err != nil {
-		return p.error(err)
+		return volumes, p.error(err)
 	}
 
 	fmt.Println("####################")
@@ -301,7 +328,7 @@ func (p *FinV2Provider) getVolumes(height uint64) error {
 			fmt.Println(denoms)
 
 			for symbol, denom := range denoms {
-				volume, found := volumes[symbol]
+				volume, found := values[symbol]
 				if !found {
 					p.logger.Error().
 						Str("symbol", symbol).
@@ -309,29 +336,26 @@ func (p *FinV2Provider) getVolumes(height uint64) error {
 					continue
 				}
 
-				volumes[symbol] = volume.Add(denom.Amount)
+				values[symbol] = volume.Add(denom.Amount)
 			}
 		}
 	}
 
-	err = p.volumes.AddVolumes(height, timestamp, volumes)
-	if err != nil {
-		return err
-	}
-
-	p.volumes.Debug()
-
 	fmt.Println("height:", height)
-	for symbol, volume := range volumes {
-		if volume.IsZero() {
+	for symbol, value := range values {
+		if value.IsZero() {
 			continue
 		}
-		fmt.Println(symbol, volume)
+		fmt.Println(symbol, value)
 	}
 
-	p.height = height
+	volumes = volume.Volumes{
+		Height: height,
+		Time:   timestamp.Unix(),
+		Values: values,
+	}
 
-	return nil
+	return volumes, nil
 }
 
 func (p *FinV2Provider) GetAvailablePairs() (map[string]struct{}, error) {
