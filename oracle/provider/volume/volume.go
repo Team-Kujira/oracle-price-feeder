@@ -8,8 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"price-feeder/oracle/types"
-
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	_ "github.com/mattn/go-sqlite3"
 
@@ -19,165 +17,45 @@ import (
 type Volume struct {
 	Height uint64
 	Time   int64
-	Value  sdk.Dec
-}
-
-type Volumes struct {
-	Height uint64
-	Time   int64
 	Values map[string]sdk.Dec
 }
 
-type TotalVolume struct {
-	Period  int64
-	Total   sdk.Dec
-	Volumes []Volume
-	Missing []uint64
-}
-
-func (v *TotalVolume) Calculate() {
-	if len(v.Volumes) < 2 {
-		return
-	}
-
-	sort.Slice(v.Volumes, func(i, j int) bool {
-		return v.Volumes[i].Height < v.Volumes[j].Height
-	})
-
-	// use the most recent block known
-	stop := v.Volumes[len(v.Volumes)-1].Time
-	start := stop - v.Period
-
-	// validate and calculate total
-	v.Missing = []uint64{}
-	valid := []Volume{}
-	total := sdk.ZeroDec()
-
-	for i, volume := range v.Volumes {
-		if volume.Time < start {
-			continue
-		}
-
-		if volume.Time > stop {
-			continue
-		}
-
-		if i != 0 {
-			// skip duplicate
-			if v.Volumes[i-1].Height == volume.Height {
-				continue
-			}
-
-			// find missing
-			height := v.Volumes[i-1].Height + 1
-			for height < volume.Height {
-				v.Missing = append(v.Missing, height)
-				height++
-			}
-		}
-
-		valid = append(valid, volume)
-		total = total.Add(volume.Value)
-	}
-
-	first := valid[0]
-	last := valid[len(valid)-1]
-
-	blockTime := float64(last.Time-first.Time) / float64(len(valid))
-
-	expected := first.Height - uint64(math.Round(float64(first.Time-start)/blockTime))
-	fmt.Println("EXPECTED:", expected, "-", first.Height)
-
-	if expected+10 < first.Height {
-		missing := make([]uint64, first.Height-expected)
-		for i := range missing {
-			missing[i] = expected + uint64(i)
-		}
-
-		v.Missing = append(missing, v.Missing...)
-	}
-
-	v.Total = total
-	v.Volumes = valid
-}
-
-func (v *TotalVolume) Debug() {
-	var missing []uint64
-	amount := len(v.Missing)
-	if amount > 3 {
-		missing = v.Missing[amount-3:]
-	} else {
-		missing = v.Missing
-	}
-
-	fmt.Println("Total:", v.Total)
-
-	fmt.Println("Missing:", missing)
-	// fmt.Println("Volumes:", v.Volumes)
-	fmt.Printf("Ratio: %d/%d\n", len(v.Missing), len(v.Volumes))
-}
-
-type VolumeHistory struct {
+type VolumeHandler struct {
 	logger   zerolog.Logger
 	db       *sql.DB
-	insert   *sql.Stmt
-	query    *sql.Stmt
-	cleanup  *sql.Stmt
 	provider string
-	period   int64 // period to sum the volumes over (24h)
-	totals   map[string]*TotalVolume
-	symbols  []string
+	totals   map[string]sdk.Dec
+	volumes  []Volume
+	period   int64
+	missing  []uint64
+	cleanup  *sql.Stmt
 }
 
-func NewVolumeHistory(
+func NewVolumeHandler(
 	logger zerolog.Logger,
 	db *sql.DB,
 	provider string,
-	pairs []types.CurrencyPair,
-) (VolumeHistory, error) {
-	logger = logger.With().Str("module", "volume").Logger()
-
-	symbols := make([]string, len(pairs)*2)
-	for i, pair := range pairs {
-		symbols[2*i+0] = pair.Base + pair.Quote
-		symbols[2*i+1] = pair.Quote + pair.Base
-	}
-
-	history := VolumeHistory{
+	period int64,
+) (VolumeHandler, error) {
+	handler := VolumeHandler{
 		logger:   logger,
 		db:       db,
 		provider: provider,
-		symbols:  symbols,
-		period:   60 * 60 * 24,
+		totals:   map[string]sdk.Dec{},
+		volumes:  []Volume{},
+		period:   period,
+		missing:  []uint64{},
 	}
 
-	return history, history.Init()
+	err := handler.init()
+	if err != nil {
+		return handler, err
+	}
+
+	return handler, nil
 }
 
-func (h *VolumeHistory) GetVolume(symbol string) sdk.Dec {
-	total, found := h.totals[symbol]
-	if !found {
-		return sdk.ZeroDec()
-	}
-
-	if len(total.Volumes) < 10 {
-		return sdk.ZeroDec()
-	}
-
-	// < 10%
-	if len(total.Missing)*10 > len(total.Volumes) {
-		return sdk.ZeroDec()
-	}
-
-	return total.Total
-}
-
-func (h *VolumeHistory) error(err error) error {
-	h.logger.Err(err).Msg("")
-	return err
-}
-
-func (h *VolumeHistory) Init() error {
+func (h *VolumeHandler) init() error {
 	_, err := h.db.Exec(`
 		CREATE TABLE IF NOT EXISTS volume_history(
 			block INT NOT NULL,
@@ -188,50 +66,29 @@ func (h *VolumeHistory) Init() error {
 			CONSTRAINT id PRIMARY KEY (symbol, provider, block, time)
 		)`)
 	if err != nil {
-		return h.error(err)
+		h.logger.Err(err).Msg("failed creating table")
+		return err
 	}
 
 	_, err = h.db.Exec("VACUUM")
 	if err != nil {
-		return h.error(err)
+		h.logger.Err(err).Msg("")
+		return err
 	}
 
-	insert, err := h.db.Prepare(`
-		INSERT INTO volume_history(symbol, provider, block, time, volume)
-        SELECT ?, ?, ?, ?, ?
-        WHERE NOT EXISTS (SELECT 1 FROM volume_history WHERE
-			symbol = ? AND provider = ? AND block = ?
-		)
-    `)
-	if err != nil {
-		return h.error(err)
-	}
-
-	query, err := h.db.Prepare(`
-		SELECT provider, time, volume FROM volume_history
-        WHERE symbol = ? AND provider = ? AND time BETWEEN ? AND ?
-        ORDER BY time ASC
-    `)
-	if err != nil {
-		return h.error(err)
-	}
-
-	cleanup, err := h.db.Prepare(`
+	h.cleanup, err = h.db.Prepare(`
 		DELETE from volume_history
 		WHERE time < ?
 	`)
 	if err != nil {
-		return h.error(err)
+		h.logger.Err(err).Msg("failed creating cleanup statement")
+		return err
 	}
 
-	h.insert = insert
-	h.query = query
-	h.cleanup = cleanup
-
-	return h.InitStatusFromDb()
+	return h.load()
 }
 
-func (h *VolumeHistory) InitStatusFromDb() error {
+func (h *VolumeHandler) load() error {
 	stop := time.Now().Unix()
 	start := stop - h.period
 
@@ -246,80 +103,184 @@ func (h *VolumeHistory) InitStatusFromDb() error {
 	}
 	defer rows.Close()
 
-	volumes := map[string][]Volume{}
+	volumeMap := map[uint64]Volume{}
 
 	for rows.Next() {
 		var (
-			symbol, volume string
-			height         uint64
-			timestamp      int64
+			symbol, value string
+			height        uint64
+			timestamp     int64
 		)
 
-		err = rows.Scan(&symbol, &height, &timestamp, &volume)
+		err = rows.Scan(&symbol, &height, &timestamp, &value)
 		if err != nil {
 			h.logger.Err(err).Msg("")
 			return err
 		}
 
-		_, found := volumes[symbol]
+		_, found := volumeMap[height]
 		if !found {
-			volumes[symbol] = []Volume{}
+			volumeMap[height] = Volume{
+				Height: height,
+				Time:   timestamp,
+				Values: map[string]sdk.Dec{},
+			}
 		}
 
-		volumeDec, err := sdk.NewDecFromStr(volume)
+		volume, err := sdk.NewDecFromStr(value)
 		if err != nil {
 			h.logger.Err(err).Msg("")
 			return err
 		}
 
-		volumes[symbol] = append(volumes[symbol], Volume{
-			Height: height,
-			Time:   timestamp,
-			Value:  volumeDec,
-		})
+		volumeMap[height].Values[symbol] = volume
 	}
 
-	h.totals = map[string]*TotalVolume{}
-	for _, symbol := range h.symbols {
-		total := TotalVolume{
-			Period: h.period,
-		}
-
-		values, found := volumes[symbol]
-		if found {
-			total.Volumes = append(total.Volumes, values...)
-		}
-
-		h.totals[symbol] = &total
+	volumes := []Volume{}
+	for _, volume := range volumeMap {
+		volumes = append(volumes, volume)
 	}
+
+	// don't use Add(), we don't need to persist the data
+	h.volumes = volumes
 
 	return nil
 }
 
-func (h *VolumeHistory) AddVolumes(
-	volumes []Volumes,
-) error {
-	t0 := time.Now()
-	fmt.Println("ADD VOLUMES")
+func (h *VolumeHandler) Get(symbol string) sdk.Dec {
+	total, found := h.totals[symbol]
+	if !found {
+		return sdk.ZeroDec()
+	}
 
-	tmpl := `
-		INSERT OR IGNORE INTO volume_history(
-			symbol, provider, block, time, volume
-		) VALUES %s
-	`
+	if len(h.volumes) < 10 {
+		return sdk.ZeroDec()
+	}
+
+	// < 10%
+	if len(h.missing)*10 > len(h.volumes) {
+		return sdk.ZeroDec()
+	}
+
+	return total
+}
+
+func (h *VolumeHandler) Add(volumes []Volume) {
+	t0 := time.Now()
+	if len(volumes) == 0 {
+		return
+	}
+
+	h.volumes = append(h.volumes, volumes...)
+
+	if len(h.volumes) < 2 {
+		return
+	}
+
+	sort.Slice(h.volumes, func(i, j int) bool {
+		return h.volumes[i].Height < h.volumes[j].Height
+	})
+
+	// use the most recent block known
+	stopTime := h.volumes[len(h.volumes)-1].Time
+	startTime := stopTime - h.period
+
+	startIndex := 0
+	stopIndex := len(h.volumes)
+
+	missing := []uint64{}
+	totals := map[string]sdk.Dec{}
+
+	for i, volume := range h.volumes {
+		if volume.Time < startTime {
+			startIndex = i + 1
+			continue
+		}
+
+		if volume.Time > stopTime {
+			stopIndex = i
+			break
+		}
+
+		if i > 0 {
+			// skip duplicate
+			if h.volumes[i-1].Height == volume.Height {
+				continue
+			}
+
+			// find missing blocks
+			height := h.volumes[i-1].Height + 1
+			for height < volume.Height {
+				missing = append(missing, height)
+				height++
+			}
+
+		}
+
+		for symbol, value := range volume.Values {
+			total, found := totals[symbol]
+			if !found {
+				total = sdk.ZeroDec()
+			}
+			totals[symbol] = total.Add(value)
+		}
+	}
+
+	h.volumes = h.volumes[startIndex:stopIndex]
+	h.missing = missing
+	h.totals = totals
+
+	err := h.persist(volumes)
+	if err != nil {
+		h.logger.Error().Msg("error writing volumes to database")
+		return
+	}
+
+	_, err = h.cleanup.Exec(startTime)
+	if err != nil {
+		h.logger.Err(err).Msg("failed removing old volumes")
+	}
+
+	if len(h.volumes) < 2 {
+		return
+	}
+
+	first := h.volumes[0]
+	last := h.volumes[len(h.volumes)-1]
+
+	blockTime := float64(last.Time-first.Time) / float64(len(h.volumes))
+
+	blocks := uint64(math.Round(float64(first.Time-startTime) / blockTime))
+	if first.Height-blocks < first.Height-10 {
+		missing := []uint64{}
+		for height := first.Height - blocks; height < first.Height; height++ {
+			missing = append(missing, height)
+		}
+
+		h.missing = append(missing, h.missing...)
+	}
+
+	fmt.Println("Volume Calculation:", time.Now().Sub(t0))
+}
+
+func (h *VolumeHandler) persist(volumes []Volume) error {
+	if len(volumes) == 0 {
+		return nil
+	}
 
 	placeholders := []string{}
 	values := []interface{}{}
 
 	for _, volume := range volumes {
 		if len(volume.Values) == 0 {
-			h.logger.Warn().Msg("no volumes provided")
-			return nil
+			h.logger.Warn().
+				Uint64("height", volume.Height).
+				Msg("no values found")
+			continue
 		}
 
 		for symbol, value := range volume.Values {
 			placeholders = append(placeholders, "(?, ?, ?, ?, ?)")
-
 			values = append(values, []interface{}{
 				symbol,
 				h.provider,
@@ -327,64 +288,41 @@ func (h *VolumeHistory) AddVolumes(
 				volume.Time,
 				value.String(),
 			}...)
-
-			total, found := h.totals[symbol]
-			if !found {
-				total = &TotalVolume{
-					Period: h.period,
-					Total:  sdk.ZeroDec(),
-				}
-			}
-
-			total.Volumes = append(total.Volumes, Volume{
-				Height: volume.Height,
-				Time:   volume.Time,
-				Value:  value,
-			})
-
-			// h.totals[symbol] = total
 		}
 	}
 
-	sql := fmt.Sprintf(tmpl, strings.Join(placeholders, ", "))
+	if len(placeholders) == 0 {
+		return nil
+	}
+
+	sql := fmt.Sprintf(`
+		INSERT OR IGNORE INTO volume_history(
+			symbol, provider, block, time, volume
+		) VALUES %s
+	`, strings.Join(placeholders, ", "))
 
 	_, err := h.db.Exec(sql, values...)
 	if err != nil {
-		return h.error(err)
+		h.logger.Err(err).Msg("failed inserting volumes")
+		return err
 	}
-
-	t1 := time.Now()
-
-	for symbol, total := range h.totals {
-		total.Calculate()
-		h.totals[symbol] = total
-	}
-
-	t2 := time.Now()
-
-	fmt.Println("add volumes:", t1.Sub(t0))
-	fmt.Println("recalculate:", t2.Sub(t1))
-	fmt.Println("total:      ", t2.Sub(t0))
 
 	return nil
 }
 
-func (h *VolumeHistory) GetLatestMissing(amount int) []uint64 {
-	for _, total := range h.totals {
-		if len(total.Missing) > amount {
-			return total.Missing[len(total.Missing)-amount:]
-		}
-		return total.Missing
+func (h *VolumeHandler) GetMissing(amount int) []uint64 {
+	if len(h.missing) > amount {
+		return h.missing[len(h.missing)-amount:]
 	}
-	return []uint64{}
+	return h.missing
 }
 
-func (h *VolumeHistory) Debug(symbol string) {
+func (h *VolumeHandler) Debug(symbol string) {
+	fmt.Println("Volumes:", len(h.volumes))
+	fmt.Println("Missing:", len(h.missing))
 	total, found := h.totals[symbol]
 	if !found {
 		return
 	}
-	fmt.Println("-- History -- ")
-	fmt.Println(symbol)
-	total.Debug()
+	fmt.Println("Total:", total)
 }

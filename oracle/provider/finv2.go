@@ -37,7 +37,7 @@ type (
 		provider
 		contracts map[string]string
 		delta     map[string]int64
-		volumes   volume.VolumeHistory
+		volumes   volume.VolumeHandler
 		height    uint64
 		decimals  map[string]int64 // needs to go into endpoint
 	}
@@ -92,12 +92,7 @@ func NewFinV2Provider(
 
 	provider.delta = map[string]int64{}
 
-	volumePairs := []types.CurrencyPair{}
-	for _, pair := range provider.getAllPairs() {
-		volumePairs = append(volumePairs, pair)
-	}
-
-	volumes, err := volume.NewVolumeHistory(logger, db, "finv2", volumePairs)
+	volumes, err := volume.NewVolumeHandler(logger, db, "finv2", 60*60*24)
 	if err != nil {
 		return provider, err
 	}
@@ -118,28 +113,25 @@ func NewFinV2Provider(
 }
 
 func (p *FinV2Provider) Poll() error {
-	missing := p.volumes.GetLatestMissing(7)
+	missing := p.volumes.GetMissing(7)
 	missing = append(missing, 0)
 
-	volumes := make([]volume.Volumes, len(missing))
+	volumes := make([]volume.Volume, len(missing))
 
 	// wg := sync.WaitGroup
 	// mtx := sync.Mutex
 
 	for i, height := range missing {
-		var err error
-		volumes[i], err = p.getVolumes(height)
+		volume, err := p.getVolume(height)
 		time.Sleep(time.Millisecond * 250)
 		if err != nil {
-			p.logger.Err(err)
+			p.error(err)
 			continue
 		}
+		volumes[i] = volume
 	}
 
-	err := p.volumes.AddVolumes(volumes)
-	if err != nil {
-		p.logger.Err(err)
-	}
+	p.volumes.Add(volumes)
 
 	timestamp := time.Now()
 
@@ -209,12 +201,12 @@ func (p *FinV2Provider) Poll() error {
 		// hack to get the proper volume
 		_, found := p.inverse[symbol]
 		if found {
-			volume = p.volumes.GetVolume(pair.Quote + pair.Base)
+			volume = p.volumes.Get(pair.Quote + pair.Base)
 			if !volume.IsZero() {
 				volume = volume.Quo(price)
 			}
 		} else {
-			volume = p.volumes.GetVolume(pair.String())
+			volume = p.volumes.Get(pair.String())
 		}
 
 		p.setTickerPrice(
@@ -230,12 +222,10 @@ func (p *FinV2Provider) Poll() error {
 	return nil
 }
 
-func (p *FinV2Provider) getVolumes(height uint64) (volume.Volumes, error) {
-	p.logger.Info().Uint64("height", height).Msg("get volumes")
+func (p *FinV2Provider) getVolume(height uint64) (volume.Volume, error) {
+	p.logger.Info().Uint64("height", height).Msg("get volume")
 
 	var err error
-	var timestamp time.Time
-	var volumes volume.Volumes
 
 	type Denom struct {
 		Symbol   string
@@ -246,12 +236,12 @@ func (p *FinV2Provider) getVolumes(height uint64) (volume.Volumes, error) {
 	if height == 0 {
 		height, err = p.getCosmosHeight()
 		if err != nil {
-			return volumes, p.error(err)
+			return volume.Volume{}, p.error(err)
 		}
 	}
 
 	if height == p.height {
-		return volumes, nil
+		return volume.Volume{}, nil
 	}
 
 	// prepare all volumes:
@@ -265,10 +255,9 @@ func (p *FinV2Provider) getVolumes(height uint64) (volume.Volumes, error) {
 
 	txs, timestamp, err := p.getCosmosTxs(height)
 	if err != nil {
-		return volumes, p.error(err)
+		return volume.Volume{}, p.error(err)
 	}
 
-	fmt.Println("####################")
 	for _, tx := range txs {
 		fmt.Println("-- tx --")
 		trades := tx.GetEventsByType("wasm-trade")
@@ -337,8 +326,6 @@ func (p *FinV2Provider) getVolumes(height uint64) (volume.Volumes, error) {
 				pair.Quote + pair.Base: quote,
 			}
 
-			fmt.Println(denoms)
-
 			for symbol, denom := range denoms {
 				volume, found := values[symbol]
 				if !found {
@@ -353,7 +340,6 @@ func (p *FinV2Provider) getVolumes(height uint64) (volume.Volumes, error) {
 		}
 	}
 
-	fmt.Println("height:", height)
 	for symbol, value := range values {
 		if value.IsZero() {
 			continue
@@ -361,13 +347,13 @@ func (p *FinV2Provider) getVolumes(height uint64) (volume.Volumes, error) {
 		fmt.Println(symbol, value)
 	}
 
-	volumes = volume.Volumes{
+	volume := volume.Volume{
 		Height: height,
 		Time:   timestamp.Unix(),
 		Values: values,
 	}
 
-	return volumes, nil
+	return volume, nil
 }
 
 func (p *FinV2Provider) GetAvailablePairs() (map[string]struct{}, error) {
