@@ -15,18 +15,14 @@ import (
 )
 
 var (
-	_                     Provider = (*FinV2Provider)(nil)
-	finV2DefaultEndpoints          = Endpoint{
-		Name: ProviderFinV2,
-		Urls: []string{
-			"https://cosmos.directory/kujira",
-			"https://lcd.kaiyo.kujira.setten.io",
-			"https://lcd-kujira.mintthemoon.xyz",
-		},
+	_ Provider = (*FinV2Provider)(nil)
+
+	finV2DefaultEndpoints = Endpoint{
+		Name:         ProviderFinV2,
+		Urls:         []string{},
 		PollInterval: 3 * time.Second,
-		ContractAddresses: map[string]string{
-			"USDCUSK": "kujira1rwx6w02alc4kaz7xpyg3rlxpjl4g63x5jq292mkxgg65zqpn5llq202vh5",
-		},
+		VolumeBlocks: 4,
+		VolumePause:  0,
 	}
 )
 
@@ -113,25 +109,7 @@ func NewFinV2Provider(
 }
 
 func (p *FinV2Provider) Poll() error {
-	missing := p.volumes.GetMissing(7)
-	missing = append(missing, 0)
-
-	volumes := make([]volume.Volume, len(missing))
-
-	// wg := sync.WaitGroup
-	// mtx := sync.Mutex
-
-	for i, height := range missing {
-		volume, err := p.getVolume(height)
-		time.Sleep(time.Millisecond * 250)
-		if err != nil {
-			p.error(err)
-			continue
-		}
-		volumes[i] = volume
-	}
-
-	p.volumes.Add(volumes)
+	p.updateVolumes()
 
 	timestamp := time.Now()
 
@@ -217,9 +195,56 @@ func (p *FinV2Provider) Poll() error {
 		)
 	}
 
-	p.volumes.Debug("KUJIUSDC")
-
 	return nil
+}
+
+func (p *FinV2Provider) GetAvailablePairs() (map[string]struct{}, error) {
+	return p.getAvailablePairsFromContracts()
+}
+
+func (p *FinV2Provider) getDecimalDelta(contract string) (int64, error) {
+	delta, found := p.delta[contract]
+	if found {
+		return delta, nil
+	}
+
+	content, err := p.wasmSmartQuery(contract, `{"config":{}}`)
+	if err != nil {
+		return 0, err
+	}
+
+	var response FinV2ConfigResponse
+
+	err = json.Unmarshal(content, &response)
+	if err != nil {
+		p.logger.Err(err).Msg("")
+		return 0, nil
+	}
+
+	delta = response.Data.Delta
+
+	p.delta[contract] = delta
+
+	return delta, nil
+}
+
+func (p *FinV2Provider) updateVolumes() {
+	missing := p.volumes.GetMissing(p.endpoints.VolumeBlocks)
+	missing = append(missing, 0)
+
+	volumes := make([]volume.Volume, len(missing))
+
+	for i, height := range missing {
+		volume, err := p.getVolume(height)
+		time.Sleep(time.Millisecond * time.Duration(p.endpoints.VolumePause))
+		if err != nil {
+			p.error(err)
+			continue
+		}
+		volumes[i] = volume
+	}
+
+	p.volumes.Add(volumes)
 }
 
 func (p *FinV2Provider) getVolume(height uint64) (volume.Volume, error) {
@@ -354,34 +379,4 @@ func (p *FinV2Provider) getVolume(height uint64) (volume.Volume, error) {
 	}
 
 	return volume, nil
-}
-
-func (p *FinV2Provider) GetAvailablePairs() (map[string]struct{}, error) {
-	return p.getAvailablePairsFromContracts()
-}
-
-func (p *FinV2Provider) getDecimalDelta(contract string) (int64, error) {
-	delta, found := p.delta[contract]
-	if found {
-		return delta, nil
-	}
-
-	content, err := p.wasmSmartQuery(contract, `{"config":{}}`)
-	if err != nil {
-		return 0, err
-	}
-
-	var response FinV2ConfigResponse
-
-	err = json.Unmarshal(content, &response)
-	if err != nil {
-		p.logger.Err(err).Msg("")
-		return 0, nil
-	}
-
-	delta = response.Data.Delta
-
-	p.delta[contract] = delta
-
-	return delta, nil
 }

@@ -144,6 +144,8 @@ type (
 		PingType          uint
 		PingMessage       string
 		ContractAddresses map[string]string
+		VolumeBlocks      int
+		VolumePause       int
 	}
 )
 

@@ -224,6 +224,8 @@ type (
 		WebsocketPath string        `toml:"websocket_path"`
 		PollInterval  string        `toml:"poll_interval"`
 		Contracts     []string      `toml:"contracts"`
+		VolumeBlocks  int           `toml:"volume_blocks"`
+		VolumePause   int           `toml:"volume_pause"`
 	}
 
 	UrlSet struct {
@@ -293,6 +295,8 @@ func (p ProviderEndpoints) ToEndpoint(
 		Websocket:     p.Websocket,
 		WebsocketPath: p.WebsocketPath,
 		PollInterval:  pollInterval,
+		VolumeBlocks:  p.VolumeBlocks,
+		VolumePause:   p.VolumePause,
 	}
 	return e, nil
 }
