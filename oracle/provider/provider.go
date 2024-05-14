@@ -13,6 +13,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -1137,4 +1138,18 @@ func keccak256(s string) (string, error) {
 		return "", err
 	}
 	return fmt.Sprintf("%x", hash.Sum(nil)), nil
+}
+
+func parseDenom(s string) (sdk.Dec, string, error) {
+	re := regexp.MustCompile(`^([0-9]+)(.*)$`)
+
+	matches := re.FindAllStringSubmatch(s, -1)[0]
+	fmt.Println(len(matches))
+	if len(matches) != 3 {
+		return sdk.Dec{}, "", fmt.Errorf("failed parsing denom")
+	}
+
+	amount := strToDec(matches[1])
+
+	return amount, matches[2], nil
 }

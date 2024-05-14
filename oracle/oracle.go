@@ -530,7 +530,7 @@ func NewProvider(
 	case provider.ProviderOsmosis:
 		return provider.NewOsmosisProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderOsmosisV2:
-		return provider.NewOsmosisV2Provider(ctx, providerLogger, endpoint, providerPairs...)
+		return provider.NewOsmosisV2Provider(db, ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderPancakeV3Bsc:
 		return provider.NewPancakeProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderPhemex:

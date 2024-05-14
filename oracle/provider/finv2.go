@@ -35,7 +35,7 @@ type (
 		delta     map[string]int64
 		volumes   volume.VolumeHandler
 		height    uint64
-		decimals  map[string]int64 // needs to go into endpoint
+		decimals  map[string]int64
 	}
 
 	FinV2BookResponse struct {
@@ -264,10 +264,12 @@ func (p *FinV2Provider) getVolume(height uint64) (volume.Volume, error) {
 		if err != nil {
 			return volume.Volume{}, p.error(err)
 		}
-	}
 
-	if height == p.height {
-		return volume.Volume{}, nil
+		if height == p.height || height == 0 {
+			return volume.Volume{}, nil
+		}
+
+		p.height = height
 	}
 
 	// prepare all volumes:

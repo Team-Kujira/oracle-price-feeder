@@ -203,8 +203,12 @@ func (h *VolumeHandler) Add(volumes []Volume) {
 		return e1.Height == e2.Height
 	})
 
+	if volumes[0].Height == 0 {
+		return
+	}
+
 	if len(h.volumes) == 0 {
-		h.volumes = volumes[0:1]
+		h.volumes = []Volume{volumes[0]}
 	}
 
 	knownMinHeight := h.volumes[0].Height
@@ -262,6 +266,7 @@ func (h *VolumeHandler) Add(volumes []Volume) {
 		height := first.Height - blocks
 		diff := first.Height - height
 		missing := make([]uint64, diff)
+		fmt.Println(">", first.Height-blocks, blocks, diff)
 		for i := range missing {
 			missing[i] = height + uint64(i)
 		}
@@ -333,6 +338,7 @@ func (h *VolumeHandler) append(volumes []Volume) {
 }
 
 func (h *VolumeHandler) prepend(volumes []Volume) {
+	t0 := time.Now()
 	h.logger.Info().Msg("prepend")
 	// [4, 6, 7] + [1, 2]
 
@@ -341,7 +347,7 @@ func (h *VolumeHandler) prepend(volumes []Volume) {
 
 	startIndex := 0
 
-	for i := len(volumes); i > 0; i-- {
+	for i := len(volumes) - 1; i > 0; i-- {
 		volume := volumes[i]
 		if volume.Time < startTime {
 			startIndex = i
@@ -364,10 +370,16 @@ func (h *VolumeHandler) prepend(volumes []Volume) {
 	}
 
 	h.volumes = append(volumes[startIndex:], h.volumes...)
+	fmt.Println("prepend:", time.Since(t0))
 }
 
 func (h *VolumeHandler) update(volumes []Volume) {
 	t0 := time.Now()
+
+	if len(volumes) == 0 {
+		return
+	}
+
 	h.logger.Info().Msg("update")
 
 	h.volumes = append(h.volumes, volumes...)
@@ -484,8 +496,12 @@ func (h *VolumeHandler) GetMissing(amount int) []uint64 {
 }
 
 func (h *VolumeHandler) Debug(symbol string) {
-	fmt.Println("Volumes:", len(h.volumes))
-	fmt.Println("Missing:", len(h.missing))
+	missing := len(h.missing)
+	volumes := len(h.volumes)
+	percent := float64(missing) / float64(volumes) * 100
+	fmt.Printf("--- %s @ %s ---\n", symbol, h.provider)
+	fmt.Println("Volumes:", volumes)
+	fmt.Printf("Missing: %d (%.2f%%)\n", missing, percent)
 	total, found := h.totals[symbol]
 	if !found {
 		return

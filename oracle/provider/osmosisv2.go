@@ -2,11 +2,13 @@ package provider
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
+	"price-feeder/oracle/provider/volume"
 	"price-feeder/oracle/types"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -18,7 +20,9 @@ var (
 	osmosisv2DefaultEndpoints          = Endpoint{
 		Name:         ProviderOsmosisV2,
 		Urls:         []string{"https://rest.cosmos.directory/osmosis"},
-		PollInterval: 6 * time.Second,
+		PollInterval: 4 * time.Second,
+		VolumeBlocks: 4,
+		VolumePause:  0,
 	}
 )
 
@@ -32,6 +36,9 @@ type (
 		denoms       map[string]string
 		contracts    map[string]string
 		concentrated map[string]struct{}
+		volumes      volume.VolumeHandler
+		height       uint64
+		decimals     map[string]int64
 	}
 
 	OsmosisV2SpotPrice struct {
@@ -61,6 +68,7 @@ type (
 )
 
 func NewOsmosisV2Provider(
+	db *sql.DB,
 	ctx context.Context,
 	logger zerolog.Logger,
 	endpoints Endpoint,
@@ -78,16 +86,42 @@ func NewOsmosisV2Provider(
 
 	provider.contracts = provider.endpoints.ContractAddresses
 
+	for symbol, contract := range provider.endpoints.ContractAddresses {
+		provider.contracts[contract] = symbol
+	}
+
 	availablePairs, _ := provider.GetAvailablePairs()
 	provider.setPairs(pairs, availablePairs, nil)
+
+	volumes, err := volume.NewVolumeHandler(logger, db, "osmosisv2", pairs, 60*60*24)
+	if err != nil {
+		return provider, err
+	}
+
+	provider.volumes = volumes
+
+	provider.decimals = map[string]int64{
+		"KUJI":  6,
+		"USDC":  6,
+		"USK":   6,
+		"MNTA":  6,
+		"ATOM":  6,
+		"OSMO":  6,
+		"SOMM":  6,
+		"JUNO":  6,
+		"WHALE": 6,
+	}
 
 	provider.init()
 
 	go startPolling(provider, provider.endpoints.PollInterval, logger)
+
 	return provider, nil
 }
 
 func (p *OsmosisV2Provider) Poll() error {
+	p.updateVolumes()
+
 	timestamp := time.Now()
 
 	p.mtx.Lock()
@@ -130,10 +164,22 @@ func (p *OsmosisV2Provider) Poll() error {
 			price = strToDec(strPrice)
 		}
 
+		var volume sdk.Dec
+		// hack to get the proper volume
+		_, found = p.inverse[symbol]
+		if found {
+			volume = p.volumes.Get(pair.Quote + pair.Base)
+			if !volume.IsZero() {
+				volume = volume.Quo(price)
+			}
+		} else {
+			volume = p.volumes.Get(pair.String())
+		}
+
 		p.setTickerPrice(
 			symbol,
 			price,
-			sdk.ZeroDec(),
+			volume,
 			timestamp,
 		)
 	}
@@ -251,4 +297,168 @@ func (p *OsmosisV2Provider) init() error {
 	}
 
 	return nil
+}
+
+func (p *OsmosisV2Provider) updateVolumes() {
+	missing := p.volumes.GetMissing(p.endpoints.VolumeBlocks)
+	missing = append(missing, 0)
+
+	volumes := make([]volume.Volume, len(missing))
+
+	for i, height := range missing {
+		volume, err := p.getVolume(height)
+		time.Sleep(time.Millisecond * time.Duration(p.endpoints.VolumePause))
+		if err != nil {
+			p.error(err)
+			continue
+		}
+		volumes[i] = volume
+	}
+
+	p.volumes.Add(volumes)
+	p.volumes.Debug("OSMOUSDC")
+}
+
+func (p *OsmosisV2Provider) getVolume(height uint64) (volume.Volume, error) {
+	p.logger.Info().Uint64("height", height).Msg("get volume")
+
+	var err error
+
+	type Denom struct {
+		Symbol   string
+		Decimals int64
+		Amount   sdk.Dec
+	}
+
+	if height == 0 {
+		height, err = p.getCosmosHeight()
+		if err != nil {
+			return volume.Volume{}, p.error(err)
+		}
+
+		if height == p.height || height == 0 {
+			return volume.Volume{}, nil
+		}
+
+		p.height = height
+	}
+
+	// prepare all volumes:
+	// not traded pairs have zero volume for this block
+	values := map[string]sdk.Dec{}
+
+	for _, pair := range p.getAllPairs() {
+		values[pair.Base+pair.Quote] = sdk.ZeroDec()
+		values[pair.Quote+pair.Base] = sdk.ZeroDec()
+	}
+
+	txs, timestamp, err := p.getCosmosTxs(height)
+	if err != nil {
+		return volume.Volume{}, p.error(err)
+	}
+
+	for _, tx := range txs {
+		trades := tx.GetEventsByType("token_swapped")
+		for _, event := range trades {
+			pool, found := event.Attributes["pool_id"]
+			if !found {
+				continue
+			}
+
+			fmt.Println(event)
+
+			symbol, found := p.contracts[pool]
+			if !found {
+				fmt.Println("pool not known:", pool)
+				continue
+			}
+
+			pair, err := p.getPair(symbol)
+			if err != nil {
+				p.logger.Warn().Err(err).Str("symbol", symbol).Msg("")
+				continue
+			}
+
+			fmt.Println(symbol, pair.String())
+
+			tokensIn, found := event.Attributes["tokens_in"]
+			if !found {
+				continue
+			}
+
+			tokensOut, found := event.Attributes["tokens_out"]
+			if !found {
+				continue
+			}
+
+			amountIn, denomIn, err := parseDenom(tokensIn)
+			if err != nil {
+				p.logger.Err(err).Msg("")
+				continue
+			}
+
+			amountOut, _, err := parseDenom(tokensOut)
+			if err != nil {
+				p.logger.Err(err).Msg("")
+				continue
+			}
+
+			baseDenom, found := p.denoms[pair.Base]
+			if !found {
+				p.logger.Err(err).Msg("")
+				continue
+			}
+
+			var symbolIn, symbolOut string
+
+			if denomIn == baseDenom {
+				symbolIn = pair.Base
+				symbolOut = pair.Quote
+			} else {
+				symbolIn = pair.Quote
+				symbolOut = pair.Base
+			}
+
+			decimalsIn, found := p.decimals[symbolIn]
+			if !found {
+				continue
+			}
+
+			decimalsOut, found := p.decimals[symbolOut]
+			if !found {
+				continue
+			}
+
+			ten := uintToDec(10)
+
+			amountIn = amountIn.Quo(ten.Power(uint64(decimalsIn)))
+			amountOut = amountOut.Quo(ten.Power(uint64(decimalsOut)))
+
+			// needed to for final volumes: {ATOMOSMO: 1, OSMOATOM: 9}
+			amounts := map[string]sdk.Dec{
+				symbolIn + symbolOut: amountIn,
+				symbolOut + symbolIn: amountOut,
+			}
+
+			for symbol, amount := range amounts {
+				value, found := values[symbol]
+				if !found {
+					p.logger.Error().
+						Str("symbol", symbol).
+						Msg("volume not set")
+					continue
+				}
+
+				values[symbol] = value.Add(amount)
+			}
+		}
+	}
+
+	volume := volume.Volume{
+		Height: height,
+		Time:   timestamp.Unix(),
+		Values: values,
+	}
+
+	return volume, nil
 }
