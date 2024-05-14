@@ -692,6 +692,14 @@ func (e *Endpoint) SetDefaults() {
 		}
 		e.ContractAddresses[symbol] = address
 	}
+
+	if e.VolumeBlocks == 0 {
+		e.VolumeBlocks = defaults.VolumeBlocks
+	}
+
+	if e.VolumePause <= 0 {
+		e.VolumePause = defaults.VolumePause
+	}
 }
 
 func startPolling(p PollingProvider, interval time.Duration, logger zerolog.Logger) {

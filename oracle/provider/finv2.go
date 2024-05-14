@@ -88,7 +88,7 @@ func NewFinV2Provider(
 
 	provider.delta = map[string]int64{}
 
-	volumes, err := volume.NewVolumeHandler(logger, db, "finv2", 60*60*24)
+	volumes, err := volume.NewVolumeHandler(logger, db, "finv2", pairs, 60*60*24)
 	if err != nil {
 		return provider, err
 	}
@@ -245,6 +245,7 @@ func (p *FinV2Provider) updateVolumes() {
 	}
 
 	p.volumes.Add(volumes)
+	p.volumes.Debug("KUJIUSDC")
 }
 
 func (p *FinV2Provider) getVolume(height uint64) (volume.Volume, error) {
@@ -284,12 +285,8 @@ func (p *FinV2Provider) getVolume(height uint64) (volume.Volume, error) {
 	}
 
 	for _, tx := range txs {
-		fmt.Println("-- tx --")
 		trades := tx.GetEventsByType("wasm-trade")
 		for _, event := range trades {
-			fmt.Println("-- event --")
-			fmt.Println(event)
-
 			contract, found := event.Attributes["_contract_address"]
 			if !found {
 				continue
@@ -297,13 +294,12 @@ func (p *FinV2Provider) getVolume(height uint64) (volume.Volume, error) {
 
 			symbol, found := p.contracts[contract]
 			if !found {
-				fmt.Println(contract)
 				continue
 			}
 
 			pair, err := p.getPair(symbol)
 			if err != nil {
-				p.logger.Warn().Err(err).Msg("")
+				p.logger.Warn().Err(err).Str("symbol", symbol).Msg("")
 				continue
 			}
 
@@ -363,13 +359,6 @@ func (p *FinV2Provider) getVolume(height uint64) (volume.Volume, error) {
 				values[symbol] = volume.Add(denom.Amount)
 			}
 		}
-	}
-
-	for symbol, value := range values {
-		if value.IsZero() {
-			continue
-		}
-		fmt.Println(symbol, value)
 	}
 
 	volume := volume.Volume{
