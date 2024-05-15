@@ -226,10 +226,10 @@ func (h *VolumeHandler) Add(volumes []Volume) {
 	newMinHeight := volumes[0].Height
 	newMaxHeight := volumes[len(volumes)-1].Height
 
-	fmt.Printf(
-		"%d - %d\n%d - %d\n",
-		knownMinHeight, knownMaxHeight, newMinHeight, newMaxHeight,
-	)
+	// fmt.Printf(
+	// 	"%d - %d\n%d - %d\n",
+	// 	knownMinHeight, knownMaxHeight, newMinHeight, newMaxHeight,
+	// )
 
 	if knownMaxHeight > newMinHeight && knownMinHeight < newMaxHeight {
 		// [4, 6, 7] + [5, 8]
