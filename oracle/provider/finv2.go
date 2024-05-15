@@ -246,7 +246,6 @@ func (p *FinV2Provider) updateVolumes() {
 	}
 
 	p.volumes.Add(volumes)
-	p.volumes.Debug("KUJIUSDC")
 }
 
 func (p *FinV2Provider) getVolume(height uint64) (volume.Volume, error) {

@@ -5,9 +5,9 @@ import (
 )
 
 type Total struct {
-	Total   sdk.Dec
-	Values  int
-	Missing int
+	Total  sdk.Dec
+	Values int
+	First  uint64
 }
 
 func NewTotal() *Total {
@@ -30,10 +30,13 @@ func (t *Total) Sub(value sdk.Dec) {
 	t.Values -= 1
 }
 
-func (t *Total) Add(value sdk.Dec) {
+func (t *Total) Add(value sdk.Dec, height uint64) {
 	if value.IsNil() || value.IsNegative() {
 		return
 	}
 	t.Total = t.Total.Add(value)
 	t.Values += 1
+	if height < t.First || t.First == 0 {
+		t.First = height
+	}
 }

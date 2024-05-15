@@ -101,15 +101,16 @@ func NewOsmosisV2Provider(
 	provider.volumes = volumes
 
 	provider.decimals = map[string]int64{
-		"KUJI":  6,
-		"USDC":  6,
-		"USK":   6,
-		"MNTA":  6,
-		"ATOM":  6,
-		"OSMO":  6,
-		"SOMM":  6,
-		"JUNO":  6,
-		"WHALE": 6,
+		"KUJI":   6,
+		"USDC":   6,
+		"USK":    6,
+		"MNTA":   6,
+		"ATOM":   6,
+		"OSMO":   6,
+		"SOMM":   6,
+		"JUNO":   6,
+		"WHALE":  6,
+		"STATOM": 6,
 	}
 
 	provider.init()
@@ -308,10 +309,6 @@ func (p *OsmosisV2Provider) init() error {
 		}
 	}
 
-	for k, v := range p.denoms {
-		fmt.Println(k, v)
-	}
-
 	return nil
 }
 
@@ -390,11 +387,11 @@ func (p *OsmosisV2Provider) getVolume(height uint64) (volume.Volume, error) {
 				continue
 			}
 
-			fmt.Println(event)
-
 			symbol, found := p.contracts[pool]
 			if !found {
-				fmt.Println("pool not known:", pool)
+				p.logger.Debug().
+					Str("pool", pool).
+					Msg("unknown pool")
 				continue
 			}
 
@@ -403,21 +400,21 @@ func (p *OsmosisV2Provider) getVolume(height uint64) (volume.Volume, error) {
 				continue
 			}
 
-			pair, err := p.getPair(symbol)
-			if err != nil {
-				p.logger.Warn().Err(err).Str("symbol", symbol).Msg("")
-				continue
-			}
-
 			in, err := p.getToken(event, "tokens_in")
 			if err != nil {
-				p.logger.Error().Str("pair", pair.String()).Msg("failed parsing token 'in'")
+				p.logger.Error().
+					Str("symbol", symbol).
+					Str("attribute", "tokens_in").
+					Msg("failed parsing token")
 				continue
 			}
 
 			out, err := p.getToken(event, "tokens_out")
 			if err != nil {
-				p.logger.Error().Str("pair", pair.String()).Msg("failed parsing token 'out'")
+				p.logger.Error().
+					Str("symbol", symbol).
+					Str("attribute", "tokens_out").
+					Msg("failed parsing token")
 				continue
 			}
 

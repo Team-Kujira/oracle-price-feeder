@@ -200,10 +200,6 @@ func (h *VolumeHandler) Get(symbol string) (sdk.Dec, error) {
 }
 
 func (h *VolumeHandler) Add(volumes []Volume) {
-	if h.provider == "osmosisv2" {
-		fmt.Println(volumes[0])
-	}
-
 	t0 := time.Now()
 	if len(volumes) == 0 {
 		return
@@ -280,7 +276,6 @@ func (h *VolumeHandler) Add(volumes []Volume) {
 		height := first.Height - blocks
 		diff := first.Height - height
 		missing := make([]uint64, diff)
-		fmt.Println(">", first.Height-blocks, blocks, diff)
 		for i := range missing {
 			missing[i] = height + uint64(i)
 		}
@@ -349,7 +344,7 @@ func (h *VolumeHandler) append(volumes []Volume) {
 				continue
 			}
 
-			total.Add(value)
+			total.Add(value, volume.Height)
 		}
 	}
 
@@ -381,7 +376,7 @@ func (h *VolumeHandler) prepend(volumes []Volume) {
 				continue
 			}
 
-			total.Add(value)
+			total.Add(value, volume.Height)
 		}
 
 		index := slices.Index(h.missing, volume.Height)
@@ -443,7 +438,7 @@ func (h *VolumeHandler) update(volumes []Volume) {
 			if !found {
 				continue
 			}
-			total.Add(value)
+			total.Add(value, volume.Height)
 		}
 
 		if i == 0 {
@@ -515,19 +510,48 @@ func (h *VolumeHandler) persist(volumes []Volume) error {
 }
 
 func (h *VolumeHandler) GetMissing(amount int) []uint64 {
-	if len(h.missing) > amount {
+	if len(h.missing) >= amount {
 		return h.missing[len(h.missing)-amount:]
 	}
-	return h.missing
+
+	start := uint64(0)
+	for _, total := range h.totals {
+		if total.First > start {
+			start = total.First
+		}
+	}
+
+	reindex := []uint64{}
+	for i := 1; i <= amount-len(h.missing); i++ {
+		height := start - uint64(i)
+		if height < h.volumes[0].Height {
+			break
+		}
+		reindex = append(reindex, height)
+	}
+
+	h.logger.Info().
+		Int("missing", len(h.missing)).
+		Int("reindex", len(reindex)).
+		Msg("get missing blocks")
+
+	return append(h.missing, reindex...)
 }
 
 func (h *VolumeHandler) Debug(symbol string) {
 	for symbol, total := range h.totals {
-		if symbol != "STARSOSMO" {
+		if symbol != "STATOMATOM" {
 			continue
 		}
+		first := h.volumes[0].Height
+		if total.First > first {
+			first = total.First
+		}
 		missing := len(h.volumes) - total.Values + len(h.missing)
-		fmt.Println(symbol, "Values:", total.Values, "Missing:", missing)
+		fmt.Printf(
+			"%s Values: %d Missing: %d First: %d\n",
+			symbol, total.Values, missing, first,
+		)
 	}
 
 	missing := len(h.missing)
