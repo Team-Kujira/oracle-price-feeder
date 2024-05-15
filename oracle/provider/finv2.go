@@ -179,12 +179,13 @@ func (p *FinV2Provider) Poll() error {
 		// hack to get the proper volume
 		_, found := p.inverse[symbol]
 		if found {
-			volume = p.volumes.Get(pair.Quote + pair.Base)
+			volume, _ = p.volumes.Get(pair.Quote + pair.Base)
+
 			if !volume.IsZero() {
 				volume = volume.Quo(price)
 			}
 		} else {
-			volume = p.volumes.Get(pair.String())
+			volume, _ = p.volumes.Get(pair.String())
 		}
 
 		p.setTickerPrice(

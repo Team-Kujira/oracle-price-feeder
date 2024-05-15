@@ -226,6 +226,7 @@ type (
 		Contracts     []string      `toml:"contracts"`
 		VolumeBlocks  int           `toml:"volume_blocks"`
 		VolumePause   int           `toml:"volume_pause"`
+		Decimals      map[string]int
 	}
 
 	UrlSet struct {
@@ -297,6 +298,7 @@ func (p ProviderEndpoints) ToEndpoint(
 		PollInterval:  pollInterval,
 		VolumeBlocks:  p.VolumeBlocks,
 		VolumePause:   p.VolumePause,
+		Decimals:      p.Decimals,
 	}
 	return e, nil
 }

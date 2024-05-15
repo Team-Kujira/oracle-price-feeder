@@ -168,12 +168,16 @@ func (p *OsmosisV2Provider) Poll() error {
 		// hack to get the proper volume
 		_, found = p.inverse[symbol]
 		if found {
-			volume = p.volumes.Get(pair.Quote + pair.Base)
+			volume, _ = p.volumes.Get(pair.Quote + pair.Base)
 			if !volume.IsZero() {
 				volume = volume.Quo(price)
 			}
 		} else {
-			volume = p.volumes.Get(pair.String())
+			volume, _ = p.volumes.Get(pair.String())
+		}
+
+		if volume.IsNil() {
+			volume = sdk.ZeroDec()
 		}
 
 		p.setTickerPrice(
@@ -286,14 +290,26 @@ func (p *OsmosisV2Provider) init() error {
 		case "/osmosis.gamm.v1beta1.Pool":
 			p.denoms[pair.Base] = response.Pool.Assets[0].Token.Denom
 			p.denoms[pair.Quote] = response.Pool.Assets[1].Token.Denom
+			p.denoms[response.Pool.Assets[0].Token.Denom] = pair.Base
+			p.denoms[response.Pool.Assets[1].Token.Denom] = pair.Quote
 		case "/osmosis.gamm.poolmodels.stableswap.v1beta1.Pool":
 			p.denoms[pair.Base] = response.Pool.Liquidity[0].Denom
 			p.denoms[pair.Quote] = response.Pool.Liquidity[1].Denom
+			p.denoms[response.Pool.Liquidity[0].Denom] = pair.Base
+			p.denoms[response.Pool.Liquidity[1].Denom] = pair.Quote
 		case "/osmosis.concentratedliquidity.v1beta1.Pool":
+			p.denoms[pair.Base] = response.Pool.Token0
+			p.denoms[pair.Quote] = response.Pool.Token1
+			p.denoms[response.Pool.Token0] = pair.Base
+			p.denoms[response.Pool.Token1] = pair.Quote
 			p.concentrated[pool] = struct{}{}
 		default:
 			continue
 		}
+	}
+
+	for k, v := range p.denoms {
+		fmt.Println(k, v)
 	}
 
 	return nil
@@ -325,9 +341,8 @@ func (p *OsmosisV2Provider) getVolume(height uint64) (volume.Volume, error) {
 	var err error
 
 	type Denom struct {
-		Symbol   string
-		Decimals int64
-		Amount   sdk.Dec
+		Symbol string
+		Amount sdk.Dec
 	}
 
 	if height == 0 {
@@ -348,6 +363,16 @@ func (p *OsmosisV2Provider) getVolume(height uint64) (volume.Volume, error) {
 	values := map[string]sdk.Dec{}
 
 	for _, pair := range p.getAllPairs() {
+		_, found := p.decimals[pair.Base]
+		if !found {
+			continue
+		}
+
+		_, found = p.decimals[pair.Quote]
+		if !found {
+			continue
+		}
+
 		values[pair.Base+pair.Quote] = sdk.ZeroDec()
 		values[pair.Quote+pair.Base] = sdk.ZeroDec()
 	}
@@ -373,71 +398,33 @@ func (p *OsmosisV2Provider) getVolume(height uint64) (volume.Volume, error) {
 				continue
 			}
 
+			_, found = values[symbol]
+			if !found {
+				continue
+			}
+
 			pair, err := p.getPair(symbol)
 			if err != nil {
 				p.logger.Warn().Err(err).Str("symbol", symbol).Msg("")
 				continue
 			}
 
-			fmt.Println(symbol, pair.String())
-
-			tokensIn, found := event.Attributes["tokens_in"]
-			if !found {
-				continue
-			}
-
-			tokensOut, found := event.Attributes["tokens_out"]
-			if !found {
-				continue
-			}
-
-			amountIn, denomIn, err := parseDenom(tokensIn)
+			in, err := p.getToken(event, "tokens_in")
 			if err != nil {
-				p.logger.Err(err).Msg("")
+				p.logger.Error().Str("pair", pair.String()).Msg("failed parsing token 'in'")
 				continue
 			}
 
-			amountOut, _, err := parseDenom(tokensOut)
+			out, err := p.getToken(event, "tokens_out")
 			if err != nil {
-				p.logger.Err(err).Msg("")
+				p.logger.Error().Str("pair", pair.String()).Msg("failed parsing token 'out'")
 				continue
 			}
-
-			baseDenom, found := p.denoms[pair.Base]
-			if !found {
-				p.logger.Err(err).Msg("")
-				continue
-			}
-
-			var symbolIn, symbolOut string
-
-			if denomIn == baseDenom {
-				symbolIn = pair.Base
-				symbolOut = pair.Quote
-			} else {
-				symbolIn = pair.Quote
-				symbolOut = pair.Base
-			}
-
-			decimalsIn, found := p.decimals[symbolIn]
-			if !found {
-				continue
-			}
-
-			decimalsOut, found := p.decimals[symbolOut]
-			if !found {
-				continue
-			}
-
-			ten := uintToDec(10)
-
-			amountIn = amountIn.Quo(ten.Power(uint64(decimalsIn)))
-			amountOut = amountOut.Quo(ten.Power(uint64(decimalsOut)))
 
 			// needed to for final volumes: {ATOMOSMO: 1, OSMOATOM: 9}
 			amounts := map[string]sdk.Dec{
-				symbolIn + symbolOut: amountIn,
-				symbolOut + symbolIn: amountOut,
+				in.Symbol + out.Symbol: in.Amount,
+				out.Symbol + in.Symbol: out.Amount,
 			}
 
 			for symbol, amount := range amounts {
@@ -461,4 +448,41 @@ func (p *OsmosisV2Provider) getVolume(height uint64) (volume.Volume, error) {
 	}
 
 	return volume, nil
+}
+
+func (p *OsmosisV2Provider) getToken(
+	event types.CosmosTxEvent,
+	key string,
+) (types.Denom, error) {
+	token, found := event.Attributes[key]
+	if !found {
+		return types.Denom{}, fmt.Errorf("token not found")
+	}
+
+	amount, denom, err := parseDenom(token)
+	if err != nil {
+		return types.Denom{}, err
+	}
+
+	symbol, found := p.denoms[denom]
+	if !found {
+		err := fmt.Errorf("symbol not found")
+		p.logger.Err(err).
+			Str("denom", denom).Msg("")
+		return types.Denom{}, err
+	}
+
+	decimals, found := p.decimals[symbol]
+	if !found {
+		err := fmt.Errorf("no decimals found")
+		p.logger.Err(err).Str("symbol", symbol).Msg("")
+		return types.Denom{}, err
+	}
+
+	amount = amount.Quo(uintToDec(10).Power(uint64(decimals)))
+
+	return types.Denom{
+		Amount: amount,
+		Symbol: symbol,
+	}, nil
 }

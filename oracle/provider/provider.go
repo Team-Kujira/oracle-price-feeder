@@ -147,6 +147,7 @@ type (
 		ContractAddresses map[string]string
 		VolumeBlocks      int
 		VolumePause       int
+		Decimals          map[string]int
 	}
 )
 

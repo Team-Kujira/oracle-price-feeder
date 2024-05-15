@@ -28,7 +28,7 @@ type VolumeHandler struct {
 	db       *sql.DB
 	provider string
 	symbols  []string
-	totals   map[string]sdk.Dec
+	totals   map[string]*Total
 	volumes  []Volume
 	period   int64
 	missing  []uint64
@@ -44,16 +44,21 @@ func NewVolumeHandler(
 ) (VolumeHandler, error) {
 	symbols := []string{}
 	for _, pair := range pairs {
-		symbols = append(symbols, pair.String())
-		symbols = append(symbols, pair.Swap().String())
+		symbols = append(symbols, pair.Base+pair.Quote)
+		symbols = append(symbols, pair.Quote+pair.Base)
+	}
+
+	totals := map[string]*Total{}
+	for _, symbol := range symbols {
+		totals[symbol] = NewTotal()
 	}
 
 	handler := VolumeHandler{
-		logger:   logger,
+		logger:   logger.With().Str("module", "volume").Logger(),
 		db:       db,
 		provider: provider,
 		symbols:  symbols,
-		totals:   map[string]sdk.Dec{},
+		totals:   totals,
 		volumes:  []Volume{},
 		period:   period,
 		missing:  []uint64{},
@@ -107,7 +112,7 @@ func (h *VolumeHandler) load() error {
 	symbols := map[string]struct{}{}
 
 	for _, symbol := range h.symbols {
-		h.totals[symbol] = sdk.ZeroDec()
+		h.totals[symbol].Clear()
 		symbols[symbol] = struct{}{}
 	}
 
@@ -171,25 +176,34 @@ func (h *VolumeHandler) load() error {
 	return nil
 }
 
-func (h *VolumeHandler) Get(symbol string) sdk.Dec {
+func (h *VolumeHandler) Get(symbol string) (sdk.Dec, error) {
 	total, found := h.totals[symbol]
 	if !found {
-		return sdk.ZeroDec()
+		err := fmt.Errorf("no volume data found")
+		h.logger.Err(err).Str("symbol", symbol).Msg("")
+		return sdk.ZeroDec(), err
 	}
 
-	if len(h.volumes) < 10 {
-		return sdk.ZeroDec()
+	missing := len(h.volumes) - total.Values + len(h.missing)
+
+	if total.Values == 0 || missing*10 > total.Values {
+		err := fmt.Errorf("not enough volume data")
+		h.logger.Err(err).
+			Str("symbol", symbol).
+			Int("values", total.Values).
+			Int("missing", missing).
+			Msg("")
+		return sdk.ZeroDec(), err
 	}
 
-	// < 10%
-	if len(h.missing)*10 > len(h.volumes) {
-		return sdk.ZeroDec()
-	}
-
-	return total
+	return total.Total, nil
 }
 
 func (h *VolumeHandler) Add(volumes []Volume) {
+	if h.provider == "osmosisv2" {
+		fmt.Println(volumes[0])
+	}
+
 	t0 := time.Now()
 	if len(volumes) == 0 {
 		return
@@ -296,12 +310,14 @@ func (h *VolumeHandler) append(volumes []Volume) {
 			break
 		}
 
-		for symbol, value := range volume.Values {
-			total, found := h.totals[symbol]
+		for symbol, total := range h.totals {
+			value, found := volume.Values[symbol]
+			// removing old data, so we don't need to worry about
+			// missing volume data for specifiv symbols in old blocks
 			if !found {
 				continue
 			}
-			h.totals[symbol] = total.Sub(value)
+			total.Sub(value)
 		}
 	}
 
@@ -316,20 +332,24 @@ func (h *VolumeHandler) append(volumes []Volume) {
 	h.missing = missing
 
 	// search for new missing blocks
+	missing = []uint64{}
 	height := h.volumes[len(h.volumes)-1].Height + 1
 	for height < volumes[0].Height {
-		h.missing = append(h.missing, height)
+		missing = append(missing, height)
 		height++
 	}
 
+	h.missing = missing
+
 	// add new data
 	for _, volume := range volumes {
-		for symbol, value := range volume.Values {
-			total, found := h.totals[symbol]
+		for symbol, total := range h.totals {
+			value, found := volume.Values[symbol]
 			if !found {
 				continue
 			}
-			h.totals[symbol] = total.Add(value)
+
+			total.Add(value)
 		}
 	}
 
@@ -347,6 +367,7 @@ func (h *VolumeHandler) prepend(volumes []Volume) {
 
 	startIndex := 0
 
+	// add new data
 	for i := len(volumes) - 1; i > 0; i-- {
 		volume := volumes[i]
 		if volume.Time < startTime {
@@ -354,12 +375,13 @@ func (h *VolumeHandler) prepend(volumes []Volume) {
 			break
 		}
 
-		for symbol, value := range volume.Values {
-			total, found := h.totals[symbol]
+		for symbol, total := range h.totals {
+			value, found := volume.Values[symbol]
 			if !found {
 				continue
 			}
-			h.totals[symbol] = total.Add(value)
+
+			total.Add(value)
 		}
 
 		index := slices.Index(h.missing, volume.Height)
@@ -407,8 +429,8 @@ func (h *VolumeHandler) update(volumes []Volume) {
 	h.volumes = h.volumes[startIndex:]
 
 	// reset totals
-	for symbol := range h.totals {
-		h.totals[symbol] = sdk.ZeroDec()
+	for _, total := range h.totals {
+		total.Clear()
 	}
 
 	// calculate totals and find missing blocks
@@ -416,12 +438,12 @@ func (h *VolumeHandler) update(volumes []Volume) {
 	missing := make([]uint64, blocks)
 	index := 0
 	for i, volume := range h.volumes {
-		for symbol, value := range volume.Values {
-			total, found := h.totals[symbol]
+		for symbol, total := range h.totals {
+			value, found := volume.Values[symbol]
 			if !found {
 				continue
 			}
-			h.totals[symbol] = total.Add(value)
+			total.Add(value)
 		}
 
 		if i == 0 {
@@ -458,6 +480,10 @@ func (h *VolumeHandler) persist(volumes []Volume) error {
 		}
 
 		for symbol, value := range volume.Values {
+			if value.IsNil() || value.IsNegative() {
+				continue
+			}
+
 			placeholders = append(placeholders, "(?, ?, ?, ?, ?)")
 			values = append(values, []interface{}{
 				symbol,
@@ -496,6 +522,14 @@ func (h *VolumeHandler) GetMissing(amount int) []uint64 {
 }
 
 func (h *VolumeHandler) Debug(symbol string) {
+	for symbol, total := range h.totals {
+		if symbol != "STARSOSMO" {
+			continue
+		}
+		missing := len(h.volumes) - total.Values + len(h.missing)
+		fmt.Println(symbol, "Values:", total.Values, "Missing:", missing)
+	}
+
 	missing := len(h.missing)
 	volumes := len(h.volumes)
 	percent := float64(missing) / float64(volumes) * 100
