@@ -299,9 +299,8 @@ func (p *FinV2Provider) getVolume(height uint64) (volume.Volume, error) {
 				continue
 			}
 
-			pair, err := p.getPair(symbol)
-			if err != nil {
-				p.logger.Warn().Err(err).Str("symbol", symbol).Msg("")
+			pair, found := p.getPair(symbol)
+			if !found {
 				continue
 			}
 

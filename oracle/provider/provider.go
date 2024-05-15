@@ -865,18 +865,22 @@ func (p *provider) getAvailablePairsFromContracts() (map[string]struct{}, error)
 	return symbols, nil
 }
 
-func (p *provider) getPair(symbol string) (types.CurrencyPair, error) {
+func (p *provider) getPair(symbol string) (types.CurrencyPair, bool) {
 	pair, found := p.pairs[symbol]
 	if found {
-		return pair, nil
+		return pair, true
 	}
 
 	pair, found = p.inverse[symbol]
 	if found {
-		return pair.Swap(), nil
+		return pair.Swap(), true
 	}
 
-	return pair, p.errorf("pair not found")
+	p.logger.Debug().
+		Str("symbol", symbol).
+		Msg("pair not found")
+
+	return pair, false
 }
 
 func (p *provider) getContractAddress(pair types.CurrencyPair) (string, error) {
