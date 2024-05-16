@@ -394,15 +394,17 @@ func (p *OsmosisV2Provider) getVolume(height uint64) (volume.Volume, error) {
 	}
 
 	for _, tx := range txs {
-		trades := tx.GetEventsByType("token_swapped")
-		if len(trades) > 0 {
-			p.logger.Info().
-				Str("tx", tx.Hash).
-				Int("swaps", len(trades)).
-				Msg("swaps found")
+		swaps := tx.GetEventsByType("token_swapped")
+		if len(swaps) == 0 {
+			continue
 		}
 
-		for _, event := range trades {
+		p.logger.Debug().
+			Str("tx", tx.Hash).
+			Int("swaps", len(swaps)).
+			Msg("swaps found")
+
+		for _, event := range swaps {
 			pool, found := event.Attributes["pool_id"]
 			if !found {
 				p.logger.Debug().
