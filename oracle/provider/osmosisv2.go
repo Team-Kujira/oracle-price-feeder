@@ -39,6 +39,7 @@ type (
 		volumes      volume.VolumeHandler
 		height       uint64
 		decimals     map[string]int64
+		symbols      []string
 	}
 
 	OsmosisV2SpotPrice struct {
@@ -112,6 +113,28 @@ func NewOsmosisV2Provider(
 		"WHALE":  6,
 		"STATOM": 6,
 	}
+
+	symbols := []string{}
+	for _, pair := range pairs {
+		skip := false
+		for _, symbol := range []string{pair.Base, pair.Quote} {
+			_, found := provider.decimals[symbol]
+			if !found {
+				skip = true
+				logger.Debug().
+					Str("symbol", symbol).
+					Msg("unknown decimal")
+			}
+		}
+		if skip {
+			continue
+		}
+
+		symbols = append(symbols, pair.Base+pair.Quote)
+		symbols = append(symbols, pair.Quote+pair.Base)
+	}
+
+	provider.symbols = symbols
 
 	provider.init()
 
@@ -337,11 +360,6 @@ func (p *OsmosisV2Provider) getVolume(height uint64) (volume.Volume, error) {
 
 	var err error
 
-	type Denom struct {
-		Symbol string
-		Amount sdk.Dec
-	}
-
 	if height == 0 {
 		height, err = p.getCosmosHeight()
 		if err != nil {
@@ -355,35 +373,41 @@ func (p *OsmosisV2Provider) getVolume(height uint64) (volume.Volume, error) {
 		p.height = height
 	}
 
-	// prepare all volumes:
-	// not traded pairs have zero volume for this block
-	values := map[string]sdk.Dec{}
-
-	for _, pair := range p.getAllPairs() {
-		_, found := p.decimals[pair.Base]
-		if !found {
-			continue
-		}
-
-		_, found = p.decimals[pair.Quote]
-		if !found {
-			continue
-		}
-
-		values[pair.Base+pair.Quote] = sdk.ZeroDec()
-		values[pair.Quote+pair.Base] = sdk.ZeroDec()
+	filter := []string{
+		"/osmosis.poolmanager.v1beta1.MsgSwapExactAmountIn",
+		"/osmosis.gamm.v1beta1.MsgSwapExactAmountIn",
+		"/cosmwasm.wasm.v1.MsgExecuteContract",
+		"/ibc.core.channel.v1.MsgRecvPacket", // via skip
+		"/osmosis.poolmanager.v1beta1.MsgSplitRouteSwapExactAmountIn",
 	}
 
-	txs, timestamp, err := p.getCosmosTxs(height)
+	txs, timestamp, err := p.getCosmosTxs(height, filter)
 	if err != nil {
 		return volume.Volume{}, p.error(err)
 	}
 
+	// prepare all volumes:
+	// not traded pairs have zero volume for this block
+	values := map[string]sdk.Dec{}
+	for _, symbol := range p.symbols {
+		values[symbol] = sdk.ZeroDec()
+	}
+
 	for _, tx := range txs {
 		trades := tx.GetEventsByType("token_swapped")
+		if len(trades) > 0 {
+			p.logger.Info().
+				Str("tx", tx.Hash).
+				Int("swaps", len(trades)).
+				Msg("swaps found")
+		}
+
 		for _, event := range trades {
 			pool, found := event.Attributes["pool_id"]
 			if !found {
+				p.logger.Debug().
+					Str("pool_id", pool).
+					Msg("unknown pool")
 				continue
 			}
 
@@ -397,6 +421,9 @@ func (p *OsmosisV2Provider) getVolume(height uint64) (volume.Volume, error) {
 
 			_, found = values[symbol]
 			if !found {
+				p.logger.Debug().
+					Str("symbol", symbol).
+					Msg("unknown symbol")
 				continue
 			}
 

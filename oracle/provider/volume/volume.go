@@ -218,7 +218,8 @@ func (h *VolumeHandler) Add(volumes []Volume) {
 	}
 
 	if len(h.volumes) == 0 {
-		h.volumes = []Volume{volumes[0]}
+		h.update(volumes)
+		return
 	}
 
 	knownMinHeight := h.volumes[0].Height
@@ -514,6 +515,12 @@ func (h *VolumeHandler) GetMissing(amount int) []uint64 {
 		return h.missing[len(h.missing)-amount:]
 	}
 
+	// doesn't make sense to search for specific pairs missing data
+	// when we have no volumes at all
+	if len(h.volumes) == 0 {
+		return []uint64{}
+	}
+
 	start := uint64(0)
 	for _, total := range h.totals {
 		if total.First > start {
@@ -556,7 +563,7 @@ func (h *VolumeHandler) Debug(symbol string) {
 
 	missing := len(h.missing)
 	volumes := len(h.volumes)
-	percent := float64(missing) / float64(volumes) * 100
+	percent := float64(missing) / float64(missing+volumes) * 100
 	fmt.Printf("--- %s @ %s ---\n", symbol, h.provider)
 	fmt.Println("Volumes:", volumes)
 	fmt.Printf("Missing: %d (%.2f%%)\n", missing, percent)

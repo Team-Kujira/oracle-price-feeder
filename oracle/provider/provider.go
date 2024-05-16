@@ -329,6 +329,7 @@ func (p *provider) getCosmosTx(hash string) (types.CosmosTx, error) {
 		Time:   timestamp,
 		Height: height,
 		Events: events,
+		Hash:   hash,
 	}
 
 	return tx, nil
@@ -356,7 +357,10 @@ func (p *provider) getCosmosHeight() (uint64, error) {
 	return height, nil
 }
 
-func (p *provider) getCosmosTxs(height uint64) ([]types.CosmosTx, time.Time, error) {
+func (p *provider) getCosmosTxs(
+	height uint64,
+	msgTypes []string,
+) ([]types.CosmosTx, time.Time, error) {
 	var timestamp time.Time
 	if height == 0 {
 		return nil, timestamp, fmt.Errorf("height is 0")
@@ -381,21 +385,28 @@ func (p *provider) getCosmosTxs(height uint64) ([]types.CosmosTx, time.Time, err
 	}
 
 	hashes := []string{}
+	filter := map[string]struct{}{}
+	for _, msgType := range msgTypes {
+		filter[msgType] = struct{}{}
+	}
 
 	for i, tx := range response.Txs {
 		for _, message := range tx.Body.Messages {
-			if message.Type == "/cosmwasm.wasm.v1.MsgExecuteContract" {
-				data, err := base64.StdEncoding.DecodeString(
-					response.Block.Data.Txs[i],
-				)
-				if err != nil {
-					return nil, timestamp, err
-				}
-
-				hash := sha256.New()
-				hash.Write(data)
-				hashes = append(hashes, fmt.Sprintf("%X", hash.Sum(nil)))
+			_, found := filter[message.Type]
+			if !found {
+				continue
 			}
+
+			data, err := base64.StdEncoding.DecodeString(
+				response.Block.Data.Txs[i],
+			)
+			if err != nil {
+				return nil, timestamp, err
+			}
+
+			hash := sha256.New()
+			hash.Write(data)
+			hashes = append(hashes, fmt.Sprintf("%X", hash.Sum(nil)))
 		}
 	}
 

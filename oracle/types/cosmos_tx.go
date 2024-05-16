@@ -7,6 +7,7 @@ type CosmosTx struct {
 	Height uint64
 	Time   time.Time
 	Events []CosmosTxEvent
+	Hash   string
 }
 
 func (tx *CosmosTx) GetEventsByType(eventType string) []CosmosTxEvent {

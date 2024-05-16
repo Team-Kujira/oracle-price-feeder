@@ -281,7 +281,11 @@ func (p *FinV2Provider) getVolume(height uint64) (volume.Volume, error) {
 		values[pair.Quote+pair.Base] = sdk.ZeroDec()
 	}
 
-	txs, timestamp, err := p.getCosmosTxs(height)
+	filter := []string{
+		"/cosmwasm.wasm.v1.MsgExecuteContract",
+	}
+
+	txs, timestamp, err := p.getCosmosTxs(height, filter)
 	if err != nil {
 		return volume.Volume{}, p.error(err)
 	}
