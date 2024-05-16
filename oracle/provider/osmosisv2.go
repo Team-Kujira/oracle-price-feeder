@@ -19,7 +19,7 @@ var (
 	_                         Provider = (*OsmosisV2Provider)(nil)
 	osmosisv2DefaultEndpoints          = Endpoint{
 		Name:         ProviderOsmosisV2,
-		Urls:         []string{"https://rest.cosmos.directory/osmosis"},
+		Urls:         []string{},
 		PollInterval: 4 * time.Second,
 		VolumeBlocks: 4,
 		VolumePause:  0,
@@ -39,7 +39,6 @@ type (
 		volumes      volume.VolumeHandler
 		height       uint64
 		decimals     map[string]int64
-		symbols      []string
 	}
 
 	OsmosisV2SpotPrice struct {
@@ -94,13 +93,6 @@ func NewOsmosisV2Provider(
 	availablePairs, _ := provider.GetAvailablePairs()
 	provider.setPairs(pairs, availablePairs, nil)
 
-	volumes, err := volume.NewVolumeHandler(logger, db, "osmosisv2", pairs, 60*60*24)
-	if err != nil {
-		return provider, err
-	}
-
-	provider.volumes = volumes
-
 	provider.decimals = map[string]int64{
 		"KUJI":   6,
 		"USDC":   6,
@@ -134,7 +126,12 @@ func NewOsmosisV2Provider(
 		symbols = append(symbols, pair.Quote+pair.Base)
 	}
 
-	provider.symbols = symbols
+	volumes, err := volume.NewVolumeHandler(logger, db, "osmosisv2", symbols, 60*60*24)
+	if err != nil {
+		return provider, err
+	}
+
+	provider.volumes = volumes
 
 	provider.init()
 
@@ -170,7 +167,7 @@ func (p *OsmosisV2Provider) Poll() error {
 				pair = pair.Swap()
 			}
 
-			price, err = p.queryConcentratedLiquidityPool(pair, poolId)
+			price, err = p.queryConcentratedLiquidityPool(poolId)
 			if err != nil {
 				p.logger.Error().
 					Str("pair", pair.String()).
@@ -258,7 +255,6 @@ func (p *OsmosisV2Provider) queryLegacyPool(
 }
 
 func (p *OsmosisV2Provider) queryConcentratedLiquidityPool(
-	pair types.CurrencyPair,
 	poolId string,
 ) (sdk.Dec, error) {
 	path := "/osmosis/gamm/v1beta1/pools/" + poolId
@@ -389,7 +385,7 @@ func (p *OsmosisV2Provider) getVolume(height uint64) (volume.Volume, error) {
 	// prepare all volumes:
 	// not traded pairs have zero volume for this block
 	values := map[string]sdk.Dec{}
-	for _, symbol := range p.symbols {
+	for _, symbol := range p.volumes.Symbols() {
 		values[symbol] = sdk.ZeroDec()
 	}
 
@@ -407,16 +403,13 @@ func (p *OsmosisV2Provider) getVolume(height uint64) (volume.Volume, error) {
 		for _, event := range swaps {
 			pool, found := event.Attributes["pool_id"]
 			if !found {
-				p.logger.Debug().
-					Str("pool_id", pool).
-					Msg("unknown pool")
 				continue
 			}
 
 			symbol, found := p.contracts[pool]
 			if !found {
 				p.logger.Debug().
-					Str("pool", pool).
+					Str("pool_id", pool).
 					Msg("unknown pool")
 				continue
 			}

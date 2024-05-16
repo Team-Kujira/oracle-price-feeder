@@ -88,13 +88,6 @@ func NewFinV2Provider(
 
 	provider.delta = map[string]int64{}
 
-	volumes, err := volume.NewVolumeHandler(logger, db, "finv2", pairs, 60*60*24)
-	if err != nil {
-		return provider, err
-	}
-
-	provider.volumes = volumes
-
 	provider.decimals = map[string]int64{
 		"KUJI": 6,
 		"USDC": 6,
@@ -102,6 +95,33 @@ func NewFinV2Provider(
 		"MNTA": 6,
 		"ATOM": 6,
 	}
+
+	symbols := []string{}
+	for _, pair := range pairs {
+		skip := false
+		for _, symbol := range []string{pair.Base, pair.Quote} {
+			_, found := provider.decimals[symbol]
+			if !found {
+				skip = true
+				logger.Debug().
+					Str("symbol", symbol).
+					Msg("unknown decimal")
+			}
+		}
+		if skip {
+			continue
+		}
+
+		symbols = append(symbols, pair.Base+pair.Quote)
+		symbols = append(symbols, pair.Quote+pair.Base)
+	}
+
+	volumes, err := volume.NewVolumeHandler(logger, db, "finv2", symbols, 60*60*24)
+	if err != nil {
+		return provider, err
+	}
+
+	provider.volumes = volumes
 
 	go startPolling(provider, provider.endpoints.PollInterval, logger)
 
@@ -275,10 +295,8 @@ func (p *FinV2Provider) getVolume(height uint64) (volume.Volume, error) {
 	// prepare all volumes:
 	// not traded pairs have zero volume for this block
 	values := map[string]sdk.Dec{}
-
-	for _, pair := range p.getAllPairs() {
-		values[pair.Base+pair.Quote] = sdk.ZeroDec()
-		values[pair.Quote+pair.Base] = sdk.ZeroDec()
+	for _, symbol := range p.volumes.Symbols() {
+		values[symbol] = sdk.ZeroDec()
 	}
 
 	filter := []string{
@@ -300,6 +318,9 @@ func (p *FinV2Provider) getVolume(height uint64) (volume.Volume, error) {
 
 			symbol, found := p.contracts[contract]
 			if !found {
+				p.logger.Debug().
+					Str("contract", contract).
+					Msg("unknown contract")
 				continue
 			}
 
@@ -318,27 +339,6 @@ func (p *FinV2Provider) getVolume(height uint64) (volume.Volume, error) {
 				Symbol:   pair.Quote,
 				Decimals: p.decimals[pair.Quote],
 				Amount:   strToDec(event.Attributes["quote_amount"]),
-			}
-
-			if base.Decimals == 0 && quote.Decimals == 0 {
-				p.logger.Error().
-					Str("pair", pair.String()).
-					Msg("no decimals found")
-				continue
-			}
-
-			if base.Decimals == 0 || quote.Decimals == 0 {
-				delta, err := p.getDecimalDelta(contract)
-				if err != nil {
-					p.logger.Err(err).Msg("")
-					continue
-				}
-
-				if base.Decimals == 0 {
-					base.Decimals = quote.Decimals + delta
-				} else {
-					quote.Decimals = base.Decimals - delta
-				}
 			}
 
 			ten := uintToDec(10)

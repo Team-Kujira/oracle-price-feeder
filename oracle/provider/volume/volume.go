@@ -8,8 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"price-feeder/oracle/types"
-
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	_ "github.com/mattn/go-sqlite3"
 	"golang.org/x/exp/slices"
@@ -39,15 +37,9 @@ func NewVolumeHandler(
 	logger zerolog.Logger,
 	db *sql.DB,
 	provider string,
-	pairs []types.CurrencyPair,
+	symbols []string,
 	period int64,
 ) (VolumeHandler, error) {
-	symbols := []string{}
-	for _, pair := range pairs {
-		symbols = append(symbols, pair.Base+pair.Quote)
-		symbols = append(symbols, pair.Quote+pair.Base)
-	}
-
 	totals := map[string]*Total{}
 	for _, symbol := range symbols {
 		totals[symbol] = NewTotal()
@@ -572,4 +564,8 @@ func (h *VolumeHandler) Debug(symbol string) {
 		return
 	}
 	fmt.Println("Total:", total)
+}
+
+func (h *VolumeHandler) Symbols() []string {
+	return h.symbols
 }
