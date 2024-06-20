@@ -70,6 +70,7 @@ const (
 	ProviderOsmosisV2          Name = "osmosisv2"
 	ProviderPancakeV3Bsc       Name = "pancakev3_bsc"
 	ProviderPhemex             Name = "phemex"
+	ProviderPionex             Name = "pionex"
 	ProviderPoloniex           Name = "poloniex"
 	ProviderPyth               Name = "pyth"
 	ProviderShade              Name = "shade"
@@ -633,6 +634,8 @@ func (e *Endpoint) SetDefaults() {
 		defaults = PancakeV3BscDefaultEndpoints
 	case ProviderPhemex:
 		defaults = phemexDefaultEndpoints
+	case ProviderPionex:
+		defaults = pionexDefaultEndpoints
 	case ProviderPoloniex:
 		defaults = poloniexDefaultEndpoints
 	case ProviderPyth:

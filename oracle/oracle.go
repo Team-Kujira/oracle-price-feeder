@@ -540,6 +540,8 @@ func NewProvider(
 		return provider.NewPancakeProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderPhemex:
 		return provider.NewPhemexProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderPionex:
+		return provider.NewPionexProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderPoloniex:
 		return provider.NewPoloniexProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderPyth:

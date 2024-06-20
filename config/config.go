@@ -72,6 +72,7 @@ var (
 		provider.ProviderOsmosisV2:          {},
 		provider.ProviderPancakeV3Bsc:       {},
 		provider.ProviderPhemex:             {},
+		provider.ProviderPionex:             {},
 		provider.ProviderPoloniex:           {},
 		provider.ProviderPyth:               {},
 		provider.ProviderShade:              {},
