@@ -82,6 +82,7 @@ type Oracle struct {
 	derivativeSymbols    map[string]struct{}
 	contractAddresses    map[string]map[string]string
 	providerWeights      map[string]ProviderWeight
+	decimals             map[string]map[string]int
 	volumeDatabase       *sql.DB
 
 	mtx             sync.RWMutex
@@ -106,6 +107,7 @@ func New(
 	history history.PriceHistory,
 	contractAddresses map[string]map[string]string,
 	providerWeights map[string]ProviderWeight,
+	decimals map[string]map[string]int,
 	volumeDatabase *sql.DB,
 ) *Oracle {
 	providerPairs := make(map[provider.Name][]types.CurrencyPair)
@@ -150,6 +152,7 @@ func New(
 		history:              history,
 		contractAddresses:    contractAddresses,
 		providerWeights:      providerWeights,
+		decimals:             decimals,
 		volumeDatabase:       volumeDatabase,
 	}
 }
@@ -230,7 +233,9 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 		if !found {
 			endpoint := o.endpoints[providerName]
 			contractAddresses := o.contractAddresses[providerName.String()]
+			decimals := o.decimals[providerName.String()]
 			endpoint.ContractAddresses = contractAddresses
+			endpoint.Decimals = decimals
 
 			newProvider, err := NewProvider(
 				o.volumeDatabase,

@@ -35,7 +35,6 @@ type (
 		delta     map[string]int64
 		volumes   volume.VolumeHandler
 		height    uint64
-		decimals  map[string]int64
 	}
 
 	FinV2BookResponse struct {
@@ -88,19 +87,11 @@ func NewFinV2Provider(
 
 	provider.delta = map[string]int64{}
 
-	provider.decimals = map[string]int64{
-		"KUJI": 6,
-		"USDC": 6,
-		"USK":  6,
-		"MNTA": 6,
-		"ATOM": 6,
-	}
-
 	symbols := []string{}
 	for _, pair := range pairs {
 		skip := false
 		for _, symbol := range []string{pair.Base, pair.Quote} {
-			_, found := provider.decimals[symbol]
+			_, found := endpoints.Decimals[symbol]
 			if !found {
 				skip = true
 				logger.Debug().
@@ -253,16 +244,16 @@ func (p *FinV2Provider) updateVolumes() {
 	missing := p.volumes.GetMissing(p.endpoints.VolumeBlocks)
 	missing = append(missing, 0)
 
-	volumes := make([]volume.Volume, len(missing))
+	volumes := []volume.Volume{}
 
-	for i, height := range missing {
+	for _, height := range missing {
 		volume, err := p.getVolume(height)
 		time.Sleep(time.Millisecond * time.Duration(p.endpoints.VolumePause))
 		if err != nil {
 			p.error(err)
 			continue
 		}
-		volumes[i] = volume
+		volumes = append(volumes, volume)
 	}
 
 	p.volumes.Add(volumes)
@@ -275,7 +266,7 @@ func (p *FinV2Provider) getVolume(height uint64) (volume.Volume, error) {
 
 	type Denom struct {
 		Symbol   string
-		Decimals int64
+		Decimals int
 		Amount   sdk.Dec
 	}
 
@@ -331,13 +322,13 @@ func (p *FinV2Provider) getVolume(height uint64) (volume.Volume, error) {
 
 			base := Denom{
 				Symbol:   pair.Base,
-				Decimals: p.decimals[pair.Base],
+				Decimals: p.endpoints.Decimals[pair.Base],
 				Amount:   strToDec(event.Attributes["base_amount"]),
 			}
 
 			quote := Denom{
 				Symbol:   pair.Quote,
-				Decimals: p.decimals[pair.Quote],
+				Decimals: p.endpoints.Decimals[pair.Quote],
 				Amount:   strToDec(event.Attributes["quote_amount"]),
 			}
 

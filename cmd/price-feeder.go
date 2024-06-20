@@ -276,6 +276,7 @@ func priceFeederCmdHandler(cmd *cobra.Command, args []string) error {
 		history,
 		cfg.ContractAdresses,
 		providerWeights,
+		cfg.Decimals,
 		volumeDatabase,
 	)
 

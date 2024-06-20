@@ -201,7 +201,7 @@ func (h *VolumeHandler) Add(volumes []Volume) {
 		return volumes[i].Height < volumes[j].Height
 	})
 
-	slices.CompactFunc(volumes, func(e1, e2 Volume) bool {
+	volumes = slices.CompactFunc(volumes, func(e1, e2 Volume) bool {
 		return e1.Height == e2.Height
 	})
 
@@ -212,6 +212,15 @@ func (h *VolumeHandler) Add(volumes []Volume) {
 	if len(h.volumes) == 0 {
 		h.update(volumes)
 		return
+	}
+
+	for _, volume := range volumes {
+		for pair, value := range volume.Values {
+			if value.IsZero() {
+				continue
+			}
+			fmt.Println(pair, value)
+		}
 	}
 
 	knownMinHeight := h.volumes[0].Height
@@ -301,7 +310,7 @@ func (h *VolumeHandler) append(volumes []Volume) {
 		for symbol, total := range h.totals {
 			value, found := volume.Values[symbol]
 			// removing old data, so we don't need to worry about
-			// missing volume data for specifiv symbols in old blocks
+			// missing volume data for specific symbols in old blocks
 			if !found {
 				continue
 			}
@@ -317,10 +326,10 @@ func (h *VolumeHandler) append(volumes []Volume) {
 			break
 		}
 	}
-	h.missing = missing
+	// h.missing = missing
 
 	// search for new missing blocks
-	missing = []uint64{}
+	// missing = []uint64{}
 	height := h.volumes[len(h.volumes)-1].Height + 1
 	for height < volumes[0].Height {
 		missing = append(missing, height)
@@ -398,7 +407,7 @@ func (h *VolumeHandler) update(volumes []Volume) {
 		return h.volumes[i].Height < h.volumes[j].Height
 	})
 
-	slices.CompactFunc(h.volumes, func(e1, e2 Volume) bool {
+	h.volumes = slices.CompactFunc(h.volumes, func(e1, e2 Volume) bool {
 		return e1.Height == e2.Height
 	})
 

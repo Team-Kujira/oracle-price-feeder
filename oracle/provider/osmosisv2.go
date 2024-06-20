@@ -38,7 +38,6 @@ type (
 		concentrated map[string]struct{}
 		volumes      volume.VolumeHandler
 		height       uint64
-		decimals     map[string]int64
 	}
 
 	OsmosisV2SpotPrice struct {
@@ -93,24 +92,11 @@ func NewOsmosisV2Provider(
 	availablePairs, _ := provider.GetAvailablePairs()
 	provider.setPairs(pairs, availablePairs, nil)
 
-	provider.decimals = map[string]int64{
-		"KUJI":   6,
-		"USDC":   6,
-		"USK":    6,
-		"MNTA":   6,
-		"ATOM":   6,
-		"OSMO":   6,
-		"SOMM":   6,
-		"JUNO":   6,
-		"WHALE":  6,
-		"STATOM": 6,
-	}
-
 	symbols := []string{}
 	for _, pair := range pairs {
 		skip := false
 		for _, symbol := range []string{pair.Base, pair.Quote} {
-			_, found := provider.decimals[symbol]
+			_, found := provider.endpoints.Decimals[symbol]
 			if !found {
 				skip = true
 				logger.Debug().
@@ -335,20 +321,19 @@ func (p *OsmosisV2Provider) updateVolumes() {
 	missing := p.volumes.GetMissing(p.endpoints.VolumeBlocks)
 	missing = append(missing, 0)
 
-	volumes := make([]volume.Volume, len(missing))
+	volumes := []volume.Volume{}
 
-	for i, height := range missing {
+	for _, height := range missing {
 		volume, err := p.getVolume(height)
 		time.Sleep(time.Millisecond * time.Duration(p.endpoints.VolumePause))
 		if err != nil {
 			p.error(err)
 			continue
 		}
-		volumes[i] = volume
+		volumes = append(volumes, volume)
 	}
 
 	p.volumes.Add(volumes)
-	p.volumes.Debug("OSMOUSDC")
 }
 
 func (p *OsmosisV2Provider) getVolume(height uint64) (volume.Volume, error) {
@@ -491,7 +476,7 @@ func (p *OsmosisV2Provider) getToken(
 		return types.Denom{}, err
 	}
 
-	decimals, found := p.decimals[symbol]
+	decimals, found := p.endpoints.Decimals[symbol]
 	if !found {
 		err := fmt.Errorf("no decimals found")
 		p.logger.Err(err).Str("symbol", symbol).Msg("")

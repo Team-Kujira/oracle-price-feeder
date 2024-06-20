@@ -121,6 +121,7 @@ type (
 		HeightPollInterval   string                        `toml:"height_poll_interval"`
 		HistoryDb            string                        `toml:"history_db"`
 		ContractAdresses     map[string]map[string]string  `toml:"contract_addresses"`
+		Decimals             map[string]map[string]int     `toml:"decimals"`
 		UrlSets              map[string]UrlSet             `toml:"url_set"`
 	}
 
@@ -223,10 +224,10 @@ type (
 		Websocket     string        `toml:"websocket"`
 		WebsocketPath string        `toml:"websocket_path"`
 		PollInterval  string        `toml:"poll_interval"`
-		Contracts     []string      `toml:"contracts"`
-		VolumeBlocks  int           `toml:"volume_blocks"`
-		VolumePause   int           `toml:"volume_pause"`
-		Decimals      map[string]int
+		// Contracts     []string       `toml:"contracts"`
+		VolumeBlocks int            `toml:"volume_blocks"`
+		VolumePause  int            `toml:"volume_pause"`
+		Decimals     map[string]int `toml:"decimals"`
 	}
 
 	UrlSet struct {
