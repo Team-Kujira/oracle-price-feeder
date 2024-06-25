@@ -34,10 +34,7 @@ type (
 	OsmosisV2Provider struct {
 		provider
 		denoms       map[string]string
-		contracts    map[string]string
 		concentrated map[string]struct{}
-		volumes      volume.VolumeHandler
-		height       uint64
 	}
 
 	OsmosisV2SpotPrice struct {
@@ -74,6 +71,7 @@ func NewOsmosisV2Provider(
 	pairs ...types.CurrencyPair,
 ) (*OsmosisV2Provider, error) {
 	provider := &OsmosisV2Provider{}
+	provider.db = db
 	provider.Init(
 		ctx,
 		endpoints,
@@ -83,41 +81,8 @@ func NewOsmosisV2Provider(
 		nil,
 	)
 
-	provider.contracts = provider.endpoints.ContractAddresses
-
-	for symbol, contract := range provider.endpoints.ContractAddresses {
-		provider.contracts[contract] = symbol
-	}
-
 	availablePairs, _ := provider.GetAvailablePairs()
 	provider.setPairs(pairs, availablePairs, nil)
-
-	symbols := []string{}
-	for _, pair := range pairs {
-		skip := false
-		for _, symbol := range []string{pair.Base, pair.Quote} {
-			_, found := provider.endpoints.Decimals[symbol]
-			if !found {
-				skip = true
-				logger.Debug().
-					Str("symbol", symbol).
-					Msg("unknown decimal")
-			}
-		}
-		if skip {
-			continue
-		}
-
-		symbols = append(symbols, pair.Base+pair.Quote)
-		symbols = append(symbols, pair.Quote+pair.Base)
-	}
-
-	volumes, err := volume.NewVolumeHandler(logger, db, "osmosisv2", symbols, 60*60*24)
-	if err != nil {
-		return provider, err
-	}
-
-	provider.volumes = volumes
 
 	provider.init()
 
@@ -207,14 +172,18 @@ func (p *OsmosisV2Provider) queryLegacyPool(
 	pair types.CurrencyPair,
 	poolId string,
 ) (string, error) {
+	err := fmt.Errorf("denom not found")
+
 	baseDenom, found := p.denoms[pair.Base]
 	if !found {
-		return "", fmt.Errorf("denom not found")
+		p.logger.Err(err).Str("symbol", pair.Base).Msg("")
+		return "", err
 	}
 
 	quoteDenom, found := p.denoms[pair.Quote]
 	if !found {
-		return "", fmt.Errorf("denom not found")
+		p.logger.Err(err).Str("symbol", pair.Quote).Msg("")
+		return "", err
 	}
 
 	// api seems to flipped base and quote

@@ -172,7 +172,7 @@ func (h *VolumeHandler) Get(symbol string) (sdk.Dec, error) {
 	total, found := h.totals[symbol]
 	if !found {
 		err := fmt.Errorf("no volume data found")
-		h.logger.Err(err).Str("symbol", symbol).Msg("")
+		h.logger.Debug().AnErr("error", err).Str("symbol", symbol).Msg("")
 		return sdk.ZeroDec(), err
 	}
 
@@ -212,15 +212,6 @@ func (h *VolumeHandler) Add(volumes []Volume) {
 	if len(h.volumes) == 0 {
 		h.update(volumes)
 		return
-	}
-
-	for _, volume := range volumes {
-		for pair, value := range volume.Values {
-			if value.IsZero() {
-				continue
-			}
-			fmt.Println(pair, value)
-		}
 	}
 
 	knownMinHeight := h.volumes[0].Height
@@ -285,12 +276,12 @@ func (h *VolumeHandler) Add(volumes []Volume) {
 		h.missing = append(missing, h.missing...)
 	}
 
-	fmt.Println("Volume Calculation:", time.Since(t0))
+	h.logger.Info().Str("duration", time.Since(t0).String()).Msg("updated volumes")
 }
 
 func (h *VolumeHandler) append(volumes []Volume) {
 	t0 := time.Now()
-	h.logger.Info().Msg("append")
+	h.logger.Debug().Msg("append")
 	// [4, 6, 7] + [8, 9]
 
 	stopTime := volumes[len(volumes)-1].Time
@@ -351,12 +342,12 @@ func (h *VolumeHandler) append(volumes []Volume) {
 	}
 
 	h.volumes = append(h.volumes[startIndex:], volumes...)
-	fmt.Println("append:", time.Since(t0))
+	h.logger.Info().Str("duration", time.Since(t0).String()).Msg("append")
 }
 
 func (h *VolumeHandler) prepend(volumes []Volume) {
 	t0 := time.Now()
-	h.logger.Info().Msg("prepend")
+	h.logger.Debug().Msg("prepend")
 	// [4, 6, 7] + [1, 2]
 
 	stopTime := h.volumes[len(h.volumes)-1].Time
@@ -389,7 +380,7 @@ func (h *VolumeHandler) prepend(volumes []Volume) {
 	}
 
 	h.volumes = append(volumes[startIndex:], h.volumes...)
-	fmt.Println("prepend:", time.Since(t0))
+	h.logger.Info().Str("duration", time.Since(t0).String()).Msg("prepend")
 }
 
 func (h *VolumeHandler) update(volumes []Volume) {
@@ -399,7 +390,7 @@ func (h *VolumeHandler) update(volumes []Volume) {
 		return
 	}
 
-	h.logger.Info().Msg("update")
+	h.logger.Debug().Msg("update")
 
 	h.volumes = append(h.volumes, volumes...)
 
@@ -457,7 +448,7 @@ func (h *VolumeHandler) update(volumes []Volume) {
 
 	h.missing = missing[:index]
 
-	fmt.Println("update:", time.Since(t0))
+	h.logger.Info().Str("duration", time.Since(t0).String()).Msg("update")
 }
 
 func (h *VolumeHandler) persist(volumes []Volume) error {

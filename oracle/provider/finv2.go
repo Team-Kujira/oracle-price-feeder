@@ -33,8 +33,6 @@ type (
 		provider
 		contracts map[string]string
 		delta     map[string]int64
-		volumes   volume.VolumeHandler
-		height    uint64
 	}
 
 	FinV2BookResponse struct {
@@ -67,6 +65,7 @@ func NewFinV2Provider(
 	pairs ...types.CurrencyPair,
 ) (*FinV2Provider, error) {
 	provider := &FinV2Provider{}
+	provider.db = db
 	provider.Init(
 		ctx,
 		endpoints,
@@ -76,43 +75,10 @@ func NewFinV2Provider(
 		nil,
 	)
 
-	provider.contracts = provider.endpoints.ContractAddresses
-
-	for symbol, contract := range provider.endpoints.ContractAddresses {
-		provider.contracts[contract] = symbol
-	}
-
 	availablePairs, _ := provider.GetAvailablePairs()
 	provider.setPairs(pairs, availablePairs, nil)
 
 	provider.delta = map[string]int64{}
-
-	symbols := []string{}
-	for _, pair := range pairs {
-		skip := false
-		for _, symbol := range []string{pair.Base, pair.Quote} {
-			_, found := endpoints.Decimals[symbol]
-			if !found {
-				skip = true
-				logger.Debug().
-					Str("symbol", symbol).
-					Msg("unknown decimal")
-			}
-		}
-		if skip {
-			continue
-		}
-
-		symbols = append(symbols, pair.Base+pair.Quote)
-		symbols = append(symbols, pair.Quote+pair.Base)
-	}
-
-	volumes, err := volume.NewVolumeHandler(logger, db, "finv2", symbols, 60*60*24)
-	if err != nil {
-		return provider, err
-	}
-
-	provider.volumes = volumes
 
 	go startPolling(provider, provider.endpoints.PollInterval, logger)
 
@@ -312,6 +278,14 @@ func (p *FinV2Provider) getVolume(height uint64) (volume.Volume, error) {
 				p.logger.Debug().
 					Str("contract", contract).
 					Msg("unknown contract")
+				continue
+			}
+
+			_, found = values[symbol]
+			if !found {
+				p.logger.Debug().
+					Str("symbol", symbol).
+					Msg("unknown symbol")
 				continue
 			}
 

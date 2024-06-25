@@ -2,11 +2,12 @@ package provider
 
 import (
 	"context"
-	"encoding/base64"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"time"
 
+	"price-feeder/oracle/provider/volume"
 	"price-feeder/oracle/types"
 
 	"cosmossdk.io/math"
@@ -64,8 +65,8 @@ type (
 	// chain specific api nodes
 	WhitewhaleProvider struct {
 		provider
-		contracts map[string]string
-		assets    map[string]WhitewhaleAsset
+		assets map[string]WhitewhaleAsset
+		denoms map[string]string
 	}
 
 	WhitewhaleBalanceResponse struct {
@@ -102,6 +103,39 @@ type (
 	}
 )
 
+func NewWhitewhaleProvider(
+	db *sql.DB,
+	ctx context.Context,
+	logger zerolog.Logger,
+	endpoints Endpoint,
+	pairs ...types.CurrencyPair,
+) (*WhitewhaleProvider, error) {
+	provider := &WhitewhaleProvider{}
+	provider.db = db
+	provider.Init(
+		ctx,
+		endpoints,
+		logger,
+		pairs,
+		nil,
+		nil,
+	)
+
+	availablePairs, _ := provider.GetAvailablePairs()
+	provider.setPairs(pairs, availablePairs, nil)
+
+	provider.assets = provider.getAssets()
+
+	provider.denoms = map[string]string{}
+	for symbol, asset := range provider.assets {
+		provider.denoms[symbol] = asset.Denom
+		provider.denoms[asset.Denom] = symbol
+	}
+
+	go startPolling(provider, provider.endpoints.PollInterval, logger)
+	return provider, nil
+}
+
 func (r *WhitewhalePairResponse) GetAssets() ([]WhitewhaleAsset, error) {
 	assets := make([]WhitewhaleAsset, len(r.Data.AssetInfos))
 
@@ -129,38 +163,13 @@ func (r *WhitewhalePairResponse) GetAssets() ([]WhitewhaleAsset, error) {
 	return assets, nil
 }
 
-func NewWhitewhaleProvider(
-	ctx context.Context,
-	logger zerolog.Logger,
-	endpoints Endpoint,
-	pairs ...types.CurrencyPair,
-) (*WhitewhaleProvider, error) {
-	provider := &WhitewhaleProvider{}
-	provider.Init(
-		ctx,
-		endpoints,
-		logger,
-		pairs,
-		nil,
-		nil,
-	)
-
-	provider.contracts = provider.endpoints.ContractAddresses
-
-	availablePairs, _ := provider.GetAvailablePairs()
-	provider.setPairs(pairs, availablePairs, nil)
-
-	provider.assets = provider.getAssets()
-
-	go startPolling(provider, provider.endpoints.PollInterval, logger)
-	return provider, nil
-}
-
 func (p *WhitewhaleProvider) Poll() error {
 	if len(p.assets) == 0 {
 		p.logger.Warn().Msg("no known assets found")
 		return nil
 	}
+
+	p.updateVolumes()
 
 	timestamp := time.Now()
 
@@ -247,18 +256,7 @@ func (p *WhitewhaleProvider) getAssets() map[string]WhitewhaleAsset {
 			continue
 		}
 
-		query := base64.StdEncoding.EncodeToString(
-			[]byte(`{"pair":{}}`),
-		)
-
-		path := fmt.Sprintf(
-			"/cosmwasm/wasm/v1/contract/%s/smart/%s",
-			contract, query,
-		)
-
-		p.logger.Info().Str("path", path).Msg("")
-
-		content, err := p.httpGet(path)
+		content, err := p.wasmSmartQuery(contract, `{"pair":{}}`)
 		if err != nil {
 			p.logger.Err(err)
 			continue
@@ -294,4 +292,177 @@ func (p *WhitewhaleProvider) getAssets() map[string]WhitewhaleAsset {
 	}
 
 	return assets
+}
+
+func (p *WhitewhaleProvider) updateVolumes() {
+	missing := p.volumes.GetMissing(p.endpoints.VolumeBlocks)
+	missing = append(missing, 0)
+
+	volumes := []volume.Volume{}
+
+	for _, height := range missing {
+		volume, err := p.getVolume(height)
+		time.Sleep(time.Millisecond * time.Duration(p.endpoints.VolumePause))
+		if err != nil {
+			p.error(err)
+			continue
+		}
+		volumes = append(volumes, volume)
+	}
+
+	p.volumes.Add(volumes)
+}
+
+func (p *WhitewhaleProvider) getVolume(height uint64) (volume.Volume, error) {
+	p.logger.Info().Uint64("height", height).Msg("get volume")
+
+	var err error
+
+	type Denom struct {
+		Symbol   string
+		Decimals int
+		Amount   sdk.Dec
+	}
+
+	if height == 0 {
+		height, err = p.getCosmosHeight()
+		if err != nil {
+			return volume.Volume{}, p.error(err)
+		}
+
+		if height == p.height || height == 0 {
+			return volume.Volume{}, nil
+		}
+
+		p.height = height
+	}
+
+	// prepare all volumes:
+	// not traded pairs have zero volume for this block
+	values := map[string]sdk.Dec{}
+	for _, symbol := range p.volumes.Symbols() {
+		values[symbol] = sdk.ZeroDec()
+	}
+
+	filter := []string{
+		"/cosmwasm.wasm.v1.MsgExecuteContract",
+	}
+
+	txs, timestamp, err := p.getCosmosTxs(height, filter)
+	if err != nil {
+		return volume.Volume{}, p.error(err)
+	}
+
+	for _, tx := range txs {
+		swaps := tx.GetEventsByType("wasm")
+		for _, event := range swaps {
+			contract, found := event.Attributes["_contract_address"]
+			if !found {
+				continue
+			}
+
+			action, found := event.Attributes["action"]
+			if !found || action != "swap" {
+				continue
+			}
+
+			symbol, found := p.contracts[contract]
+			if !found {
+				p.logger.Debug().
+					Str("contract", contract).
+					Msg("unknown contract")
+				continue
+			}
+
+			_, found = values[symbol]
+			if !found {
+				p.logger.Debug().
+					Str("symbol", symbol).
+					Msg("unknown symbol")
+				continue
+			}
+
+			in := Denom{
+				Amount: sdk.ZeroDec(),
+			}
+			out := Denom{}
+
+			attributes := 0
+			keys := []string{
+				"offer_asset", "offer_amount", "ask_asset", "return_amount",
+				"burn_fee_amount", "protocol_fee_amount", "swap_fee_amount",
+			}
+
+			for _, key := range keys {
+				value, found := event.Attributes[key]
+				if !found {
+					break
+				}
+
+				switch key {
+				case "offer_asset", "ask_asset":
+					symbol, found := p.denoms[value]
+					if !found {
+						break
+					}
+					asset, found := p.assets[symbol]
+					if !found {
+						break
+					}
+					if key == "ask_asset" {
+						in.Symbol = symbol
+						in.Decimals = int(asset.Decimals)
+					} else {
+						out.Symbol = symbol
+						out.Decimals = int(asset.Decimals)
+					}
+				default:
+					amount := strToDec(value)
+					if key == "offer_amount" {
+						out.Amount = amount
+					} else {
+						in.Amount = in.Amount.Add(amount)
+					}
+				}
+
+				attributes += 1
+			}
+
+			if attributes != len(keys) {
+				// some value is missing
+				continue
+			}
+
+			ten := uintToDec(10)
+
+			in.Amount = in.Amount.Quo(ten.Power(uint64(in.Decimals)))
+			out.Amount = out.Amount.Quo(ten.Power(uint64(out.Decimals)))
+
+			// needed to for final volumes: {KUJIUSK: 1, USKKUJI: 2}
+			denoms := map[string]Denom{
+				in.Symbol + out.Symbol: in,
+				out.Symbol + in.Symbol: out,
+			}
+
+			for symbol, denom := range denoms {
+				volume, found := values[symbol]
+				if !found {
+					p.logger.Error().
+						Str("symbol", symbol).
+						Msg("volume not set")
+					continue
+				}
+
+				values[symbol] = volume.Add(denom.Amount)
+			}
+		}
+	}
+
+	volume := volume.Volume{
+		Height: height,
+		Time:   timestamp.Unix(),
+		Values: values,
+	}
+
+	return volume, nil
 }

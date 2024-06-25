@@ -550,6 +550,8 @@ func NewProvider(
 		return provider.NewShadeProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderUniswapV3:
 		return provider.NewUniswapV3Provider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderUnstake:
+		return provider.NewUnstakeProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderVelodromeV2:
 		return provider.NewVelodromeV2Provider(ctx, providerLogger, endpoint, providerPairs...)
 	case
@@ -561,7 +563,7 @@ func NewProvider(
 		provider.ProviderWhitewhaleLuna,
 		provider.ProviderWhitewhaleSei,
 		provider.ProviderWhitewhaleWhale:
-		return provider.NewWhitewhaleProvider(ctx, providerLogger, endpoint, providerPairs...)
+		return provider.NewWhitewhaleProvider(db, ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderXt:
 		return provider.NewXtProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderZero:

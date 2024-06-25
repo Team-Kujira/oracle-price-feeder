@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"price-feeder/oracle/provider/volume"
 	"price-feeder/oracle/types"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -76,6 +77,7 @@ const (
 	ProviderShade              Name = "shade"
 	ProviderStride             Name = "stride"
 	ProviderUniswapV3          Name = "uniswapv3"
+	ProviderUnstake            Name = "unstake"
 	ProviderVelodromeV2        Name = "velodromev2"
 	ProviderWhitewhaleCmdx     Name = "whitewhale_cmdx"
 	ProviderWhitewhaleHuahua   Name = "whitewhale_huahua"
@@ -119,6 +121,8 @@ type (
 		contracts map[string]string
 		websocket *WebsocketController
 		db        *sql.DB
+		volumes   volume.VolumeHandler
+		height    uint64
 	}
 
 	PollingProvider interface {
@@ -196,6 +200,52 @@ func (p *provider) Init(
 		)
 		go p.websocket.Start()
 	}
+
+	// set contract<>symbol mapping
+
+	p.contracts = endpoints.ContractAddresses
+
+	for symbol, contract := range endpoints.ContractAddresses {
+		p.contracts[contract] = symbol
+	}
+
+	p.height = 0
+
+	if p.db == nil {
+		return
+	}
+
+	// set up volume handler
+
+	symbols := []string{}
+	for _, pair := range pairs {
+		skip := false
+		for _, symbol := range []string{pair.Base, pair.Quote} {
+			_, found := endpoints.Decimals[symbol]
+			if !found {
+				skip = true
+				logger.Debug().
+					Str("symbol", symbol).
+					Msg("unknown decimal")
+			}
+		}
+		if skip {
+			continue
+		}
+
+		symbols = append(symbols, pair.Base+pair.Quote)
+		symbols = append(symbols, pair.Quote+pair.Base)
+	}
+
+	var period int64 = 86400
+	name := endpoints.Name.String()
+
+	volumes, err := volume.NewVolumeHandler(logger, p.db, name, symbols, period)
+	if err != nil {
+		panic(err)
+	}
+
+	p.volumes = volumes
 }
 
 func (p *provider) GetTickerPrices(pairs ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
@@ -644,6 +694,8 @@ func (e *Endpoint) SetDefaults() {
 		defaults = shadeDefaultEndpoints
 	case ProviderUniswapV3:
 		defaults = uniswapv3DefaultEndpoints
+	case ProviderUnstake:
+		defaults = unstakeDefaultEndpoints
 	case ProviderVelodromeV2:
 		defaults = velodromev2DefaultEndpoints
 	case ProviderWhitewhaleCmdx:
@@ -873,7 +925,7 @@ func (p *provider) getAllPairs() map[string]types.CurrencyPair {
 
 func (p *provider) getAvailablePairsFromContracts() (map[string]struct{}, error) {
 	symbols := map[string]struct{}{}
-	for symbol := range p.contracts {
+	for symbol := range p.endpoints.ContractAddresses {
 		symbols[symbol] = struct{}{}
 	}
 	return symbols, nil
