@@ -229,10 +229,23 @@ func (p *WhitewhaleProvider) Poll() error {
 
 		price := quoteAmount.Quo(baseAmount)
 
+		var volume sdk.Dec
+		// hack to get the proper volume
+		_, found := p.inverse[symbol]
+		if found {
+			volume, _ = p.volumes.Get(pair.Quote + pair.Base)
+
+			if !volume.IsZero() {
+				volume = volume.Quo(price)
+			}
+		} else {
+			volume, _ = p.volumes.Get(pair.String())
+		}
+
 		p.setTickerPrice(
 			symbol,
 			price,
-			sdk.ZeroDec(),
+			volume,
 			timestamp,
 		)
 	}

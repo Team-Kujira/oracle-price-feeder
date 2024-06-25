@@ -192,7 +192,6 @@ func (h *VolumeHandler) Get(symbol string) (sdk.Dec, error) {
 }
 
 func (h *VolumeHandler) Add(volumes []Volume) {
-	t0 := time.Now()
 	if len(volumes) == 0 {
 		return
 	}
@@ -275,8 +274,6 @@ func (h *VolumeHandler) Add(volumes []Volume) {
 
 		h.missing = append(missing, h.missing...)
 	}
-
-	h.logger.Info().Str("duration", time.Since(t0).String()).Msg("updated volumes")
 }
 
 func (h *VolumeHandler) append(volumes []Volume) {
