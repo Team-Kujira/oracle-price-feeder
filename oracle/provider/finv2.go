@@ -31,8 +31,7 @@ type (
 	// to directly retrieve the price from the fin contract
 	FinV2Provider struct {
 		provider
-		contracts map[string]string
-		delta     map[string]int64
+		delta map[string]int64
 	}
 
 	FinV2BookResponse struct {

@@ -20,6 +20,7 @@ func NewTotal() *Total {
 func (t *Total) Clear() {
 	t.Total = sdk.ZeroDec()
 	t.Values = 0
+	t.First = 0
 }
 
 func (t *Total) Sub(value sdk.Dec) {

@@ -176,7 +176,7 @@ func (h *VolumeHandler) Get(symbol string) (sdk.Dec, error) {
 		return sdk.ZeroDec(), err
 	}
 
-	missing := len(h.volumes) - total.Values + len(h.missing)
+	missing := len(h.volumes) - total.Values
 
 	if total.Values == 0 || missing*10 > total.Values {
 		err := fmt.Errorf("not enough volume data")
@@ -218,11 +218,6 @@ func (h *VolumeHandler) Add(volumes []Volume) {
 	newMinHeight := volumes[0].Height
 	newMaxHeight := volumes[len(volumes)-1].Height
 
-	// fmt.Printf(
-	// 	"%d - %d\n%d - %d\n",
-	// 	knownMinHeight, knownMaxHeight, newMinHeight, newMaxHeight,
-	// )
-
 	if knownMaxHeight > newMinHeight && knownMinHeight < newMaxHeight {
 		// [4, 6, 7] + [5, 8]
 		// [4, 6, 7] + [3, 5]
@@ -241,6 +236,8 @@ func (h *VolumeHandler) Add(volumes []Volume) {
 	if len(h.volumes) < 2 {
 		return
 	}
+
+	// remove missing blocks outside the (24h) window
 
 	stopTime := h.volumes[len(h.volumes)-1].Time
 	startTime := stopTime - h.period
@@ -264,10 +261,9 @@ func (h *VolumeHandler) Add(volumes []Volume) {
 	blockTime := float64(last.Time-first.Time) / float64(len(h.volumes))
 
 	blocks := uint64(math.Round(float64(first.Time-startTime) / blockTime))
-	if first.Height-blocks < first.Height-10 {
+	if blocks > 10 {
+		missing := make([]uint64, blocks)
 		height := first.Height - blocks
-		diff := first.Height - height
-		missing := make([]uint64, diff)
 		for i := range missing {
 			missing[i] = height + uint64(i)
 		}
@@ -389,15 +385,37 @@ func (h *VolumeHandler) update(volumes []Volume) {
 
 	h.logger.Debug().Msg("update")
 
-	h.volumes = append(h.volumes, volumes...)
+	// update volume list
+	volumeMap := map[uint64]int{}
+	for i, volume := range volumes {
+		volumeMap[volume.Height] = i
+	}
+
+	for i, volume := range h.volumes {
+		index, found := volumeMap[volume.Height]
+		if !found {
+			continue
+		}
+		h.volumes[i] = volumes[index]
+		delete(volumeMap, volume.Height)
+	}
+
+	remaining := make([]Volume, len(volumeMap))
+	i := 0
+	for _, index := range volumeMap {
+		remaining[i] = volumes[index]
+		i++
+	}
+
+	h.volumes = append(h.volumes, remaining...)
 
 	sort.Slice(h.volumes, func(i, j int) bool {
 		return h.volumes[i].Height < h.volumes[j].Height
 	})
 
-	h.volumes = slices.CompactFunc(h.volumes, func(e1, e2 Volume) bool {
-		return e1.Height == e2.Height
-	})
+	// h.volumes = slices.CompactFunc(h.volumes, func(e1, e2 Volume) bool {
+	// 	return e1.Height == e2.Height
+	// })
 
 	stopTime := h.volumes[len(h.volumes)-1].Time
 	startTime := stopTime - h.period
@@ -413,22 +431,34 @@ func (h *VolumeHandler) update(volumes []Volume) {
 
 	h.volumes = h.volumes[startIndex:]
 
+	first := h.volumes[0]
+	last := h.volumes[len(h.volumes)-1]
+
 	// reset totals
 	for _, total := range h.totals {
 		total.Clear()
 	}
 
 	// calculate totals and find missing blocks
-	blocks := h.volumes[len(h.volumes)-1].Height - h.volumes[0].Height
+	blocks := last.Height - first.Height + 1
+
 	missing := make([]uint64, blocks)
 	index := 0
+
 	for i, volume := range h.volumes {
+		skip := false
 		for symbol, total := range h.totals {
 			value, found := volume.Values[symbol]
 			if !found {
-				continue
+				// if not already added height to missing blocks
+				if !skip {
+					missing[index] = volume.Height
+					skip = true
+					index++
+				}
+			} else {
+				total.Add(value, volume.Height)
 			}
-			total.Add(value, volume.Height)
 		}
 
 		if i == 0 {
@@ -510,28 +540,11 @@ func (h *VolumeHandler) GetMissing(amount int) []uint64 {
 		return []uint64{}
 	}
 
-	start := uint64(0)
-	for _, total := range h.totals {
-		if total.First > start {
-			start = total.First
-		}
-	}
-
-	reindex := []uint64{}
-	for i := 1; i <= amount-len(h.missing); i++ {
-		height := start - uint64(i)
-		if height < h.volumes[0].Height {
-			break
-		}
-		reindex = append(reindex, height)
-	}
-
 	h.logger.Info().
 		Int("missing", len(h.missing)).
-		Int("reindex", len(reindex)).
 		Msg("get missing blocks")
 
-	return append(h.missing, reindex...)
+	return h.missing
 }
 
 func (h *VolumeHandler) Debug(symbol string) {
