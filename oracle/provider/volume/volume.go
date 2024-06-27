@@ -169,6 +169,14 @@ func (h *VolumeHandler) load() error {
 }
 
 func (h *VolumeHandler) Get(symbol string) (sdk.Dec, error) {
+	err := fmt.Errorf("not enough volume data")
+	if len(h.volumes) == 0 {
+		h.logger.Err(err).
+			Str("symbol", symbol).
+			Msg("")
+		return sdk.ZeroDec(), err
+	}
+
 	total, found := h.totals[symbol]
 	if !found {
 		err := fmt.Errorf("no volume data found")
@@ -176,10 +184,24 @@ func (h *VolumeHandler) Get(symbol string) (sdk.Dec, error) {
 		return sdk.ZeroDec(), err
 	}
 
-	missing := len(h.volumes) - total.Values
+	last := h.volumes[len(h.volumes)-1].Height
+	first := h.volumes[len(h.volumes)-1].Height
+	if len(h.missing) > 0 {
+		height := h.missing[0]
+		if height < first {
+			first = height
+		}
+
+		height = h.missing[len(h.missing)-1]
+		if height > last {
+			last = height
+		}
+	}
+
+	missing := int(last-first) - total.Values
 
 	if total.Values == 0 || missing*10 > total.Values {
-		err := fmt.Errorf("not enough volume data")
+
 		h.logger.Err(err).
 			Str("symbol", symbol).
 			Int("values", total.Values).
