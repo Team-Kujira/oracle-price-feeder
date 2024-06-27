@@ -83,6 +83,7 @@ type Oracle struct {
 	contractAddresses    map[string]map[string]string
 	providerWeights      map[string]ProviderWeight
 	decimals             map[string]map[string]int
+	periods              map[string]map[string]int
 	volumeDatabase       *sql.DB
 
 	mtx             sync.RWMutex
@@ -108,6 +109,7 @@ func New(
 	contractAddresses map[string]map[string]string,
 	providerWeights map[string]ProviderWeight,
 	decimals map[string]map[string]int,
+	periods map[string]map[string]int,
 	volumeDatabase *sql.DB,
 ) *Oracle {
 	providerPairs := make(map[provider.Name][]types.CurrencyPair)
@@ -153,6 +155,7 @@ func New(
 		contractAddresses:    contractAddresses,
 		providerWeights:      providerWeights,
 		decimals:             decimals,
+		periods:              periods,
 		volumeDatabase:       volumeDatabase,
 	}
 }
@@ -234,8 +237,10 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 			endpoint := o.endpoints[providerName]
 			contractAddresses := o.contractAddresses[providerName.String()]
 			decimals := o.decimals[providerName.String()]
+			periods := o.periods[providerName.String()]
 			endpoint.ContractAddresses = contractAddresses
 			endpoint.Decimals = decimals
+			endpoint.Periods = periods
 
 			newProvider, err := NewProvider(
 				o.volumeDatabase,

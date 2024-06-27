@@ -153,6 +153,7 @@ type (
 		VolumeBlocks      int
 		VolumePause       int
 		Decimals          map[string]int
+		Periods           map[string]int
 	}
 )
 

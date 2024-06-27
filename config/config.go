@@ -124,6 +124,7 @@ type (
 		HistoryDb            string                        `toml:"history_db"`
 		ContractAdresses     map[string]map[string]string  `toml:"contract_addresses"`
 		Decimals             map[string]map[string]int     `toml:"decimals"`
+		Periods              map[string]map[string]int     `toml:"periods"`
 		UrlSets              map[string]UrlSet             `toml:"url_set"`
 	}
 
@@ -230,6 +231,7 @@ type (
 		VolumeBlocks int            `toml:"volume_blocks"`
 		VolumePause  int            `toml:"volume_pause"`
 		Decimals     map[string]int `toml:"decimals"`
+		Periods      map[string]int
 	}
 
 	UrlSet struct {
@@ -302,6 +304,7 @@ func (p ProviderEndpoints) ToEndpoint(
 		VolumeBlocks:  p.VolumeBlocks,
 		VolumePause:   p.VolumePause,
 		Decimals:      p.Decimals,
+		Periods:       p.Periods,
 	}
 	return e, nil
 }

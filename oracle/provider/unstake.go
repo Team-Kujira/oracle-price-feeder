@@ -52,15 +52,14 @@ func NewUnstakeProvider(
 	availablePairs, _ := provider.GetAvailablePairs()
 	provider.setPairs(pairs, availablePairs, nil)
 
-	provider.periods = map[string]sdk.Dec{
-		"AMPKUJIKUJI": uintToDec(14),
-		"QCKUJIKUJI":  uintToDec(14),
-		"QCMNTAMNTA":  uintToDec(21),
+	provider.periods = map[string]sdk.Dec{}
+	for symbol, period := range endpoints.Periods {
+		provider.periods[symbol] = uintToDec(uint64(period))
 	}
 
-	provider.decimals = map[string]uint64{
-		"KUJI": 6,
-		"MNTA": 6,
+	provider.decimals = map[string]uint64{}
+	for symbol, decimals := range endpoints.Decimals {
+		provider.decimals[symbol] = uint64(decimals)
 	}
 
 	go startPolling(provider, provider.endpoints.PollInterval, logger)
