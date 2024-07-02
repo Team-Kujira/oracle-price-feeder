@@ -110,6 +110,7 @@ type (
 
 	provider struct {
 		ctx       context.Context
+		name      string
 		endpoints Endpoint
 		httpBase  string
 		http      *http.Client
@@ -123,6 +124,7 @@ type (
 		db        *sql.DB
 		volumes   volume.VolumeHandler
 		height    uint64
+		chain     string
 	}
 
 	PollingProvider interface {
@@ -154,6 +156,18 @@ type (
 		VolumePause       int
 		Decimals          map[string]int
 		Periods           map[string]int
+	}
+
+	EvmLog struct {
+		Address string   `json:"address"`
+		Topics  []string `json:"topics"`
+		Data    string   `json:"data"`
+		Number  string   `json:"blockNumber"`
+		Height  uint64
+	}
+
+	EvmBlock struct {
+		Timestamp string `json:"timestamp"`
 	}
 )
 
@@ -1027,6 +1041,8 @@ func (p *provider) doEthCall(address, data string) (string, error) {
 }
 
 func (p *provider) getEthDecimals(contract string) (uint64, error) {
+	p.logger.Info().Str("contract", contract).Msg("get decimals")
+
 	hash, err := keccak256("decimals()")
 	if err != nil {
 		return 0, err
@@ -1054,6 +1070,154 @@ func (p *provider) getEthDecimals(contract string) (uint64, error) {
 	return decimals, nil
 }
 
+func (p *provider) evmRpcQuery(method, params string) (json.RawMessage, error) {
+	p.logger.Info().Str("method", method).Msg("query evm rpc")
+
+	query := []byte(fmt.Sprintf(
+		`{"jsonrpc":"2.0","method":"%s","params":[%s],"id":1}`,
+		method, string(params),
+	))
+
+	fmt.Println(string(query))
+
+	TelemetryEvmMethod(p.chain, p.name, method)
+
+	content, err := p.httpPost("", query)
+	if err != nil {
+		return nil, p.error(err)
+	}
+
+	var response struct {
+		Result json.RawMessage `json:"result"`
+	}
+
+	err = json.Unmarshal(content, &response)
+	if err != nil {
+		return nil, p.error(err)
+	}
+
+	if len(response.Result) == 0 {
+		p.logger.Error().
+			Str("content", string(content)).
+			Msg("empty return data")
+	}
+
+	return response.Result, nil
+}
+
+func (p *provider) getEvmHeight() (uint64, error) {
+	p.logger.Info().Msg("get height")
+
+	result, err := p.evmRpcQuery("eth_blockNumber", "")
+	if err != nil {
+		return 0, err
+	}
+
+	var height string
+	err = json.Unmarshal(result, &height)
+	if err != nil {
+		return 0, err
+	}
+	// strip "0x" from height string
+	return strconv.ParseUint(height[2:], 16, 64)
+}
+
+func (p *provider) evmGetLogs(
+	from, to uint64,
+	addresses, topics []string,
+) ([]EvmLog, error) {
+	type Params struct {
+		FromBlock string   `json:"fromBlock"`
+		ToBlock   string   `json:"toBlock"`
+		Address   []string `json:"address"`
+		Topics    []string `json:"topics"`
+	}
+
+	params := Params{
+		FromBlock: fmt.Sprintf("0x%x", from),
+		ToBlock:   fmt.Sprintf("0x%x", to),
+		Address:   addresses,
+		Topics:    topics,
+	}
+
+	if to == 0 {
+		params.ToBlock = "latest"
+	}
+
+	bz, err := json.Marshal(params)
+	if err != nil {
+		return nil, err
+	}
+
+	response, err := p.evmRpcQuery("eth_getLogs", string(bz))
+	if err != nil {
+		return nil, err
+	}
+
+	fmt.Println(">", len(response), string(response))
+
+	var logs []EvmLog
+	err = json.Unmarshal(response, &logs)
+	if err != nil {
+		p.logger.Err(err).Msg("failed to unmarshal evm log")
+		return nil, err
+	}
+
+	for i, log := range logs {
+		height, err := hexToUint64(log.Number)
+		if err != nil {
+			return nil, err
+		}
+		logs[i].Height = height
+	}
+
+	return logs, nil
+}
+
+func (p *provider) evmGetBlockByNumber(height uint64) (EvmBlock, error) {
+	params := fmt.Sprintf(`"0x%x",false`, height)
+	output, err := p.evmRpcQuery("eth_getBlockByNumber", params)
+	if err != nil {
+		return EvmBlock{}, err
+	}
+
+	var block EvmBlock
+
+	err = json.Unmarshal(output, &block)
+	if err != nil {
+		return EvmBlock{}, err
+	}
+
+	return block, nil
+}
+
+func (p *provider) evmCall(
+	address, method string,
+	args []string,
+) (json.RawMessage, error) {
+	p.logger.Info().Str("method", method).Msg("evmCall")
+
+	hash, err := keccak256(method)
+	if err != nil {
+		return nil, p.error(err)
+	}
+
+	data := "0x" + hash[:8]
+
+	for _, arg := range args {
+		data += arg
+	}
+
+	if len(args) == 0 {
+		// append 64 zeros
+		data = fmt.Sprintf("%s%064d", data, 0)
+	}
+
+	params := fmt.Sprintf(`{"to":"%s","data":"%s"},"latest"`, address, data)
+
+	return p.evmRpcQuery("eth_call", params)
+}
+
 func (p *provider) error(err error) error {
 	p.logger.Err(err).Msg("")
 	return err
@@ -1062,6 +1226,18 @@ func (p *provider) error(err error) error {
 func (p *provider) errorf(message string) error {
 	err := fmt.Errorf(message)
 	return p.error(err)
+}
+
+func hexToUint64(s string) (uint64, error) {
+	return strconv.ParseUint(strings.Replace(s, "0x", "", -1), 16, 64)
+}
+
+func decodeSqrtPrice(sqrt string) (sdk.Dec, error) {
+	dec := strToDec(sqrt)
+	if dec.IsZero() {
+		return sdk.Dec{}, fmt.Errorf("sqrt is 0")
+	}
+	return dec.Power(2).Quo(uintToDec(2).Power(192)), nil
 }
 
 func decodeEthData(data string, types []string) ([]interface{}, error) {
@@ -1223,4 +1399,15 @@ func parseDenom(s string) (sdk.Dec, string, error) {
 	amount := strToDec(matches[1])
 
 	return amount, matches[2], nil
+}
+
+func (b *EvmBlock) GetTime() (time.Time, error) {
+	seconds, err := strconv.ParseInt(
+		strings.Replace(b.Timestamp, "0x", "", -1), 16, 64,
+	)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	return time.Unix(seconds, 0), nil
 }

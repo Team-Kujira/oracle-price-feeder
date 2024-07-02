@@ -72,7 +72,7 @@ func (h *VolumeHandler) init() error {
 			provider TEXT NOT NULL,
 			time INT NOT NULL,
 			volume TEXT NOT NULL,
-			CONSTRAINT id PRIMARY KEY (symbol, provider, block, time)
+			CONSTRAINT id PRIMARY KEY (symbol, provider, block)
 		)`)
 	if err != nil {
 		h.logger.Err(err).Msg("failed creating table")
@@ -214,6 +214,10 @@ func (h *VolumeHandler) Get(symbol string) (sdk.Dec, error) {
 }
 
 func (h *VolumeHandler) Add(volumes []Volume) {
+	if len(h.symbols) == 0 {
+		return
+	}
+
 	if len(volumes) == 0 {
 		return
 	}
@@ -280,7 +284,12 @@ func (h *VolumeHandler) Add(volumes []Volume) {
 	first := h.volumes[0]
 	last := h.volumes[len(h.volumes)-1]
 
-	blockTime := float64(last.Time-first.Time) / float64(len(h.volumes))
+	timeDiff := last.Time - first.Time
+	if timeDiff <= 1 {
+		return
+	}
+
+	blockTime := float64(timeDiff) / float64(len(h.volumes))
 
 	blocks := uint64(math.Round(float64(first.Time-startTime) / blockTime))
 	if blocks > 10 {

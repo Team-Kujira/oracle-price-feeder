@@ -2,11 +2,12 @@ package provider
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
+	"price-feeder/oracle/provider/volume"
 	"price-feeder/oracle/types"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -18,78 +19,43 @@ var (
 
 	camelotV2DefaultEndpoints = Endpoint{
 		Name:         ProviderCamelotV2,
-		Urls:         []string{"https://api.thegraph.com"},
-		PollInterval: 10 * time.Second,
+		Urls:         []string{},
+		PollInterval: 15 * time.Second,
+		VolumeBlocks: 1,
+		VolumePause:  0,
 	}
 
 	camelotV3DefaultEndpoints = Endpoint{
 		Name:         ProviderCamelotV3,
-		Urls:         []string{"https://api.thegraph.com"},
-		PollInterval: 10 * time.Second,
+		Urls:         []string{},
+		PollInterval: 15 * time.Second,
+		VolumeBlocks: 1,
+		VolumePause:  0,
 	}
 )
 
 type (
-	// CamelotProvider defines an oracle provider using on chain data from thegraph.com
-	//
-	// REF: -
+	// CamelotProvider defines an oracle provider using on chain data
 	CamelotProvider struct {
 		provider
-		contracts map[string]string
-		volumes   map[string][]CamelotVolume
-	}
-
-	CamelotVolume struct {
-		Date   int64
-		Token0 sdk.Dec
-		Token1 sdk.Dec
-	}
-
-	CamelotQuery struct {
-		Query string `json:"query"`
-	}
-
-	CamelotQueryResponse struct {
-		Data CamelotResponseData `json:"data"`
-	}
-
-	CamelotResponseData struct {
-		PairsHourData []CamelotPairHourData `json:"pairHourDatas"`
-		Pairs         []CamelotPairData     `json:"pairs"`
-		PoolsHourData []CamelotPoolHourData `json:"poolHourDatas"`
-		Pools         []CamelotPairData     `json:"pools"`
-	}
-
-	CamelotPairHourData struct {
-		Time    int64           `json:"hourStartUnix"`
-		Pair    CamelotPairData `json:"pair"`
-		Volume0 string          `json:"hourlyVolumeToken0"`
-		Volume1 string          `json:"hourlyVolumeToken1"`
-	}
-
-	CamelotPoolHourData struct {
-		Time    int64           `json:"periodStartUnix"`
-		Pool    CamelotPairData `json:"pool"`
-		Volume0 string          `json:"volumeToken0"`
-		Volume1 string          `json:"volumeToken1"`
-	}
-
-	// only the quote price is required
-	// the inverse price is calculated by
-	// the feeder automatically if needed
-	CamelotPairData struct {
-		Id    string `json:"id"`
-		Price string `json:"token1Price"`
+		// map topic hash to output types
+		// keccak256("Swap(address,address,int256,int256,uint160,uint128,int24)
+		// 0xc42079f94a6350d7e6235f29174924f928cc2ac818eb64fed8004e115fbcca67:
+		//   ["int256", "int256", "uint160", "uint128", "int24"]
+		topics   map[string][]string
+		decimals map[string]uint64
 	}
 )
 
 func NewCamelotProvider(
+	db *sql.DB,
 	ctx context.Context,
 	logger zerolog.Logger,
 	endpoints Endpoint,
 	pairs ...types.CurrencyPair,
 ) (*CamelotProvider, error) {
 	provider := &CamelotProvider{}
+	provider.db = db
 	provider.Init(
 		ctx,
 		endpoints,
@@ -99,7 +65,21 @@ func NewCamelotProvider(
 		nil,
 	)
 
-	provider.contracts = provider.endpoints.ContractAddresses
+	provider.chain = "arbitrum"
+	provider.name = "camelotv3"
+
+	provider.topics = map[string][]string{}
+	for _, values := range [][]string{{
+		"Swap(address,address,int256,int256,uint160,uint128,int24)",
+		"int256", "int256", "uint160", "uint128", "int24",
+	}} {
+		topic, err := keccak256(values[0])
+		if err != nil {
+			return nil, err
+		}
+		topic = "0x" + topic
+		provider.topics[topic] = values[1:]
+	}
 
 	availablePairs, _ := provider.GetAvailablePairs()
 	provider.setPairs(pairs, availablePairs, nil)
@@ -115,75 +95,130 @@ func (p *CamelotProvider) GetAvailablePairs() (map[string]struct{}, error) {
 }
 
 func (p *CamelotProvider) Poll() error {
-	if p.endpoints.Name != ProviderCamelotV2 && p.endpoints.Name != ProviderCamelotV3 {
+	// get latest block
+	height, err := p.getEvmHeight()
+	if err != nil {
+		return err
+	}
+
+	if p.height == 0 {
+		p.height = height
 		return nil
 	}
 
-	offset := 3600
-	if p.volumes == nil {
-		p.volumes = map[string][]CamelotVolume{}
-		offset = 23 * 3600
-	}
-
 	contracts := []string{}
-
-	for _, pair := range p.getAllPairs() {
-
-		contract, err := p.getContractAddress(pair)
-		if err != nil {
+	for symbol := range p.getAllPairs() {
+		contract, found := p.contracts[symbol]
+		if !found {
 			continue
 		}
-
 		contracts = append(contracts, contract)
 	}
 
-	query, _ := p.getQuery(contracts, offset)
+	fmt.Println(contracts)
 
-	var (
-		prices  map[string]sdk.Dec
-		volumes map[string][]CamelotVolume
-	)
+	// some rpc providers only accept small ranges for getLogs calls
+	if p.height+2000 < height {
+		p.height = height - 2000
+	}
 
-	prices, volumes, _ = p.query(query)
+	p.updateVolumes(p.height, height, contracts)
 
-	p.updateVolumes(volumes)
+	p.volumes.Debug("KUJIWETH")
+
+	fmt.Println("VOLUMEBLOCKS", p.endpoints.VolumeBlocks)
+	for i := 0; i < p.endpoints.VolumeBlocks; i++ {
+		missing := p.volumes.GetMissing(1)
+		fmt.Println("MISSING", missing)
+
+		if len(missing) == 0 {
+			continue
+		}
+
+		to := missing[0]
+
+		var from uint64
+		if to > 2000 {
+			from = to - 2000
+		}
+
+		fmt.Println("###", from, to)
+
+		p.updateVolumes(from, to, contracts)
+	}
+
+	method := "globalState()"
+	types := []string{
+		"uint160", "int24", "uint16", "uint16",
+		"uint16", "uint8", "uint8", "bool",
+	}
 
 	timestamp := time.Now()
 
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 
-	for symbol, pair := range p.getAllPairs() {
-		contract, err := p.getContractAddress(pair)
-		if err != nil {
-			p.logger.Warn().
-				Str("symbol", symbol).
-				Msg("no pool id found")
-			continue
-		}
+	for _, contract := range contracts {
+		symbol := p.contracts[contract]
 
-		price, found := prices[contract]
+		pair, found := p.getPair(symbol)
 		if !found {
+			p.logger.Warn().Str("symbol", symbol).Msg("pair not found")
 			continue
 		}
 
-		var tokenId int
+		decimals1, found := p.decimals[pair.Base]
+		if !found {
+			p.logger.Warn().Str("symbol", pair.Base).Msg("decimals not found")
+		}
+
+		decimals2, found := p.decimals[pair.Quote]
+		if !found {
+			p.logger.Warn().Str("symbol", pair.Quote).Msg("decimals not found")
+		}
+
+		response, err := p.evmCall(contract, method, nil)
+		if err != nil {
+			return p.error(err)
+		}
+
+		var data string
+		err = json.Unmarshal(response, &data)
+		if err != nil {
+			return p.error(err)
+		}
+
+		decoded, err := decodeEthData(data, types)
+		if err != nil {
+			return p.error(err)
+		}
+
+		sqrtPrice := fmt.Sprintf("%v", decoded[0])
+		fmt.Println(sqrtPrice)
+		price, err := decodeSqrtPrice(sqrtPrice)
+		if err != nil {
+			return p.error(err)
+		}
+
+		factor, err := computeDecimalsFactor(int64(decimals1), int64(decimals2))
+		if err != nil {
+			return p.error(err)
+		}
+
+		price = price.Mul(factor)
+		fmt.Println(price)
+
+		var volume sdk.Dec
+		// hack to get the proper volume
 		_, found = p.inverse[symbol]
 		if found {
-			tokenId = 1
+			volume, _ = p.volumes.Get(pair.Quote + pair.Base)
+
+			if !volume.IsZero() {
+				volume = volume.Quo(price)
+			}
 		} else {
-			tokenId = 0
-		}
-
-		volume, err := p.getVolume(contract, tokenId)
-		if err != nil {
-			p.logger.Error().Msg("failed getting volume data")
-		}
-
-		if tokenId == 1 {
-			// setTickerPrice() does the reverse calculation by default
-			// so we need to provide a prepared volume
-			volume = volume.Quo(price)
+			volume, _ = p.volumes.Get(pair.String())
 		}
 
 		p.setTickerPrice(
@@ -197,234 +232,180 @@ func (p *CamelotProvider) Poll() error {
 	return nil
 }
 
-func (p *CamelotProvider) query(
-	query string,
-) (
-	prices map[string]sdk.Dec,
-	volumes map[string][]CamelotVolume,
-	err error,
-) {
-	var (
-		version string
-		path    string
-	)
+func (p *CamelotProvider) init() error {
+	fmt.Println("### INIT")
+	p.decimals = map[string]uint64{}
+	types := []string{"address"}
 
-	switch p.endpoints.Name {
-	case ProviderCamelotV2:
-		version = "v2"
-		path = "/subgraphs/name/camelotlabs/camelot-amm"
-	case ProviderCamelotV3:
-		version = "v3"
-		path = "/subgraphs/name/camelotlabs/camelot-amm-v3"
-	}
+	for symbol, pair := range p.getAllPairs() {
+		logger := p.logger.With().Str("symbol", symbol).Logger()
+		logger.Info().Msg("get decimals")
 
-	prices = map[string]sdk.Dec{}
-	volumes = map[string][]CamelotVolume{}
-
-	request, err := json.Marshal(CamelotQuery{Query: query})
-	if err != nil {
-		p.logger.Error().Msg("failed marshalling request")
-	}
-
-	content, err := p.httpPost(path, request)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	var response CamelotQueryResponse
-	err = json.Unmarshal(content, &response)
-	if err != nil {
-		p.logger.Error().
-			Err(err).
-			Msg("failed unmarshalling response")
-		return nil, nil, err
-	}
-
-	if version == "v2" {
-		for _, volume := range response.Data.PairsHourData {
-			contract := volume.Pair.Id
-
-			_, found := volumes[contract]
-			if !found {
-				volumes[contract] = []CamelotVolume{}
-			}
-			volumes[contract] = append(volumes[contract], CamelotVolume{
-				Date:   volume.Time,
-				Token0: strToDec(volume.Volume0),
-				Token1: strToDec(volume.Volume1),
-			})
-		}
-
-		for _, pair := range response.Data.Pairs {
-			prices[pair.Id] = strToDec(pair.Price)
-		}
-	} else {
-		for _, volume := range response.Data.PoolsHourData {
-			contract := volume.Pool.Id
-
-			_, found := volumes[contract]
-			if !found {
-				volumes[contract] = []CamelotVolume{}
-			}
-			volumes[contract] = append(volumes[contract], CamelotVolume{
-				Date:   volume.Time,
-				Token0: strToDec(volume.Volume0),
-				Token1: strToDec(volume.Volume1),
-			})
-		}
-
-		for _, pool := range response.Data.Pools {
-			prices[pool.Id] = strToDec(pool.Price)
-		}
-	}
-
-	return prices, volumes, nil
-}
-
-func (p *CamelotProvider) getQuery(
-	contracts []string,
-	offset int,
-) (string, error) {
-	addresses := `"` + strings.Join(contracts, `","`) + `"`
-	timestamp := time.Now().Truncate(1*time.Hour).Unix() - int64(offset)
-
-	query := ""
-
-	switch p.endpoints.Name {
-	case ProviderCamelotV2:
-		query = fmt.Sprintf(`
-		{
-			pairHourDatas(
-				where: {
-					pair_in: [%s],
-					hourStartUnix_gte: %d
-				}
-			) {
-				hourStartUnix,
-				hourlyVolumeToken0,
-				hourlyVolumeToken1,
-				pair {
-					id
-				}
-			}
-			pairs(
-				where: {
-					id_in: [%s]
-				}
-			) {
-				id,
-				token1Price
-			}
-		}`,
-			addresses,
-			timestamp,
-			addresses,
-		)
-	case ProviderCamelotV3:
-		query = fmt.Sprintf(`
-		{
-			poolHourDatas(
-				where: {
-					pool_in: [%s],
-					periodStartUnix_gte: %d
-				}
-			) {
-				periodStartUnix,
-				volumeToken0,
-				volumeToken1,
-				pool {
-					id
-				}
-			}
-			pools(
-				where: {
-					id_in: [%s]
-				}
-			) {
-				id,
-				token1Price
-			}
-		}`,
-			addresses,
-			timestamp,
-			addresses,
-		)
-	}
-
-	query = strings.ReplaceAll(query, " ", "")
-	query = strings.ReplaceAll(query, "\t", "")
-	query = strings.ReplaceAll(query, "\n", "")
-
-	return query, nil
-}
-
-func (p *CamelotProvider) updateVolumes(volumes map[string][]CamelotVolume) error {
-	startHour := time.Now().Truncate(1 * time.Hour).Unix()
-
-	for contract := range volumes {
-		_, found := p.volumes[contract]
+		contract, found := p.contracts[symbol]
 		if !found {
-			p.volumes[contract] = make([]CamelotVolume, 24)
+			logger.Warn().Msg("contract not found")
+			continue
 		}
 
-		tmp := map[int64]CamelotVolume{}
-		for _, volume := range p.volumes[contract] {
-			tmp[volume.Date] = volume
-		}
+		decimals := make([]uint64, 2)
 
-		for _, volume := range volumes[contract] {
-			tmp[volume.Date] = volume
-		}
+		for i, method := range []string{"token0()", "token1()"} {
+			response, err := p.evmCall(contract, method, nil)
+			if err != nil {
+				return p.error(err)
+			}
 
-		for i := 0; i < 24; i++ {
-			timestamp := startHour - int64(i)*3600
-			volume := tmp[timestamp]
-			p.volumes[contract][i] = CamelotVolume{
-				Date:   timestamp,
-				Token0: volume.Token0,
-				Token1: volume.Token1,
+			var data string
+			err = json.Unmarshal(response, &data)
+			if err != nil {
+				return p.error(err)
+			}
+
+			decoded, err := decodeEthData(data, types)
+			if err != nil {
+				return p.error(err)
+			}
+			token := fmt.Sprintf("%v", decoded[0])
+
+			decimals[i], err = p.getEthDecimals(token)
+			if err != nil {
+				return err
 			}
 		}
+
+		p.decimals[pair.Base] = decimals[0]
+		p.decimals[pair.Quote] = decimals[1]
 	}
+
+	fmt.Println("> DECIMALS", p.decimals)
 
 	return nil
 }
 
-func (p *CamelotProvider) getVolume(contract string, tokenId int) (sdk.Dec, error) {
-	value := sdk.NewDec(0)
-	volumes, found := p.volumes[contract]
-	if !found {
-		msg := "volume data not found"
-		p.logger.Error().
-			Str("contract", contract).
-			Msg(msg)
-		return value, fmt.Errorf(msg)
+func (p *CamelotProvider) updateVolumes(
+	height1, height2 uint64,
+	addresses []string,
+) error {
+	if len(p.volumes.Symbols()) == 0 {
+		return nil
 	}
 
-	for _, volume := range volumes {
-		var v sdk.Dec
+	timestamps := make([]time.Time, 2)
+	for i, height := range []uint64{height1, height2} {
+		block, err := p.evmGetBlockByNumber(height)
+		if err != nil {
+			return err
+		}
+		timestamps[i], err = block.GetTime()
+		if err != nil {
+			return err
+		}
+	}
 
-		if tokenId == 0 {
-			v = volume.Token0
-		} else {
-			v = volume.Token1
+	// prepare default values (0) for every symbol
+
+	blocks := height2 - height1
+
+	blocktime := timestamps[1].Sub(timestamps[0]).Seconds() / float64(blocks)
+	timestamp := timestamps[0].Unix()
+
+	volumes := make([]volume.Volume, blocks)
+	for i := uint64(0); i < blocks; i++ {
+		values := map[string]sdk.Dec{}
+		for _, symbol := range p.volumes.Symbols() {
+			values[symbol] = sdk.ZeroDec()
 		}
 
-		if v.IsNil() {
+		volumes[i] = volume.Volume{
+			Height: height1 + i + 1,
+			Time:   timestamp + int64(float64(i)*blocktime),
+			Values: values,
+		}
+	}
+
+	topics := []string{}
+	for topic := range p.topics {
+		topics = append(topics, topic)
+	}
+
+	logs, err := p.evmGetLogs(height1, height2, addresses, topics)
+	if err != nil {
+		return err
+	}
+
+	for _, log := range logs {
+		symbol, found := p.contracts[log.Address]
+		if !found {
+			p.logger.Warn().Str("contract", log.Address).Msg("symbol not found")
 			continue
 		}
 
-		value = value.Add(v)
+		pair, found := p.getPair(symbol)
+		if !found {
+			if !found {
+				p.logger.Warn().Str("symbol", symbol).Msg("pair not found")
+				continue
+			}
+		}
+
+		types, found := p.topics[log.Topics[0]]
+		if !found {
+			err = fmt.Errorf("no types found")
+			p.logger.Err(err).
+				Str("topic", log.Topics[0]).
+				Msg("")
+			return err
+		}
+
+		fmt.Println("> TYPES", types)
+
+		data, err := decodeEthData(log.Data, types)
+		if err != nil {
+			err = fmt.Errorf("failed decoding data")
+			p.logger.Err(err).
+				Str("topic", log.Topics[0]).
+				Msg("")
+			return err
+		}
+
+		fmt.Println("> DECODED", data)
+
+		decimals := [2]uint64{}
+		for i, denom := range []string{pair.Base, pair.Quote} {
+			decimals[i], found = p.decimals[denom]
+			if !found {
+				p.logger.Warn().Str("denom", denom).Msg("no decimals found")
+				continue
+			}
+		}
+
+		index := int(log.Height - height1)
+
+		fmt.Println("INDEX", index)
+
+		ten := int64ToDec(10)
+
+		symbols := []string{pair.String(), pair.Swap().String()}
+		for i, symbol := range symbols {
+			current := volumes[index].Values[symbol]
+			factor := ten.Power(decimals[i])
+			amount := strToDec(fmt.Sprintf("%v", data[i])).Quo(factor).Abs()
+			volumes[index].Values[symbol] = current.Add(amount)
+		}
 	}
 
-	return value, nil
-}
-
-func (p *CamelotProvider) init() error {
-	// lowercase contracts, needed for thegraph api calls
-	for symbol, contract := range p.contracts {
-		p.contracts[symbol] = strings.ToLower(contract)
+	for _, volume := range volumes {
+		for symbol, value := range volume.Values {
+			if !value.IsZero() {
+				fmt.Println(symbol, value)
+			}
+		}
 	}
+
+	fmt.Println(volumes[0])
+	fmt.Println(volumes[len(volumes)-1])
+
+	p.volumes.Add(volumes)
 
 	return nil
 }

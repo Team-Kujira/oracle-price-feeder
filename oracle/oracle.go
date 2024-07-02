@@ -498,7 +498,7 @@ func NewProvider(
 	case provider.ProviderBybit:
 		return provider.NewBybitProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderCamelotV2, provider.ProviderCamelotV3:
-		return provider.NewCamelotProvider(ctx, providerLogger, endpoint, providerPairs...)
+		return provider.NewCamelotProvider(db, ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderCoinbase:
 		return provider.NewCoinbaseProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderCoinex:
