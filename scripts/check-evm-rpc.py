@@ -26,6 +26,10 @@ def rpc_call(endpoint, method, params):
     }
     response = requests.post(endpoint, json=data)
 
+    if response.status_code != 200:
+        print(response.status_code)
+        print(response.text)
+
     response.raise_for_status()
 
     data = response.json()
