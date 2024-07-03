@@ -284,14 +284,21 @@ func (h *VolumeHandler) Add(volumes []Volume) {
 	first := h.volumes[0]
 	last := h.volumes[len(h.volumes)-1]
 
+	if first.Time < startTime {
+		// no blocks missing before h.volumes[0]
+		return
+	}
+
 	timeDiff := last.Time - first.Time
-	if timeDiff <= 1 {
+	if timeDiff < 1 {
 		return
 	}
 
 	blockTime := float64(timeDiff) / float64(len(h.volumes))
 
 	blocks := uint64(math.Round(float64(first.Time-startTime) / blockTime))
+
+	// fmt.Println(timeDiff, blockTime, blocks, len(h.volumes), first.Time, last.Time)
 	if blocks > 10 {
 		missing := make([]uint64, blocks)
 		height := first.Height - blocks
