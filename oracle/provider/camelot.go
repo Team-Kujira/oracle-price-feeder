@@ -115,8 +115,6 @@ func (p *CamelotProvider) Poll() error {
 		contracts = append(contracts, contract)
 	}
 
-	fmt.Println(contracts)
-
 	// some rpc providers only accept small ranges for getLogs calls
 	if p.height+2000 < height {
 		p.height = height - 2000
@@ -124,12 +122,8 @@ func (p *CamelotProvider) Poll() error {
 
 	p.updateVolumes(p.height, height, contracts)
 
-	p.volumes.Debug("KUJIWETH")
-
-	fmt.Println("VOLUMEBLOCKS", p.endpoints.VolumeBlocks)
 	for i := 0; i < p.endpoints.VolumeBlocks; i++ {
 		missing := p.volumes.GetMissing(1)
-		fmt.Println("MISSING", missing)
 
 		if len(missing) == 0 {
 			continue
@@ -141,8 +135,6 @@ func (p *CamelotProvider) Poll() error {
 		if to > 2000 {
 			from = to - 2000
 		}
-
-		fmt.Println("###", from, to)
 
 		p.updateVolumes(from, to, contracts)
 	}
@@ -194,7 +186,6 @@ func (p *CamelotProvider) Poll() error {
 		}
 
 		sqrtPrice := fmt.Sprintf("%v", decoded[0])
-		fmt.Println(sqrtPrice)
 		price, err := decodeSqrtPrice(sqrtPrice)
 		if err != nil {
 			return p.error(err)
@@ -206,7 +197,6 @@ func (p *CamelotProvider) Poll() error {
 		}
 
 		price = price.Mul(factor)
-		fmt.Println(price)
 
 		var volume sdk.Dec
 		// hack to get the proper volume
@@ -233,7 +223,6 @@ func (p *CamelotProvider) Poll() error {
 }
 
 func (p *CamelotProvider) init() error {
-	fmt.Println("### INIT")
 	p.decimals = map[string]uint64{}
 	types := []string{"address"}
 
@@ -276,8 +265,6 @@ func (p *CamelotProvider) init() error {
 		p.decimals[pair.Base] = decimals[0]
 		p.decimals[pair.Quote] = decimals[1]
 	}
-
-	fmt.Println("> DECIMALS", p.decimals)
 
 	return nil
 }
@@ -357,8 +344,6 @@ func (p *CamelotProvider) updateVolumes(
 			return err
 		}
 
-		fmt.Println("> TYPES", types)
-
 		data, err := decodeEthData(log.Data, types)
 		if err != nil {
 			err = fmt.Errorf("failed decoding data")
@@ -367,8 +352,6 @@ func (p *CamelotProvider) updateVolumes(
 				Msg("")
 			return err
 		}
-
-		fmt.Println("> DECODED", data)
 
 		decimals := [2]uint64{}
 		for i, denom := range []string{pair.Base, pair.Quote} {
@@ -381,8 +364,6 @@ func (p *CamelotProvider) updateVolumes(
 
 		index := int(log.Height - height1)
 
-		fmt.Println("INDEX", index)
-
 		ten := int64ToDec(10)
 
 		symbols := []string{pair.String(), pair.Swap().String()}
@@ -393,17 +374,6 @@ func (p *CamelotProvider) updateVolumes(
 			volumes[index].Values[symbol] = current.Add(amount)
 		}
 	}
-
-	for _, volume := range volumes {
-		for symbol, value := range volume.Values {
-			if !value.IsZero() {
-				fmt.Println(symbol, value)
-			}
-		}
-	}
-
-	fmt.Println(volumes[0])
-	fmt.Println(volumes[len(volumes)-1])
 
 	p.volumes.Add(volumes)
 

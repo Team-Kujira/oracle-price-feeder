@@ -9,7 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math/rand"
 	"net/http"
 	"net/url"
@@ -615,9 +615,13 @@ func (p *provider) makeHttpRequest(url string, method string, body []byte, heade
 		}
 		return nil, fmt.Errorf("http request returned invalid status")
 	}
-	content, err := ioutil.ReadAll(res.Body)
+	content, err := io.ReadAll(res.Body)
 	if err != nil {
 		return nil, err
+	}
+
+	if len(content) == 0 {
+		return nil, fmt.Errorf("empty response")
 	}
 	return content, nil
 }
@@ -1078,7 +1082,7 @@ func (p *provider) evmRpcQuery(method, params string) (json.RawMessage, error) {
 		method, string(params),
 	))
 
-	fmt.Println(string(query))
+	p.logger.Debug().Msg(string(query))
 
 	TelemetryEvmMethod(p.chain, p.name, method)
 
@@ -1153,8 +1157,6 @@ func (p *provider) evmGetLogs(
 	if err != nil {
 		return nil, err
 	}
-
-	fmt.Println(">", len(response), string(response))
 
 	var logs []EvmLog
 	err = json.Unmarshal(response, &logs)
