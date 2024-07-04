@@ -277,8 +277,6 @@ func (p *OsmosisV2Provider) init() error {
 		}
 	}
 
-	fmt.Println(p.denoms)
-
 	return nil
 }
 
