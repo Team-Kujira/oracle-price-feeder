@@ -108,6 +108,9 @@ func (ots *OracleTestSuite) SetupSuite() {
 		history,
 		nil,
 		nil,
+		nil,
+		nil,
+		nil,
 	)
 }
 

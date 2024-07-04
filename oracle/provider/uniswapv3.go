@@ -2,19 +2,15 @@ package provider
 
 import (
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"strconv"
-	"strings"
 	"time"
 
 	"price-feeder/oracle/types"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/rs/zerolog"
-
-	"github.com/ethereum/go-ethereum/accounts/abi"
 )
 
 var (
@@ -157,54 +153,6 @@ func (p *UniswapV3Provider) GetAvailablePairs() (map[string]struct{}, error) {
 // token0() 0dfe1681
 // token1() d21220a7
 // decimals() 313ce567
-
-func decodeEthData(data string, types []string) ([]interface{}, error) {
-	type AbiOutput struct {
-		Name         string `json:"name"`
-		Type         string `json:"type"`
-		InternalType string `json:"internalType"`
-	}
-
-	type AbiDefinition struct {
-		Name    string      `json:"name"`
-		Type    string      `json:"type"`
-		Outputs []AbiOutput `json:"outputs"`
-	}
-
-	outputs := []AbiOutput{}
-	for _, t := range types {
-		outputs = append(outputs, AbiOutput{
-			Name:         "",
-			Type:         t,
-			InternalType: t,
-		})
-	}
-
-	definition, err := json.Marshal([]AbiDefinition{{
-		Name:    "fn",
-		Type:    "function",
-		Outputs: outputs,
-	}})
-
-	if err != nil {
-		return nil, err
-	}
-
-	abi, err := abi.JSON(strings.NewReader(string(definition)))
-	if err != nil {
-		return nil, err
-	}
-
-	data = strings.TrimPrefix(data, "0x")
-
-	decoded, err := hex.DecodeString(data)
-	if err != nil {
-		return nil, err
-	}
-
-	return abi.Unpack("fn", decoded)
-
-}
 
 func (p *UniswapV3Provider) doEthCall(address string, data string) (UniswapV3Response, error) {
 	type Body struct {

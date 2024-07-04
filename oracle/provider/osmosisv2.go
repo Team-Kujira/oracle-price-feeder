@@ -2,11 +2,13 @@ package provider
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
+	"price-feeder/oracle/provider/volume"
 	"price-feeder/oracle/types"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -17,8 +19,10 @@ var (
 	_                         Provider = (*OsmosisV2Provider)(nil)
 	osmosisv2DefaultEndpoints          = Endpoint{
 		Name:         ProviderOsmosisV2,
-		Urls:         []string{"https://rest.cosmos.directory/osmosis"},
-		PollInterval: 6 * time.Second,
+		Urls:         []string{},
+		PollInterval: 4 * time.Second,
+		VolumeBlocks: 4,
+		VolumePause:  0,
 	}
 )
 
@@ -30,7 +34,6 @@ type (
 	OsmosisV2Provider struct {
 		provider
 		denoms       map[string]string
-		contracts    map[string]string
 		concentrated map[string]struct{}
 	}
 
@@ -61,12 +64,14 @@ type (
 )
 
 func NewOsmosisV2Provider(
+	db *sql.DB,
 	ctx context.Context,
 	logger zerolog.Logger,
 	endpoints Endpoint,
 	pairs ...types.CurrencyPair,
 ) (*OsmosisV2Provider, error) {
 	provider := &OsmosisV2Provider{}
+	provider.db = db
 	provider.Init(
 		ctx,
 		endpoints,
@@ -76,18 +81,19 @@ func NewOsmosisV2Provider(
 		nil,
 	)
 
-	provider.contracts = provider.endpoints.ContractAddresses
-
 	availablePairs, _ := provider.GetAvailablePairs()
 	provider.setPairs(pairs, availablePairs, nil)
 
 	provider.init()
 
 	go startPolling(provider, provider.endpoints.PollInterval, logger)
+
 	return provider, nil
 }
 
 func (p *OsmosisV2Provider) Poll() error {
+	p.updateVolumes()
+
 	timestamp := time.Now()
 
 	p.mtx.Lock()
@@ -112,28 +118,38 @@ func (p *OsmosisV2Provider) Poll() error {
 				pair = pair.Swap()
 			}
 
-			price, err = p.queryConcentratedLiquidityPool(pair, poolId)
+			price, err = p.queryConcentratedLiquidityPool(poolId)
 			if err != nil {
-				p.logger.Error().
-					Str("pair", pair.String()).
-					Str("pool", poolId).
-					Err(err).
-					Msg("")
-
-				return err
+				continue
 			}
 		} else {
 			strPrice, err := p.queryLegacyPool(pair, poolId)
 			if err != nil {
-				return err
+				continue
 			}
 			price = strToDec(strPrice)
+		}
+
+		var volume sdk.Dec
+		// hack to get the proper volume
+		_, found = p.inverse[symbol]
+		if found {
+			volume, _ = p.volumes.Get(pair.Quote + pair.Base)
+			if !volume.IsZero() {
+				volume = volume.Quo(price)
+			}
+		} else {
+			volume, _ = p.volumes.Get(pair.String())
+		}
+
+		if volume.IsNil() {
+			volume = sdk.ZeroDec()
 		}
 
 		p.setTickerPrice(
 			symbol,
 			price,
-			sdk.ZeroDec(),
+			volume,
 			timestamp,
 		)
 	}
@@ -150,14 +166,18 @@ func (p *OsmosisV2Provider) queryLegacyPool(
 	pair types.CurrencyPair,
 	poolId string,
 ) (string, error) {
+	err := fmt.Errorf("denom not found")
+
 	baseDenom, found := p.denoms[pair.Base]
 	if !found {
-		return "", fmt.Errorf("denom not found")
+		p.logger.Err(err).Str("symbol", pair.Base).Msg("")
+		return "", err
 	}
 
 	quoteDenom, found := p.denoms[pair.Quote]
 	if !found {
-		return "", fmt.Errorf("denom not found")
+		p.logger.Err(err).Str("symbol", pair.Quote).Msg("")
+		return "", err
 	}
 
 	// api seems to flipped base and quote
@@ -184,7 +204,6 @@ func (p *OsmosisV2Provider) queryLegacyPool(
 }
 
 func (p *OsmosisV2Provider) queryConcentratedLiquidityPool(
-	pair types.CurrencyPair,
 	poolId string,
 ) (sdk.Dec, error) {
 	path := "/osmosis/gamm/v1beta1/pools/" + poolId
@@ -233,17 +252,25 @@ func (p *OsmosisV2Provider) init() error {
 		var response OsmosisV2PoolResponse
 		err = json.Unmarshal(content, &response)
 		if err != nil {
-			return err
+			continue
 		}
 
 		switch response.Pool.Type {
 		case "/osmosis.gamm.v1beta1.Pool":
 			p.denoms[pair.Base] = response.Pool.Assets[0].Token.Denom
 			p.denoms[pair.Quote] = response.Pool.Assets[1].Token.Denom
+			p.denoms[response.Pool.Assets[0].Token.Denom] = pair.Base
+			p.denoms[response.Pool.Assets[1].Token.Denom] = pair.Quote
 		case "/osmosis.gamm.poolmodels.stableswap.v1beta1.Pool":
 			p.denoms[pair.Base] = response.Pool.Liquidity[0].Denom
 			p.denoms[pair.Quote] = response.Pool.Liquidity[1].Denom
+			p.denoms[response.Pool.Liquidity[0].Denom] = pair.Base
+			p.denoms[response.Pool.Liquidity[1].Denom] = pair.Quote
 		case "/osmosis.concentratedliquidity.v1beta1.Pool":
+			p.denoms[pair.Base] = response.Pool.Token0
+			p.denoms[pair.Quote] = response.Pool.Token1
+			p.denoms[response.Pool.Token0] = pair.Base
+			p.denoms[response.Pool.Token1] = pair.Quote
 			p.concentrated[pool] = struct{}{}
 		default:
 			continue
@@ -251,4 +278,178 @@ func (p *OsmosisV2Provider) init() error {
 	}
 
 	return nil
+}
+
+func (p *OsmosisV2Provider) updateVolumes() {
+	missing := p.volumes.GetMissing(p.endpoints.VolumeBlocks)
+	missing = append(missing, 0)
+
+	volumes := []volume.Volume{}
+
+	for _, height := range missing {
+		volume, err := p.getVolume(height)
+		time.Sleep(time.Millisecond * time.Duration(p.endpoints.VolumePause))
+		if err != nil {
+			p.error(err)
+			continue
+		}
+		volumes = append(volumes, volume)
+	}
+
+	p.volumes.Add(volumes)
+}
+
+func (p *OsmosisV2Provider) getVolume(height uint64) (volume.Volume, error) {
+	p.logger.Info().Uint64("height", height).Msg("get volume")
+
+	var err error
+
+	if height == 0 {
+		height, err = p.getCosmosHeight()
+		if err != nil {
+			return volume.Volume{}, p.error(err)
+		}
+
+		if height == p.height || height == 0 {
+			return volume.Volume{}, nil
+		}
+
+		p.height = height
+	}
+
+	filter := []string{
+		"/osmosis.poolmanager.v1beta1.MsgSwapExactAmountIn",
+		"/osmosis.gamm.v1beta1.MsgSwapExactAmountIn",
+		"/cosmwasm.wasm.v1.MsgExecuteContract",
+		"/ibc.core.channel.v1.MsgRecvPacket", // via skip
+		"/osmosis.poolmanager.v1beta1.MsgSplitRouteSwapExactAmountIn",
+	}
+
+	txs, timestamp, err := p.getCosmosTxs(height, filter)
+	if err != nil {
+		return volume.Volume{}, p.error(err)
+	}
+
+	// prepare all volumes:
+	// not traded pairs have zero volume for this block
+	values := map[string]sdk.Dec{}
+	for _, symbol := range p.volumes.Symbols() {
+		values[symbol] = sdk.ZeroDec()
+	}
+
+	for _, tx := range txs {
+		swaps := tx.GetEventsByType("token_swapped")
+		if len(swaps) == 0 {
+			continue
+		}
+
+		p.logger.Debug().
+			Str("tx", tx.Hash).
+			Int("swaps", len(swaps)).
+			Msg("swaps found")
+
+		for _, event := range swaps {
+			pool, found := event.Attributes["pool_id"]
+			if !found {
+				continue
+			}
+
+			symbol, found := p.contracts[pool]
+			if !found {
+				p.logger.Debug().
+					Str("pool_id", pool).
+					Msg("unknown pool")
+				continue
+			}
+
+			_, found = values[symbol]
+			if !found {
+				p.logger.Debug().
+					Str("symbol", symbol).
+					Msg("unknown symbol")
+				continue
+			}
+
+			in, err := p.getToken(event, "tokens_in")
+			if err != nil {
+				p.logger.Error().
+					Str("symbol", symbol).
+					Str("attribute", "tokens_in").
+					Msg("failed parsing token")
+				continue
+			}
+
+			out, err := p.getToken(event, "tokens_out")
+			if err != nil {
+				p.logger.Error().
+					Str("symbol", symbol).
+					Str("attribute", "tokens_out").
+					Msg("failed parsing token")
+				continue
+			}
+
+			// needed to for final volumes: {ATOMOSMO: 1, OSMOATOM: 9}
+			amounts := map[string]sdk.Dec{
+				in.Symbol + out.Symbol: in.Amount,
+				out.Symbol + in.Symbol: out.Amount,
+			}
+
+			for symbol, amount := range amounts {
+				value, found := values[symbol]
+				if !found {
+					p.logger.Error().
+						Str("symbol", symbol).
+						Msg("volume not set")
+					continue
+				}
+
+				values[symbol] = value.Add(amount)
+			}
+		}
+	}
+
+	volume := volume.Volume{
+		Height: height,
+		Time:   timestamp.Unix(),
+		Values: values,
+	}
+
+	return volume, nil
+}
+
+func (p *OsmosisV2Provider) getToken(
+	event types.CosmosTxEvent,
+	key string,
+) (types.Denom, error) {
+	token, found := event.Attributes[key]
+	if !found {
+		return types.Denom{}, fmt.Errorf("token not found")
+	}
+
+	amount, denom, err := parseDenom(token)
+	if err != nil {
+		return types.Denom{}, err
+	}
+
+	symbol, found := p.denoms[denom]
+	if !found {
+		err := fmt.Errorf("symbol not found")
+		p.logger.Err(err).
+			Str("denom", denom).Msg("")
+		return types.Denom{}, err
+	}
+
+	decimals, found := p.endpoints.Decimals[symbol]
+	if !found {
+		err := fmt.Errorf("no decimals found")
+		p.logger.Err(err).Str("symbol", symbol).Msg("")
+		return types.Denom{}, err
+	}
+
+	amount = amount.Quo(uintToDec(10).Power(uint64(decimals)))
+
+	return types.Denom{
+		Amount: amount,
+		Symbol: symbol,
+	}, nil
 }

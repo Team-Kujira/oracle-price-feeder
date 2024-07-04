@@ -3,6 +3,7 @@ package oracle
 import (
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"encoding/hex"
 	"fmt"
 	"math"
@@ -81,6 +82,9 @@ type Oracle struct {
 	derivativeSymbols    map[string]struct{}
 	contractAddresses    map[string]map[string]string
 	providerWeights      map[string]ProviderWeight
+	decimals             map[string]map[string]int
+	periods              map[string]map[string]int
+	volumeDatabase       *sql.DB
 
 	mtx             sync.RWMutex
 	lastPriceSyncTS time.Time
@@ -104,6 +108,9 @@ func New(
 	history history.PriceHistory,
 	contractAddresses map[string]map[string]string,
 	providerWeights map[string]ProviderWeight,
+	decimals map[string]map[string]int,
+	periods map[string]map[string]int,
+	volumeDatabase *sql.DB,
 ) *Oracle {
 	providerPairs := make(map[provider.Name][]types.CurrencyPair)
 	for _, pair := range currencyPairs {
@@ -147,6 +154,9 @@ func New(
 		history:              history,
 		contractAddresses:    contractAddresses,
 		providerWeights:      providerWeights,
+		decimals:             decimals,
+		periods:              periods,
+		volumeDatabase:       volumeDatabase,
 	}
 }
 
@@ -225,10 +235,15 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 		priceProvider, found := o.priceProviders[providerName]
 		if !found {
 			endpoint := o.endpoints[providerName]
-			contractAddresses, _ := o.contractAddresses[providerName.String()]
+			contractAddresses := o.contractAddresses[providerName.String()]
+			decimals := o.decimals[providerName.String()]
+			periods := o.periods[providerName.String()]
 			endpoint.ContractAddresses = contractAddresses
+			endpoint.Decimals = decimals
+			endpoint.Periods = periods
 
 			newProvider, err := NewProvider(
+				o.volumeDatabase,
 				ctx,
 				providerName,
 				o.logger,
@@ -448,6 +463,7 @@ func (o *Oracle) GetParams(ctx context.Context) (oracletypes.Params, error) {
 }
 
 func NewProvider(
+	db *sql.DB,
 	ctx context.Context,
 	providerName provider.Name,
 	logger zerolog.Logger,
@@ -482,9 +498,11 @@ func NewProvider(
 	case provider.ProviderBybit:
 		return provider.NewBybitProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderCamelotV2, provider.ProviderCamelotV3:
-		return provider.NewCamelotProvider(ctx, providerLogger, endpoint, providerPairs...)
+		return provider.NewCamelotProvider(db, ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderCoinbase:
 		return provider.NewCoinbaseProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderCoinex:
+		return provider.NewCoinexProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderCrypto:
 		return provider.NewCryptoProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderCurve:
@@ -494,9 +512,11 @@ func NewProvider(
 	case provider.ProviderFin:
 		return provider.NewFinProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderFinV2:
-		return provider.NewFinV2Provider(ctx, providerLogger, endpoint, providerPairs...)
+		return provider.NewFinV2Provider(db, ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderGate:
 		return provider.NewGateProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderHelix:
+		return provider.NewHelixProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderHitBtc:
 		return provider.NewHitBtcProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderHuobi:
@@ -509,6 +529,8 @@ func NewProvider(
 		return provider.NewKucoinProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderLbank:
 		return provider.NewLbankProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderMaya:
+		return provider.NewMayaProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderMexc:
 		return provider.NewMexcProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderMock:
@@ -518,11 +540,13 @@ func NewProvider(
 	case provider.ProviderOsmosis:
 		return provider.NewOsmosisProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderOsmosisV2:
-		return provider.NewOsmosisV2Provider(ctx, providerLogger, endpoint, providerPairs...)
+		return provider.NewOsmosisV2Provider(db, ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderPancakeV3Bsc:
 		return provider.NewPancakeProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderPhemex:
 		return provider.NewPhemexProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderPionex:
+		return provider.NewPionexProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderPoloniex:
 		return provider.NewPoloniexProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderPyth:
@@ -531,6 +555,10 @@ func NewProvider(
 		return provider.NewShadeProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderUniswapV3:
 		return provider.NewUniswapV3Provider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderUnstake:
+		return provider.NewUnstakeProvider(ctx, providerLogger, endpoint, providerPairs...)
+	case provider.ProviderVelodromeV2:
+		return provider.NewVelodromeV2Provider(ctx, providerLogger, endpoint, providerPairs...)
 	case
 		provider.ProviderWhitewhaleCmdx,
 		provider.ProviderWhitewhaleHuahua,
@@ -540,7 +568,7 @@ func NewProvider(
 		provider.ProviderWhitewhaleLuna,
 		provider.ProviderWhitewhaleSei,
 		provider.ProviderWhitewhaleWhale:
-		return provider.NewWhitewhaleProvider(ctx, providerLogger, endpoint, providerPairs...)
+		return provider.NewWhitewhaleProvider(db, ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderXt:
 		return provider.NewXtProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderZero:

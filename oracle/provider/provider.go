@@ -3,22 +3,29 @@ package provider
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"database/sql"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math/rand"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"price-feeder/oracle/provider/volume"
 	"price-feeder/oracle/types"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/rs/zerolog"
+	"golang.org/x/crypto/sha3"
 )
 
 const (
@@ -42,18 +49,21 @@ const (
 	ProviderCamelotV2          Name = "camelotv2"
 	ProviderCamelotV3          Name = "camelotv3"
 	ProviderCoinbase           Name = "coinbase"
+	ProviderCoinex             Name = "coinex"
 	ProviderCrypto             Name = "crypto"
 	ProviderCurve              Name = "curve"
 	ProviderDexter             Name = "dexter"
 	ProviderFin                Name = "fin"
 	ProviderFinV2              Name = "finv2"
 	ProviderGate               Name = "gate"
+	ProviderHelix              Name = "helix"
 	ProviderHitBtc             Name = "hitbtc"
 	ProviderHuobi              Name = "huobi"
 	ProviderIdxOsmosis         Name = "idxosmosis"
 	ProviderKraken             Name = "kraken"
 	ProviderKucoin             Name = "kucoin"
 	ProviderLbank              Name = "lbank"
+	ProviderMaya               Name = "maya"
 	ProviderMexc               Name = "mexc"
 	ProviderMock               Name = "mock"
 	ProviderOkx                Name = "okx"
@@ -61,11 +71,14 @@ const (
 	ProviderOsmosisV2          Name = "osmosisv2"
 	ProviderPancakeV3Bsc       Name = "pancakev3_bsc"
 	ProviderPhemex             Name = "phemex"
+	ProviderPionex             Name = "pionex"
 	ProviderPoloniex           Name = "poloniex"
 	ProviderPyth               Name = "pyth"
 	ProviderShade              Name = "shade"
 	ProviderStride             Name = "stride"
 	ProviderUniswapV3          Name = "uniswapv3"
+	ProviderUnstake            Name = "unstake"
+	ProviderVelodromeV2        Name = "velodromev2"
 	ProviderWhitewhaleCmdx     Name = "whitewhale_cmdx"
 	ProviderWhitewhaleHuahua   Name = "whitewhale_huahua"
 	ProviderWhitewhaleInj      Name = "whitewhale_inj"
@@ -97,6 +110,7 @@ type (
 
 	provider struct {
 		ctx       context.Context
+		name      string
 		endpoints Endpoint
 		httpBase  string
 		http      *http.Client
@@ -107,6 +121,10 @@ type (
 		tickers   map[string]types.TickerPrice
 		contracts map[string]string
 		websocket *WebsocketController
+		db        *sql.DB
+		volumes   volume.VolumeHandler
+		height    uint64
+		chain     string
 	}
 
 	PollingProvider interface {
@@ -134,6 +152,22 @@ type (
 		PingType          uint
 		PingMessage       string
 		ContractAddresses map[string]string
+		VolumeBlocks      int
+		VolumePause       int
+		Decimals          map[string]int
+		Periods           map[string]int
+	}
+
+	EvmLog struct {
+		Address string   `json:"address"`
+		Topics  []string `json:"topics"`
+		Data    string   `json:"data"`
+		Number  string   `json:"blockNumber"`
+		Height  uint64
+	}
+
+	EvmBlock struct {
+		Timestamp string `json:"timestamp"`
 	}
 )
 
@@ -181,6 +215,52 @@ func (p *provider) Init(
 		)
 		go p.websocket.Start()
 	}
+
+	// set contract<>symbol mapping
+
+	p.contracts = endpoints.ContractAddresses
+
+	for symbol, contract := range endpoints.ContractAddresses {
+		p.contracts[contract] = symbol
+	}
+
+	p.height = 0
+
+	if p.db == nil {
+		return
+	}
+
+	// set up volume handler
+
+	symbols := []string{}
+	for _, pair := range pairs {
+		skip := false
+		for _, symbol := range []string{pair.Base, pair.Quote} {
+			_, found := endpoints.Decimals[symbol]
+			if !found {
+				skip = true
+				logger.Debug().
+					Str("symbol", symbol).
+					Msg("unknown decimal")
+			}
+		}
+		if skip {
+			continue
+		}
+
+		symbols = append(symbols, pair.Base+pair.Quote)
+		symbols = append(symbols, pair.Quote+pair.Base)
+	}
+
+	var period int64 = 86400
+	name := endpoints.Name.String()
+
+	volumes, err := volume.NewVolumeHandler(logger, p.db, name, symbols, period)
+	if err != nil {
+		panic(err)
+	}
+
+	p.volumes = volumes
 }
 
 func (p *provider) GetTickerPrices(pairs ...types.CurrencyPair) (map[string]types.TickerPrice, error) {
@@ -246,6 +326,166 @@ func (p *provider) compactJsonString(message string) (string, error) {
 	}
 
 	return buffer.String(), nil
+}
+
+func (p *provider) getCosmosTx(hash string) (types.CosmosTx, error) {
+	type (
+		Attribute struct {
+			Key   string `json:"key"`
+			Value string `json:"value"`
+		}
+
+		Event struct {
+			Type       string      `json:"type"`
+			Attributes []Attribute `json:"attributes"`
+		}
+
+		TxResponse struct {
+			Code   int64   `json:"code"`
+			Height string  `json:"height"`
+			Time   string  `json:"timestamp"`
+			Events []Event `json:"events"`
+		}
+
+		Response struct {
+			TxResponse TxResponse `json:"tx_response"`
+		}
+	)
+
+	var tx types.CosmosTx
+
+	path := fmt.Sprintf("/cosmos/tx/v1beta1/txs/%s", hash)
+
+	content, err := p.httpGet(path)
+	if err != nil {
+		return tx, err
+	}
+
+	var response Response
+
+	err = json.Unmarshal(content, &response)
+	if err != nil {
+		return tx, err
+	}
+
+	timestamp, err := time.Parse(time.RFC3339, response.TxResponse.Time)
+	if err != nil {
+		return tx, err
+	}
+
+	height, err := strconv.ParseUint(response.TxResponse.Height, 10, 64)
+	if err != nil {
+		return tx, err
+	}
+
+	events := make([]types.CosmosTxEvent, len(response.TxResponse.Events))
+	for i, event := range response.TxResponse.Events {
+		events[i] = types.CosmosTxEvent{
+			Type:       event.Type,
+			Attributes: map[string]string{},
+		}
+
+		for _, attribute := range event.Attributes {
+			events[i].Attributes[attribute.Key] = attribute.Value
+		}
+	}
+
+	tx = types.CosmosTx{
+		Code:   response.TxResponse.Code,
+		Time:   timestamp,
+		Height: height,
+		Events: events,
+		Hash:   hash,
+	}
+
+	return tx, nil
+}
+
+func (p *provider) getCosmosHeight() (uint64, error) {
+	path := "/cosmos/base/tendermint/v1beta1/blocks/latest"
+	content, err := p.httpGet(path)
+	if err != nil {
+		return 0, err
+	}
+
+	var response types.CosmosBlockResponse
+
+	err = json.Unmarshal(content, &response)
+	if err != nil {
+		return 0, err
+	}
+
+	height, err := strconv.ParseUint(response.Block.Header.Height, 10, 64)
+	if err != nil {
+		return 0, err
+	}
+
+	return height, nil
+}
+
+func (p *provider) getCosmosTxs(
+	height uint64,
+	msgTypes []string,
+) ([]types.CosmosTx, time.Time, error) {
+	var timestamp time.Time
+	if height == 0 {
+		return nil, timestamp, fmt.Errorf("height is 0")
+	}
+
+	var response types.CosmosBlockResponse
+
+	path := fmt.Sprintf("/cosmos/tx/v1beta1/txs/block/%d", height)
+	content, err := p.httpGet(path)
+	if err != nil {
+		return nil, timestamp, err
+	}
+
+	err = json.Unmarshal(content, &response)
+	if err != nil {
+		return nil, timestamp, err
+	}
+
+	timestamp, err = time.Parse(time.RFC3339, response.Block.Header.Time)
+	if err != nil {
+		return nil, timestamp, err
+	}
+
+	hashes := []string{}
+	filter := map[string]struct{}{}
+	for _, msgType := range msgTypes {
+		filter[msgType] = struct{}{}
+	}
+
+	for i, tx := range response.Txs {
+		for _, message := range tx.Body.Messages {
+			_, found := filter[message.Type]
+			if !found {
+				continue
+			}
+
+			data, err := base64.StdEncoding.DecodeString(
+				response.Block.Data.Txs[i],
+			)
+			if err != nil {
+				return nil, timestamp, err
+			}
+
+			hash := sha256.New()
+			hash.Write(data)
+			hashes = append(hashes, fmt.Sprintf("%X", hash.Sum(nil)))
+		}
+	}
+
+	txs := []types.CosmosTx{}
+	for _, hash := range hashes {
+		tx, err := p.getCosmosTx(hash)
+		if err != nil {
+			return nil, timestamp, err
+		}
+		txs = append(txs, tx)
+	}
+
+	return txs, timestamp, nil
 }
 
 func (p *provider) wasmRawQuery(contract, message string) ([]byte, error) {
@@ -366,6 +606,9 @@ func (p *provider) makeHttpRequest(url string, method string, body []byte, heade
 	if res.StatusCode != 200 {
 		p.logger.Warn().
 			Int("code", res.StatusCode).
+			Str("body", string(body)).
+			Str("url", url).
+			Str("method", method).
 			Msg("http request returned invalid status")
 		if res.StatusCode == 429 || res.StatusCode == 418 {
 			p.logger.Warn().
@@ -375,9 +618,13 @@ func (p *provider) makeHttpRequest(url string, method string, body []byte, heade
 		}
 		return nil, fmt.Errorf("http request returned invalid status")
 	}
-	content, err := ioutil.ReadAll(res.Body)
+	content, err := io.ReadAll(res.Body)
 	if err != nil {
 		return nil, err
+	}
+
+	if len(content) == 0 {
+		return nil, fmt.Errorf("empty response")
 	}
 	return content, nil
 }
@@ -415,6 +662,8 @@ func (e *Endpoint) SetDefaults() {
 		defaults = camelotV3DefaultEndpoints
 	case ProviderCoinbase:
 		defaults = coinbaseDefaultEndpoints
+	case ProviderCoinex:
+		defaults = coinexDefaultEndpoints
 	case ProviderCrypto:
 		defaults = cryptoDefaultEndpoints
 	case ProviderCurve:
@@ -427,6 +676,8 @@ func (e *Endpoint) SetDefaults() {
 		defaults = finV2DefaultEndpoints
 	case ProviderGate:
 		defaults = gateDefaultEndpoints
+	case ProviderHelix:
+		defaults = helixDefaultEndpoints
 	case ProviderHitBtc:
 		defaults = hitbtcDefaultEndpoints
 	case ProviderIdxOsmosis:
@@ -441,6 +692,8 @@ func (e *Endpoint) SetDefaults() {
 		defaults = lbankDefaultEndpoints
 	case ProviderMexc:
 		defaults = mexcDefaultEndpoints
+	case ProviderMaya:
+		defaults = mayaDefaultEndpoints
 	case ProviderMock:
 		defaults = mockDefaultEndpoints
 	case ProviderOkx:
@@ -453,6 +706,8 @@ func (e *Endpoint) SetDefaults() {
 		defaults = PancakeV3BscDefaultEndpoints
 	case ProviderPhemex:
 		defaults = phemexDefaultEndpoints
+	case ProviderPionex:
+		defaults = pionexDefaultEndpoints
 	case ProviderPoloniex:
 		defaults = poloniexDefaultEndpoints
 	case ProviderPyth:
@@ -461,6 +716,10 @@ func (e *Endpoint) SetDefaults() {
 		defaults = shadeDefaultEndpoints
 	case ProviderUniswapV3:
 		defaults = uniswapv3DefaultEndpoints
+	case ProviderUnstake:
+		defaults = unstakeDefaultEndpoints
+	case ProviderVelodromeV2:
+		defaults = velodromev2DefaultEndpoints
 	case ProviderWhitewhaleCmdx:
 		defaults = whitewhaleCmdxDefaultEndpoints
 	case ProviderWhitewhaleHuahua:
@@ -522,6 +781,14 @@ func (e *Endpoint) SetDefaults() {
 			continue
 		}
 		e.ContractAddresses[symbol] = address
+	}
+
+	if e.VolumeBlocks == 0 {
+		e.VolumeBlocks = defaults.VolumeBlocks
+	}
+
+	if e.VolumePause <= 0 {
+		e.VolumePause = defaults.VolumePause
 	}
 }
 
@@ -680,10 +947,28 @@ func (p *provider) getAllPairs() map[string]types.CurrencyPair {
 
 func (p *provider) getAvailablePairsFromContracts() (map[string]struct{}, error) {
 	symbols := map[string]struct{}{}
-	for symbol := range p.contracts {
+	for symbol := range p.endpoints.ContractAddresses {
 		symbols[symbol] = struct{}{}
 	}
 	return symbols, nil
+}
+
+func (p *provider) getPair(symbol string) (types.CurrencyPair, bool) {
+	pair, found := p.pairs[symbol]
+	if found {
+		return pair, true
+	}
+
+	pair, found = p.inverse[symbol]
+	if found {
+		return pair.Swap(), true
+	}
+
+	p.logger.Debug().
+		Str("symbol", symbol).
+		Msg("pair not found")
+
+	return pair, false
 }
 
 func (p *provider) getContractAddress(pair types.CurrencyPair) (string, error) {
@@ -704,6 +989,309 @@ func (p *provider) getContractAddress(pair types.CurrencyPair) (string, error) {
 		Err(err)
 
 	return "", err
+}
+
+// EVM specific
+
+func (p *provider) doEthCall(address, data string) (string, error) {
+	type Body struct {
+		Jsonrpc string        `json:"jsonrpc"`
+		Method  string        `json:"method"`
+		Params  []interface{} `json:"params"`
+		Id      int64         `json:"id"`
+	}
+
+	type Transaction struct {
+		To   string `json:"to"`
+		Data string `json:"data"`
+	}
+
+	type Response struct {
+		Result string `json:"result"` // Encoded data ex.: 0x0000000000000...
+	}
+
+	data = "0x" + strings.ReplaceAll(data, "0x", "")
+
+	body := Body{
+		Jsonrpc: "2.0",
+		Method:  "eth_call",
+		Params: []interface{}{
+			Transaction{
+				To:   address,
+				Data: data,
+			},
+			"latest",
+		},
+		Id: 1,
+	}
+
+	bz, err := json.Marshal(body)
+	if err != nil {
+		p.logger.Err(err).Msg("")
+		return "", err
+	}
+
+	content, err := p.httpPost("", bz)
+	if err != nil {
+		p.logger.Err(err).Msg("")
+		return "", err
+	}
+
+	var response Response
+	err = json.Unmarshal(content, &response)
+	if err != nil {
+		p.logger.Err(err).Msg("")
+		return "", err
+	}
+
+	return response.Result, nil
+}
+
+func (p *provider) getEthDecimals(contract string) (uint64, error) {
+	p.logger.Info().Str("contract", contract).Msg("get decimals")
+
+	hash, err := keccak256("decimals()")
+	if err != nil {
+		return 0, err
+	}
+
+	data := fmt.Sprintf("%0.8s%064d", hash, 0)
+
+	result, err := p.doEthCall(contract, data)
+	if err != nil {
+		return 0, err
+	}
+
+	types := []string{"uint8"}
+
+	decoded, err := decodeEthData(result, types)
+	if err != nil {
+		return 0, err
+	}
+
+	decimals, err := strconv.ParseUint(fmt.Sprintf("%v", decoded[0]), 10, 8)
+	if err != nil {
+		return 0, err
+	}
+
+	return decimals, nil
+}
+
+func (p *provider) evmRpcQuery(method, params string) (json.RawMessage, error) {
+	p.logger.Info().Str("method", method).Msg("query evm rpc")
+
+	query := []byte(fmt.Sprintf(
+		`{"jsonrpc":"2.0","method":"%s","params":[%s],"id":1}`,
+		method, string(params),
+	))
+
+	p.logger.Debug().Msg(string(query))
+
+	TelemetryEvmMethod(p.chain, p.name, method)
+
+	content, err := p.httpPost("", query)
+	if err != nil {
+		return nil, p.error(err)
+	}
+
+	var response struct {
+		Result json.RawMessage `json:"result"`
+	}
+
+	err = json.Unmarshal(content, &response)
+	if err != nil {
+		return nil, p.error(err)
+	}
+
+	if len(response.Result) == 0 {
+		p.logger.Error().
+			Str("content", string(content)).
+			Msg("empty return data")
+	}
+
+	return response.Result, nil
+}
+
+func (p *provider) getEvmHeight() (uint64, error) {
+	p.logger.Info().Msg("get height")
+
+	result, err := p.evmRpcQuery("eth_blockNumber", "")
+	if err != nil {
+		return 0, err
+	}
+
+	var height string
+	err = json.Unmarshal(result, &height)
+	if err != nil {
+		return 0, err
+	}
+	// strip "0x" from height string
+	return strconv.ParseUint(height[2:], 16, 64)
+}
+
+func (p *provider) evmGetLogs(
+	from, to uint64,
+	addresses, topics []string,
+) ([]EvmLog, error) {
+	// Note: getLogs returns values between and includin from- and end block
+	// -> from=1, to=3 returns [1, 2, 3]
+
+	type Params struct {
+		FromBlock string   `json:"fromBlock"`
+		ToBlock   string   `json:"toBlock"`
+		Address   []string `json:"address"`
+		Topics    []string `json:"topics"`
+	}
+
+	params := Params{
+		FromBlock: fmt.Sprintf("0x%x", from),
+		ToBlock:   fmt.Sprintf("0x%x", to),
+		Address:   addresses,
+		Topics:    topics,
+	}
+
+	if to == 0 {
+		params.ToBlock = "latest"
+	}
+
+	bz, err := json.Marshal(params)
+	if err != nil {
+		return nil, err
+	}
+
+	response, err := p.evmRpcQuery("eth_getLogs", string(bz))
+	if err != nil {
+		return nil, err
+	}
+
+	var logs []EvmLog
+	err = json.Unmarshal(response, &logs)
+	if err != nil {
+		p.logger.Err(err).Msg("failed to unmarshal evm log")
+		return nil, err
+	}
+
+	for i, log := range logs {
+		height, err := hexToUint64(log.Number)
+		if err != nil {
+			return nil, err
+		}
+		logs[i].Height = height
+	}
+
+	return logs, nil
+}
+
+func (p *provider) evmGetBlockByNumber(height uint64) (EvmBlock, error) {
+	params := fmt.Sprintf(`"0x%x",false`, height)
+	output, err := p.evmRpcQuery("eth_getBlockByNumber", params)
+	if err != nil {
+		return EvmBlock{}, err
+	}
+
+	var block EvmBlock
+
+	err = json.Unmarshal(output, &block)
+	if err != nil {
+		return EvmBlock{}, err
+	}
+
+	return block, nil
+}
+
+func (p *provider) evmCall(
+	address, method string,
+	args []string,
+) (json.RawMessage, error) {
+	p.logger.Info().Str("method", method).Msg("evmCall")
+
+	hash, err := keccak256(method)
+	if err != nil {
+		return nil, p.error(err)
+	}
+
+	data := "0x" + hash[:8]
+
+	for _, arg := range args {
+		data += arg
+	}
+
+	if len(args) == 0 {
+		// append 64 zeros
+		data = fmt.Sprintf("%s%064d", data, 0)
+	}
+
+	params := fmt.Sprintf(`{"to":"%s","data":"%s"},"latest"`, address, data)
+
+	return p.evmRpcQuery("eth_call", params)
+}
+
+func (p *provider) error(err error) error {
+	p.logger.Err(err).Msg("")
+	return err
+}
+
+func (p *provider) errorf(message string) error {
+	err := fmt.Errorf(message)
+	return p.error(err)
+}
+
+func hexToUint64(s string) (uint64, error) {
+	return strconv.ParseUint(strings.Replace(s, "0x", "", -1), 16, 64)
+}
+
+func decodeSqrtPrice(sqrt string) (sdk.Dec, error) {
+	dec := strToDec(sqrt)
+	if dec.IsZero() {
+		return sdk.Dec{}, fmt.Errorf("sqrt is 0")
+	}
+	return dec.Power(2).Quo(uintToDec(2).Power(192)), nil
+}
+
+func decodeEthData(data string, types []string) ([]interface{}, error) {
+	type AbiOutput struct {
+		Name         string `json:"name"`
+		Type         string `json:"type"`
+		InternalType string `json:"internalType"`
+	}
+
+	type AbiDefinition struct {
+		Name    string      `json:"name"`
+		Type    string      `json:"type"`
+		Outputs []AbiOutput `json:"outputs"`
+	}
+
+	outputs := []AbiOutput{}
+	for _, t := range types {
+		outputs = append(outputs, AbiOutput{
+			Name:         "",
+			Type:         t,
+			InternalType: t,
+		})
+	}
+
+	definition, err := json.Marshal([]AbiDefinition{{
+		Name:    "fn",
+		Type:    "function",
+		Outputs: outputs,
+	}})
+	if err != nil {
+		return nil, err
+	}
+
+	abi, err := abi.JSON(strings.NewReader(string(definition)))
+	if err != nil {
+		return nil, err
+	}
+
+	data = strings.TrimPrefix(data, "0x")
+
+	decoded, err := hex.DecodeString(data)
+	if err != nil {
+		return nil, err
+	}
+
+	return abi.Unpack("fn", decoded)
 }
 
 // String cast provider name to string.
@@ -797,4 +1385,37 @@ func computeDecimalsFactor(base, quote int64) (sdk.Dec, error) {
 	}
 
 	return factor, nil
+}
+
+func keccak256(s string) (string, error) {
+	hash := sha3.NewLegacyKeccak256()
+	_, err := hash.Write([]byte(s))
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", hash.Sum(nil)), nil
+}
+
+func parseDenom(s string) (sdk.Dec, string, error) {
+	re := regexp.MustCompile(`^([0-9]+)(.*)$`)
+
+	matches := re.FindAllStringSubmatch(s, -1)[0]
+	if len(matches) != 3 {
+		return sdk.Dec{}, "", fmt.Errorf("failed parsing denom")
+	}
+
+	amount := strToDec(matches[1])
+
+	return amount, matches[2], nil
+}
+
+func (b *EvmBlock) GetTime() (time.Time, error) {
+	seconds, err := strconv.ParseInt(
+		strings.Replace(b.Timestamp, "0x", "", -1), 16, 64,
+	)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	return time.Unix(seconds, 0), nil
 }

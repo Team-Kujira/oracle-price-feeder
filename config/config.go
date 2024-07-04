@@ -51,29 +51,35 @@ var (
 		provider.ProviderCamelotV2:          {},
 		provider.ProviderCamelotV3:          {},
 		provider.ProviderCoinbase:           {},
+		provider.ProviderCoinex:             {},
 		provider.ProviderCrypto:             {},
 		provider.ProviderCurve:              {},
 		provider.ProviderDexter:             {},
 		provider.ProviderFin:                {},
 		provider.ProviderFinV2:              {},
 		provider.ProviderGate:               {},
+		provider.ProviderHelix:              {},
 		provider.ProviderHitBtc:             {},
 		provider.ProviderHuobi:              {},
 		provider.ProviderIdxOsmosis:         {},
 		provider.ProviderKraken:             {},
 		provider.ProviderKucoin:             {},
 		provider.ProviderLbank:              {},
+		provider.ProviderMaya:               {},
 		provider.ProviderMexc:               {},
 		provider.ProviderMock:               {},
 		provider.ProviderOkx:                {},
 		provider.ProviderOsmosisV2:          {},
 		provider.ProviderPancakeV3Bsc:       {},
 		provider.ProviderPhemex:             {},
+		provider.ProviderPionex:             {},
 		provider.ProviderPoloniex:           {},
 		provider.ProviderPyth:               {},
 		provider.ProviderShade:              {},
 		provider.ProviderStride:             {},
 		provider.ProviderUniswapV3:          {},
+		provider.ProviderUnstake:            {},
+		provider.ProviderVelodromeV2:        {},
 		provider.ProviderWhitewhaleCmdx:     {},
 		provider.ProviderWhitewhaleHuahua:   {},
 		provider.ProviderWhitewhaleInj:      {},
@@ -117,6 +123,8 @@ type (
 		HeightPollInterval   string                        `toml:"height_poll_interval"`
 		HistoryDb            string                        `toml:"history_db"`
 		ContractAdresses     map[string]map[string]string  `toml:"contract_addresses"`
+		Decimals             map[string]map[string]int     `toml:"decimals"`
+		Periods              map[string]map[string]int     `toml:"periods"`
 		UrlSets              map[string]UrlSet             `toml:"url_set"`
 	}
 
@@ -219,7 +227,11 @@ type (
 		Websocket     string        `toml:"websocket"`
 		WebsocketPath string        `toml:"websocket_path"`
 		PollInterval  string        `toml:"poll_interval"`
-		Contracts     []string      `toml:"contracts"`
+		// Contracts     []string       `toml:"contracts"`
+		VolumeBlocks int            `toml:"volume_blocks"`
+		VolumePause  int            `toml:"volume_pause"`
+		Decimals     map[string]int `toml:"decimals"`
+		Periods      map[string]int
 	}
 
 	UrlSet struct {
@@ -289,6 +301,10 @@ func (p ProviderEndpoints) ToEndpoint(
 		Websocket:     p.Websocket,
 		WebsocketPath: p.WebsocketPath,
 		PollInterval:  pollInterval,
+		VolumeBlocks:  p.VolumeBlocks,
+		VolumePause:   p.VolumePause,
+		Decimals:      p.Decimals,
+		Periods:       p.Periods,
 	}
 	return e, nil
 }

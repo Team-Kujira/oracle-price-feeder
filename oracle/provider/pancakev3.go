@@ -204,7 +204,7 @@ func (p *PancakeProvider) query(
 	prices = map[string]sdk.Dec{}
 	volumes = map[string][]PancakeVolume{}
 
-	request, err := json.Marshal(CamelotQuery{Query: query})
+	request, err := json.Marshal(PancakeQuery{Query: query})
 	if err != nil {
 		p.logger.Error().Msg("failed marshalling request")
 	}
