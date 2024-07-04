@@ -120,18 +120,12 @@ func (p *OsmosisV2Provider) Poll() error {
 
 			price, err = p.queryConcentratedLiquidityPool(poolId)
 			if err != nil {
-				p.logger.Error().
-					Str("pair", pair.String()).
-					Str("pool", poolId).
-					Err(err).
-					Msg("")
-
-				return err
+				continue
 			}
 		} else {
 			strPrice, err := p.queryLegacyPool(pair, poolId)
 			if err != nil {
-				return err
+				continue
 			}
 			price = strToDec(strPrice)
 		}
@@ -258,7 +252,7 @@ func (p *OsmosisV2Provider) init() error {
 		var response OsmosisV2PoolResponse
 		err = json.Unmarshal(content, &response)
 		if err != nil {
-			return err
+			continue
 		}
 
 		switch response.Pool.Type {
@@ -282,6 +276,8 @@ func (p *OsmosisV2Provider) init() error {
 			continue
 		}
 	}
+
+	fmt.Println(p.denoms)
 
 	return nil
 }
