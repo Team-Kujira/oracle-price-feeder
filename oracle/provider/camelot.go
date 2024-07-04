@@ -362,7 +362,15 @@ func (p *CamelotProvider) updateVolumes(
 			}
 		}
 
-		index := int(log.Height - height1)
+		index := int(log.Height - height1 + 1)
+		if index > len(volumes) || index < 0 {
+			err = fmt.Errorf("index < 0 or index > range")
+			p.logger.Err(err).
+				Uint64("from", height1).
+				Uint64("to", height2).
+				Uint64("height", log.Height).Msg("")
+			return err
+		}
 
 		ten := int64ToDec(10)
 

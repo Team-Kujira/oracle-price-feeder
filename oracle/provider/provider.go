@@ -606,6 +606,9 @@ func (p *provider) makeHttpRequest(url string, method string, body []byte, heade
 	if res.StatusCode != 200 {
 		p.logger.Warn().
 			Int("code", res.StatusCode).
+			Str("body", string(body)).
+			Str("url", url).
+			Str("method", method).
 			Msg("http request returned invalid status")
 		if res.StatusCode == 429 || res.StatusCode == 418 {
 			p.logger.Warn().
@@ -1130,6 +1133,14 @@ func (p *provider) evmGetLogs(
 	from, to uint64,
 	addresses, topics []string,
 ) ([]EvmLog, error) {
+	if from >= to {
+		return nil, p.error(fmt.Errorf("fromBlock >= toBlock"))
+	}
+
+	// getLogs returns all logs between and including start and end block
+	// -> from: 10, to: 20 returns 11 values 10..20, but range is 10 values
+	from = from + 1
+
 	type Params struct {
 		FromBlock string   `json:"fromBlock"`
 		ToBlock   string   `json:"toBlock"`
