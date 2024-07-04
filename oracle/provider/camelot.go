@@ -277,6 +277,9 @@ func (p *CamelotProvider) updateVolumes(
 		return nil
 	}
 
+	blocks := height2 - height1
+	height1 = height1 + 1
+
 	timestamps := make([]time.Time, 2)
 	for i, height := range []uint64{height1, height2} {
 		block, err := p.evmGetBlockByNumber(height)
@@ -291,8 +294,6 @@ func (p *CamelotProvider) updateVolumes(
 
 	// prepare default values (0) for every symbol
 
-	blocks := height2 - height1
-
 	blocktime := timestamps[1].Sub(timestamps[0]).Seconds() / float64(blocks)
 	timestamp := timestamps[0].Unix()
 
@@ -304,7 +305,7 @@ func (p *CamelotProvider) updateVolumes(
 		}
 
 		volumes[i] = volume.Volume{
-			Height: height1 + i + 1,
+			Height: height1 + i,
 			Time:   timestamp + int64(float64(i)*blocktime),
 			Values: values,
 		}
@@ -362,7 +363,7 @@ func (p *CamelotProvider) updateVolumes(
 			}
 		}
 
-		index := int(log.Height - height1 + 1)
+		index := int(log.Height - height1)
 		if index > len(volumes) || index < 0 {
 			err = fmt.Errorf("index < 0 or index > range")
 			p.logger.Err(err).

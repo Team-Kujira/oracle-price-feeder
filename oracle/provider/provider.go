@@ -1133,13 +1133,8 @@ func (p *provider) evmGetLogs(
 	from, to uint64,
 	addresses, topics []string,
 ) ([]EvmLog, error) {
-	if from >= to {
-		return nil, p.error(fmt.Errorf("fromBlock >= toBlock"))
-	}
-
-	// getLogs returns all logs between and including start and end block
-	// -> from: 10, to: 20 returns 11 values 10..20, but range is 10 values
-	from = from + 1
+	// Note: getLogs returns values between and includin from- and end block
+	// -> from=1, to=3 returns [1, 2, 3]
 
 	type Params struct {
 		FromBlock string   `json:"fromBlock"`
