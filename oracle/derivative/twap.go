@@ -15,7 +15,7 @@ import (
 const (
 	twapMaxTimeDeltaSeconds      = int64(120)
 	twapMinHistoryPeriodFraction = 0.8
-	twapMaxPriceDeviation        = 0.05
+	twapMaxPriceDeviation        = 0.1
 )
 
 type (

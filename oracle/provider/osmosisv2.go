@@ -84,7 +84,10 @@ func NewOsmosisV2Provider(
 	availablePairs, _ := provider.GetAvailablePairs()
 	provider.setPairs(pairs, availablePairs, nil)
 
-	provider.init()
+	err := provider.init()
+	if err != nil {
+		return nil, err
+	}
 
 	go startPolling(provider, provider.endpoints.PollInterval, logger)
 
@@ -106,40 +109,35 @@ func (p *OsmosisV2Provider) Poll() error {
 			p.logger.Warn().
 				Str("symbol", symbol).
 				Msg("no pool id found")
-			continue
+		}
+
+		_, found := p.inverse[symbol]
+		if found {
+			pair = pair.Swap()
 		}
 
 		var price sdk.Dec
 
-		_, found := p.concentrated[poolId]
+		_, found = p.concentrated[poolId]
 		if found {
-			_, found := p.inverse[symbol]
-			if found {
-				pair = pair.Swap()
-			}
-
 			price, err = p.queryConcentratedLiquidityPool(poolId)
 			if err != nil {
 				continue
 			}
 		} else {
-			strPrice, err := p.queryLegacyPool(pair, poolId)
+			price, err = p.queryLegacyPool(pair, poolId)
 			if err != nil {
 				continue
 			}
-			price = strToDec(strPrice)
 		}
 
-		var volume sdk.Dec
+		volume, _ := p.volumes.Get(pair.String())
 		// hack to get the proper volume
 		_, found = p.inverse[symbol]
 		if found {
-			volume, _ = p.volumes.Get(pair.Quote + pair.Base)
 			if !volume.IsZero() {
 				volume = volume.Quo(price)
 			}
-		} else {
-			volume, _ = p.volumes.Get(pair.String())
 		}
 
 		if volume.IsNil() {
@@ -165,19 +163,19 @@ func (p *OsmosisV2Provider) GetAvailablePairs() (map[string]struct{}, error) {
 func (p *OsmosisV2Provider) queryLegacyPool(
 	pair types.CurrencyPair,
 	poolId string,
-) (string, error) {
+) (sdk.Dec, error) {
 	err := fmt.Errorf("denom not found")
 
 	baseDenom, found := p.denoms[pair.Base]
 	if !found {
 		p.logger.Err(err).Str("symbol", pair.Base).Msg("")
-		return "", err
+		return sdk.Dec{}, err
 	}
 
 	quoteDenom, found := p.denoms[pair.Quote]
 	if !found {
 		p.logger.Err(err).Str("symbol", pair.Quote).Msg("")
-		return "", err
+		return sdk.Dec{}, err
 	}
 
 	// api seems to flipped base and quote
@@ -191,16 +189,18 @@ func (p *OsmosisV2Provider) queryLegacyPool(
 
 	content, err := p.httpGet(path)
 	if err != nil {
-		return "", err
+		return sdk.Dec{}, err
 	}
 
 	var spotPrice OsmosisV2SpotPrice
 	err = json.Unmarshal(content, &spotPrice)
 	if err != nil {
-		return "", err
+		return sdk.Dec{}, err
 	}
 
-	return spotPrice.Price, nil
+	price := strToDec(spotPrice.Price)
+
+	return price, nil
 }
 
 func (p *OsmosisV2Provider) queryConcentratedLiquidityPool(
@@ -242,6 +242,11 @@ func (p *OsmosisV2Provider) init() error {
 			continue
 		}
 
+		_, found = p.inverse[symbol]
+		if found {
+			pair = pair.Swap()
+		}
+
 		path := "/osmosis/gamm/v1beta1/pools/" + pool
 
 		content, err := p.httpGet(path)
@@ -252,7 +257,7 @@ func (p *OsmosisV2Provider) init() error {
 		var response OsmosisV2PoolResponse
 		err = json.Unmarshal(content, &response)
 		if err != nil {
-			continue
+			return err
 		}
 
 		switch response.Pool.Type {
@@ -273,7 +278,7 @@ func (p *OsmosisV2Provider) init() error {
 			p.denoms[response.Pool.Token1] = pair.Quote
 			p.concentrated[pool] = struct{}{}
 		default:
-			continue
+			return fmt.Errorf("pool type not supported")
 		}
 	}
 

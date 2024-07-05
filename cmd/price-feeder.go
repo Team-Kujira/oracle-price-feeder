@@ -260,6 +260,7 @@ func priceFeederCmdHandler(cmd *cobra.Command, args []string) error {
 			Str("path", cfg.HistoryDb).
 			Msg("failed to open sqlite db")
 	}
+	volumeDatabase.SetMaxOpenConns(1)
 
 	oracle := oracle.New(
 		logger,
