@@ -191,6 +191,11 @@ func (p *provider) Init(
 	p.logger = logger.With().Str("provider", p.endpoints.Name.String()).Logger()
 	p.tickers = map[string]types.TickerPrice{}
 	p.http = newDefaultHTTPClient()
+
+	if len(p.endpoints.Urls) == 0 {
+		p.logger.Error().Msg("no endpoint urls found")
+		return
+	}
 	p.httpBase = p.endpoints.Urls[0]
 
 	p.contracts = endpoints.ContractAddresses
