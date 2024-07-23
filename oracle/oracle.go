@@ -2,11 +2,8 @@ package oracle
 
 import (
 	"context"
-	"crypto/rand"
 	"database/sql"
-	"encoding/hex"
 	"fmt"
-	"math"
 	"net/http"
 	"sort"
 	"strings"
@@ -16,17 +13,13 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
-	"google.golang.org/grpc"
 
 	"price-feeder/config"
-	"price-feeder/oracle/client"
 	"price-feeder/oracle/derivative"
 	"price-feeder/oracle/history"
 	"price-feeder/oracle/provider"
 	"price-feeder/oracle/types"
 	pfsync "price-feeder/pkg/sync"
-
-	oracletypes "github.com/Team-Kujira/core/x/oracle/types"
 
 	"github.com/cosmos/cosmos-sdk/telemetry"
 )
@@ -44,22 +37,6 @@ type ProviderWeight struct {
 	Weight map[string]sdk.Dec
 }
 
-// PreviousPrevote defines a structure for defining the previous prevote
-// submitted on-chain.
-type PreviousPrevote struct {
-	ExchangeRates     string
-	Salt              string
-	SubmitBlockHeight int64
-}
-
-func NewPreviousPrevote() *PreviousPrevote {
-	return &PreviousPrevote{
-		Salt:              "",
-		ExchangeRates:     "",
-		SubmitBlockHeight: 0,
-	}
-}
-
 // Oracle implements the core component responsible for fetching exchange rates
 // for a given set of currency pairs and determining the correct exchange rates
 // to submit to the on-chain price oracle adhering the oracle specification.
@@ -69,10 +46,7 @@ type Oracle struct {
 
 	providerTimeout      time.Duration
 	providerPairs        map[provider.Name][]types.CurrencyPair
-	previousPrevote      *PreviousPrevote
-	previousVotePeriod   float64
 	priceProviders       map[provider.Name]provider.Provider
-	oracleClient         client.OracleClient
 	deviations           map[string]sdk.Dec
 	providerMinOverrides map[string]int
 	endpoints            map[provider.Name]provider.Endpoint
@@ -86,16 +60,13 @@ type Oracle struct {
 	periods              map[string]map[string]int
 	volumeDatabase       *sql.DB
 
-	mtx             sync.RWMutex
-	lastPriceSyncTS time.Time
-	prices          map[string]sdk.Dec
-	paramCache      ParamCache
-	healthchecks    map[string]http.Client
+	mtx          sync.RWMutex
+	prices       map[string]sdk.Dec
+	healthchecks map[string]http.Client
 }
 
 func New(
 	logger zerolog.Logger,
-	oc client.OracleClient,
 	currencyPairs []config.CurrencyPair,
 	providerTimeout time.Duration,
 	deviations map[string]sdk.Dec,
@@ -138,14 +109,11 @@ func New(
 	return &Oracle{
 		logger:               logger.With().Str("module", "oracle").Logger(),
 		closer:               pfsync.NewCloser(),
-		oracleClient:         oc,
 		providerPairs:        providerPairs,
 		priceProviders:       make(map[provider.Name]provider.Provider),
-		previousPrevote:      nil,
 		providerTimeout:      providerTimeout,
 		deviations:           deviations,
 		providerMinOverrides: providerMinOverrides,
-		paramCache:           ParamCache{},
 		endpoints:            endpoints,
 		healthchecks:         healthchecks,
 		derivatives:          derivatives,
@@ -172,12 +140,11 @@ func (o *Oracle) Start(ctx context.Context) error {
 
 			startTime := time.Now()
 
-			if err := o.tick(ctx); err != nil {
+			err := o.SetPrices(ctx)
+			if err != nil {
 				telemetry.IncrCounter(1, "failure", "tick")
-				o.logger.Err(err).Msg("oracle tick failed")
+				o.logger.Err(err).Msg("failed computing prices")
 			}
-
-			o.lastPriceSyncTS = time.Now()
 
 			telemetry.MeasureSince(startTime, "runtime", "tick")
 			telemetry.IncrCounter(1, "new", "tick")
@@ -191,15 +158,6 @@ func (o *Oracle) Start(ctx context.Context) error {
 func (o *Oracle) Stop() {
 	o.closer.Close()
 	<-o.closer.Done()
-}
-
-// GetLastPriceSyncTimestamp returns the latest timestamp at which prices where
-// fetched from the oracle's set of exchange rate providers.
-func (o *Oracle) GetLastPriceSyncTimestamp() time.Time {
-	o.mtx.RLock()
-	defer o.mtx.RUnlock()
-
-	return o.lastPriceSyncTS
 }
 
 // GetPrices returns a copy of the current prices fetched from the oracle's
@@ -419,49 +377,6 @@ func GetComputedPrices(
 	return rates, nil
 }
 
-// GetParamCache returns the last updated parameters of the x/oracle module
-// if the current ParamCache is outdated, we will query it again.
-func (o *Oracle) GetParamCache(ctx context.Context, currentBlockHeigh int64) (oracletypes.Params, error) {
-	if !o.paramCache.IsOutdated(currentBlockHeigh) {
-		return *o.paramCache.params, nil
-	}
-
-	params, err := o.GetParams(ctx)
-	if err != nil {
-		return oracletypes.Params{}, err
-	}
-
-	o.checkWhitelist(params)
-	o.paramCache.Update(currentBlockHeigh, params)
-	return params, nil
-}
-
-// GetParams returns the current on-chain parameters of the x/oracle module.
-func (o *Oracle) GetParams(ctx context.Context) (oracletypes.Params, error) {
-	grpcConn, err := grpc.Dial(
-		o.oracleClient.GRPCEndpoint,
-		// the Cosmos SDK doesn't support any transport security mechanism
-		grpc.WithInsecure(),
-		grpc.WithContextDialer(dialerFunc),
-	)
-	if err != nil {
-		return oracletypes.Params{}, fmt.Errorf("failed to dial Cosmos gRPC service: %w", err)
-	}
-
-	defer grpcConn.Close()
-	queryClient := oracletypes.NewQueryClient(grpcConn)
-
-	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
-	defer cancel()
-
-	queryResponse, err := queryClient.Params(ctx, &oracletypes.QueryParamsRequest{})
-	if err != nil {
-		return oracletypes.Params{}, fmt.Errorf("failed to get x/oracle params: %w", err)
-	}
-
-	return queryResponse.Params, nil
-}
-
 func NewProvider(
 	db *sql.DB,
 	ctx context.Context,
@@ -576,181 +491,4 @@ func NewProvider(
 
 	}
 	return nil, fmt.Errorf("provider %s not found", providerName)
-}
-
-func (o *Oracle) checkWhitelist(params oracletypes.Params) {
-	for _, denom := range params.Whitelist {
-		symbol := strings.ToUpper(denom.Name)
-		if _, ok := o.prices[symbol]; !ok {
-			o.logger.Warn().Str("denom", symbol).Msg("price missing for required denom")
-		}
-	}
-}
-
-func (o *Oracle) tick(ctx context.Context) error {
-	o.logger.Info().Msg("executing oracle tick")
-
-	// Create and start all provider routines immediately
-	if len(o.priceProviders) == 0 {
-		o.SetPrices(ctx)
-	}
-
-	blockHeight, err := o.oracleClient.ChainHeight.GetChainHeight()
-	if err != nil {
-		return err
-	}
-	if blockHeight < 1 {
-		return fmt.Errorf("expected positive block height")
-	}
-
-	oracleParams, err := o.GetParamCache(ctx, blockHeight)
-	if err != nil {
-		return err
-	}
-
-	// Get oracle vote period, next block height, current vote period, and index
-	// in the vote period.
-	oracleVotePeriod := int64(oracleParams.VotePeriod)
-	nextBlockHeight := blockHeight + 1
-	currentVotePeriod := math.Floor(float64(nextBlockHeight) / float64(oracleVotePeriod))
-	indexInVotePeriod := nextBlockHeight % oracleVotePeriod
-
-	o.logger.Debug().
-		Int64("vote_period", oracleVotePeriod).
-		Float64("previous_vote_period", o.previousVotePeriod).
-		Float64("current_vote_period", currentVotePeriod).
-		Int64("indexInVotePeriod", indexInVotePeriod).
-		Msg("")
-
-	// Skip until new voting period. Specifically, skip when:
-	// index [0, oracleVotePeriod - 1] > oracleVotePeriod - 2 OR index is 0
-	if (o.previousVotePeriod != 0 && currentVotePeriod == o.previousVotePeriod) ||
-		(indexInVotePeriod > 0 && oracleVotePeriod-indexInVotePeriod > 4) {
-		// oracleVotePeriod-indexInVotePeriod < 2 || (indexInVotePeriod > 0 && indexInVotePeriod < int64(float64(oracleVotePeriod)*0.75)) {
-		o.logger.Info().
-			Msg("skipping until next voting period")
-
-		return nil
-	}
-
-	if err := o.SetPrices(ctx); err != nil {
-		return err
-	}
-
-	// If we're past the voting period we needed to hit, reset and submit another
-	// prevote.
-	if o.previousVotePeriod != 0 && currentVotePeriod-o.previousVotePeriod != 1 {
-		o.logger.Info().
-			Msg("missing vote during voting period")
-		telemetry.IncrCounter(1, "vote", "failure", "missed")
-
-		o.previousVotePeriod = 0
-		o.previousPrevote = nil
-		return nil
-	}
-
-	salt, err := GenerateSalt(32)
-	if err != nil {
-		return err
-	}
-
-	valAddr, err := sdk.ValAddressFromBech32(o.oracleClient.ValidatorAddrString)
-	if err != nil {
-		return err
-	}
-
-	exchangeRatesStr := GenerateExchangeRatesString(o.GetPrices())
-	hash := oracletypes.GetAggregateVoteHash(salt, exchangeRatesStr, valAddr)
-	preVoteMsg := &oracletypes.MsgAggregateExchangeRatePrevote{
-		Hash:      hash.String(), // hash of prices from the oracle
-		Feeder:    o.oracleClient.OracleAddrString,
-		Validator: valAddr.String(),
-	}
-
-	isPrevoteOnlyTx := o.previousPrevote == nil
-	if isPrevoteOnlyTx {
-		// This timeout could be as small as oracleVotePeriod-indexInVotePeriod,
-		// but we give it some extra time just in case.
-		//
-		// Ref : https://github.com/terra-money/oracle-feeder/blob/baef2a4a02f57a2ffeaa207932b2e03d7fb0fb25/feeder/src/vote.ts#L222
-		o.logger.Info().
-			Str("hash", hash.String()).
-			Str("validator", preVoteMsg.Validator).
-			Str("feeder", preVoteMsg.Feeder).
-			Msg("broadcasting pre-vote")
-		if err := o.oracleClient.BroadcastTx(nextBlockHeight, oracleVotePeriod*2, preVoteMsg); err != nil {
-			return err
-		}
-
-		currentHeight, err := o.oracleClient.ChainHeight.GetChainHeight()
-		if err != nil {
-			return err
-		}
-
-		o.previousVotePeriod = math.Floor(float64(currentHeight) / float64(oracleVotePeriod))
-		o.previousPrevote = &PreviousPrevote{
-			Salt:              salt,
-			ExchangeRates:     exchangeRatesStr,
-			SubmitBlockHeight: currentHeight,
-		}
-	} else {
-		// otherwise, we're in the next voting period and thus we vote
-		voteMsg := &oracletypes.MsgAggregateExchangeRateVote{
-			Salt:          o.previousPrevote.Salt,
-			ExchangeRates: o.previousPrevote.ExchangeRates,
-			Feeder:        o.oracleClient.OracleAddrString,
-			Validator:     valAddr.String(),
-		}
-
-		o.logger.Info().
-			Str("exchange_rates", voteMsg.ExchangeRates).
-			Str("validator", voteMsg.Validator).
-			Str("feeder", voteMsg.Feeder).
-			Msg("broadcasting vote")
-		if err := o.oracleClient.BroadcastTx(
-			nextBlockHeight,
-			oracleVotePeriod-indexInVotePeriod,
-			voteMsg,
-		); err != nil {
-			return err
-		}
-
-		o.previousPrevote = nil
-		o.previousVotePeriod = 0
-		o.healthchecksPing()
-	}
-
-	return nil
-}
-
-func (o *Oracle) healthchecksPing() {
-	for url, client := range o.healthchecks {
-		o.logger.Info().Msg("updating healthcheck status")
-		_, err := client.Get(url)
-		if err != nil {
-			o.logger.Warn().Msg("healthcheck ping failed")
-		}
-	}
-}
-
-// GenerateSalt generates a random salt, size length/2,  as a HEX encoded string.
-func GenerateSalt(length int) (string, error) {
-	if length == 0 {
-		return "", fmt.Errorf("failed to generate salt: zero length")
-	}
-
-	bytes := make([]byte, length)
-
-	if _, err := rand.Read(bytes); err != nil {
-		return "", err
-	}
-
-	return hex.EncodeToString(bytes), nil
-}
-
-// GenerateExchangeRatesString generates a canonical string representation of
-// the aggregated exchange rates.
-func GenerateExchangeRatesString(prices sdk.DecCoins) string {
-	prices.Sort()
-	return prices.String()
 }

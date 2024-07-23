@@ -12,7 +12,6 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"price-feeder/config"
-	"price-feeder/oracle/client"
 	"price-feeder/oracle/derivative"
 	"price-feeder/oracle/history"
 	"price-feeder/oracle/provider"
@@ -67,7 +66,6 @@ func (ots *OracleTestSuite) SetupSuite() {
 	ots.NoError(err)
 	ots.oracle = New(
 		zerolog.Nop(),
-		client.OracleClient{},
 		[]config.CurrencyPair{
 			{
 				Base:      "UMEE",
@@ -127,11 +125,6 @@ func (ots *OracleTestSuite) TestStop() {
 		5*time.Second,
 		time.Second,
 	)
-}
-
-func (ots *OracleTestSuite) TestGetLastPriceSyncTimestamp() {
-	// when no tick() has been invoked, assume zero value
-	ots.Require().Equal(time.Time{}, ots.oracle.GetLastPriceSyncTimestamp())
 }
 
 func (ots *OracleTestSuite) TestPrices() {
@@ -328,48 +321,6 @@ func (ots *OracleTestSuite) TestPrices() {
 	ots.Require().Equal(sdk.MustNewDecFromStr("3.717"), prices.AmountOf("XBT"))
 	ots.Require().Equal(sdk.MustNewDecFromStr("1"), prices.AmountOf("USDC"))
 	ots.Require().Equal(sdk.MustNewDecFromStr("1"), prices.AmountOf("USDT"))
-}
-
-func TestGenerateSalt(t *testing.T) {
-	salt, err := GenerateSalt(0)
-	require.Error(t, err)
-	require.Empty(t, salt)
-
-	salt, err = GenerateSalt(32)
-	require.NoError(t, err)
-	require.NotEmpty(t, salt)
-}
-
-func TestGenerateExchangeRatesString(t *testing.T) {
-	testCases := map[string]struct {
-		input    sdk.DecCoins
-		expected string
-	}{
-		"empty input": {
-			input:    sdk.NewDecCoins(),
-			expected: "",
-		},
-		"single denom": {
-			input:    sdk.NewDecCoins(sdk.NewDecCoinFromDec("UMEE", sdk.MustNewDecFromStr("3.72"))),
-			expected: "3.720000000000000000UMEE",
-		},
-		"multi denom": {
-			input: sdk.NewDecCoins(sdk.NewDecCoinFromDec("UMEE", sdk.MustNewDecFromStr("3.72")),
-				sdk.NewDecCoinFromDec("ATOM", sdk.MustNewDecFromStr("40.13")),
-				sdk.NewDecCoinFromDec("OSMO", sdk.MustNewDecFromStr("8.69")),
-			),
-			expected: "40.130000000000000000ATOM,8.690000000000000000OSMO,3.720000000000000000UMEE",
-		},
-	}
-
-	for name, tc := range testCases {
-		tc := tc
-
-		t.Run(name, func(t *testing.T) {
-			out := GenerateExchangeRatesString(tc.input)
-			require.Equal(t, tc.expected, out)
-		})
-	}
 }
 
 func TestSuccessGetComputedPricesTickers(t *testing.T) {

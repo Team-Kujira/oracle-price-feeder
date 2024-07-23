@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"time"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/gorilla/mux"
@@ -61,11 +60,6 @@ func (r *Router) RegisterRoutes(rtr *mux.Router, prefix string) {
 	})
 
 	v1Router.Handle(
-		"/healthz",
-		mChain.ThenFunc(r.healthzHandler()),
-	).Methods(httputil.MethodGET)
-
-	v1Router.Handle(
 		"/prices",
 		mChain.ThenFunc(r.pricesHandler()),
 	).Methods(httputil.MethodGET)
@@ -75,18 +69,6 @@ func (r *Router) RegisterRoutes(rtr *mux.Router, prefix string) {
 			"/metrics",
 			mChain.ThenFunc(r.metricsHandler()),
 		).Methods(httputil.MethodGET)
-	}
-}
-
-func (r *Router) healthzHandler() http.HandlerFunc {
-	return func(w http.ResponseWriter, req *http.Request) {
-		resp := HealthZResponse{
-			Status: StatusAvailable,
-		}
-
-		resp.Oracle.LastSync = r.oracle.GetLastPriceSyncTimestamp().Format(time.RFC3339)
-
-		httputil.RespondWithJSON(w, http.StatusOK, resp)
 	}
 }
 
