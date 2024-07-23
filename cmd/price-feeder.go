@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"bufio"
 	"context"
 	"database/sql"
 	"fmt"
@@ -13,8 +12,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Team-Kujira/core/app/params"
-	input "github.com/cosmos/cosmos-sdk/client/input"
 	"github.com/mitchellh/mapstructure"
 
 	"github.com/gorilla/mux"
@@ -40,8 +37,6 @@ const (
 
 	flagLogLevel  = "log-level"
 	flagLogFormat = "log-format"
-
-	envVariablePass = "PRICE_FEEDER_PASS"
 )
 
 var rootCmd = &cobra.Command{
@@ -112,8 +107,6 @@ func priceFeederCmdHandler(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-
-	params.SetAddressPrefixes()
 
 	ctx, cancel := context.WithCancel(cmd.Context())
 	g, ctx := errgroup.WithContext(ctx)
@@ -266,16 +259,6 @@ func priceFeederCmdHandler(cmd *cobra.Command, args []string) error {
 	// Block main process until all spawned goroutines have gracefully exited and
 	// signal has been captured in the main process or if an error occurs.
 	return g.Wait()
-}
-
-func getKeyringPassword() (string, error) {
-	reader := bufio.NewReader(os.Stdin)
-
-	pass := os.Getenv(envVariablePass)
-	if pass == "" {
-		return input.GetString("Enter keyring password", reader)
-	}
-	return pass, nil
 }
 
 // trapSignal will listen for any OS signal and invoke Done on the main

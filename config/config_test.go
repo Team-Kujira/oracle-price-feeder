@@ -125,9 +125,6 @@ func TestParseConfig_Valid(t *testing.T) {
 	defer os.Remove(tmpFile.Name())
 
 	content := []byte(`
-gas_adjustment = 1.5
-gas_prices = "0.00125ukuji"
-
 [server]
 listen_addr = "0.0.0.0:99999"
 read_timeout = "20s"
@@ -168,22 +165,6 @@ providers = ["osmosisv2"]
 derivative = "twap"
 derivative_period = "30m"
 
-[account]
-address = "kujira15nejfgcaanqpw25ru4arvfd0fwy6j8clccvwx4"
-validator = "kujiravalcons14rjlkfzp56733j5l5nfk6fphjxymgf8mj04d5p"
-chain_id = "kujira-local-testnet"
-prefix = "kujira"
-
-[keyring]
-backend = "test"
-dir = "/Users/username/.kujira"
-pass = "keyringPassword"
-
-[rpc]
-tmrpc_endpoint = "http://localhost:26657"
-grpc_endpoint = "localhost:9090"
-rpc_timeout = "100ms"
-
 [telemetry]
 service_name = "price-feeder"
 enabled = true
@@ -222,9 +203,6 @@ func TestParseConfig_Valid_NoTelemetry(t *testing.T) {
 	defer os.Remove(tmpFile.Name())
 
 	content := []byte(`
-gas_adjustment = 1.5
-gas_prices = "0.00125ukuji"
-
 [server]
 listen_addr = "0.0.0.0:99999"
 read_timeout = "20s"
@@ -257,22 +235,6 @@ providers = [
 	"binance",
 	"huobi"
 ]
-
-[account]
-address = "kujira15nejfgcaanqpw25ru4arvfd0fwy6j8clccvwx4"
-validator = "kujiravalcons14rjlkfzp56733j5l5nfk6fphjxymgf8mj04d5p"
-chain_id = "kujira-local-testnet"
-prefix = "kujira"
-
-[keyring]
-backend = "test"
-dir = "/Users/username/.kujira"
-pass = "keyringPassword"
-
-[rpc]
-tmrpc_endpoint = "http://localhost:26657"
-grpc_endpoint = "localhost:9090"
-rpc_timeout = "100ms"
 
 [telemetry]
 enabled = false
@@ -364,9 +326,6 @@ func TestParseConfig_Valid_Deviations(t *testing.T) {
 	defer os.Remove(tmpFile.Name())
 
 	content := []byte(`
-gas_adjustment = 1.5
-gas_prices = "0.00125ukuji"
-
 [server]
 listen_addr = "0.0.0.0:99999"
 read_timeout = "20s"
@@ -408,22 +367,6 @@ providers = [
 	"huobi"
 ]
 
-[account]
-address = "kujira15nejfgcaanqpw25ru4arvfd0fwy6j8clccvwx4"
-validator = "kujiravalcons14rjlkfzp56733j5l5nfk6fphjxymgf8mj04d5p"
-chain_id = "kujira-local-testnet"
-prefix = "kujira"
-
-[keyring]
-backend = "test"
-dir = "/Users/username/.kujira"
-pass = "keyringPassword"
-
-[rpc]
-tmrpc_endpoint = "http://localhost:26657"
-grpc_endpoint = "localhost:9090"
-rpc_timeout = "100ms"
-
 [telemetry]
 service_name = "price-feeder"
 enabled = true
@@ -461,8 +404,6 @@ func TestParseConfig_Invalid_Deviations(t *testing.T) {
 	defer os.Remove(tmpFile.Name())
 
 	content := []byte(`
-gas_adjustment = 1.5
-
 [server]
 listen_addr = "0.0.0.0:99999"
 read_timeout = "20s"
@@ -503,21 +444,6 @@ providers = [
 	"binance",
 	"huobi"
 ]
-
-[account]
-address = "umee15nejfgcaanqpw25ru4arvfd0fwy6j8clccvwx4"
-validator = "umeevalcons14rjlkfzp56733j5l5nfk6fphjxymgf8mj04d5p"
-chain_id = "umee-local-testnet"
-
-[keyring]
-backend = "test"
-dir = "/Users/username/.umee"
-pass = "keyringPassword"
-
-[rpc]
-tmrpc_endpoint = "http://localhost:26657"
-grpc_endpoint = "localhost:9090"
-rpc_timeout = "100ms"
 
 [telemetry]
 service_name = "price-feeder"
