@@ -277,6 +277,10 @@ func (p *CamelotProvider) updateVolumes(
 		return nil
 	}
 
+	if height1 == height2 {
+		return nil
+	}
+
 	blocks := height2 - height1
 	height1 = height1 + 1
 
