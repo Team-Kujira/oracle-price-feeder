@@ -277,7 +277,7 @@ func (p *CamelotProvider) updateVolumes(
 		return nil
 	}
 
-	if height1 == height2 {
+	if height1 >= height2 {
 		return nil
 	}
 
