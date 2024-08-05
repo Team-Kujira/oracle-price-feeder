@@ -3,6 +3,7 @@ package cmd
 import (
 	"bufio"
 	"context"
+	"database/sql"
 	"fmt"
 	"io"
 	"net/http"
@@ -12,8 +13,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Team-Kujira/core/app/params"
 	input "github.com/cosmos/cosmos-sdk/client/input"
-	"github.com/ignite/cli/ignite/pkg/cosmoscmd"
 	"github.com/mitchellh/mapstructure"
 
 	"github.com/gorilla/mux"
@@ -113,7 +114,7 @@ func priceFeederCmdHandler(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	cosmoscmd.SetPrefixes(cfg.Account.Prefix)
+	params.SetAddressPrefixes()
 
 	ctx, cancel := context.WithCancel(cmd.Context())
 	g, ctx := errgroup.WithContext(ctx)
@@ -187,7 +188,7 @@ func priceFeederCmdHandler(cmd *cobra.Command, args []string) error {
 
 	endpoints := make(map[provider.Name]provider.Endpoint, len(cfg.ProviderEndpoints))
 	for _, e := range cfg.ProviderEndpoints {
-		endpoint, err := e.ToEndpoint()
+		endpoint, err := e.ToEndpoint(cfg.UrlSets)
 		if err != nil {
 			return err
 		}
@@ -231,6 +232,36 @@ func priceFeederCmdHandler(cmd *cobra.Command, args []string) error {
 		derivatives[name] = d
 	}
 
+	providerWeights := map[string]oracle.ProviderWeight{}
+	for denom, weights := range cfg.ProviderWeights {
+		newWeight := oracle.ProviderWeight{
+			Type:   "simple",
+			Weight: map[string]sdk.Dec{},
+		}
+
+		for providerName, value := range weights {
+			if value < 0 {
+				return fmt.Errorf("override must be >= 0")
+			}
+
+			value, err := sdk.NewDecFromStr(fmt.Sprintf("%f", value))
+			if err != nil {
+				return err
+			}
+			newWeight.Weight[providerName] = value
+		}
+
+		providerWeights[denom] = newWeight
+	}
+
+	volumeDatabase, err := sql.Open("sqlite3", cfg.HistoryDb)
+	if err != nil {
+		logger.Err(err).
+			Str("path", cfg.HistoryDb).
+			Msg("failed to open sqlite db")
+	}
+	volumeDatabase.SetMaxOpenConns(1)
+
 	oracle := oracle.New(
 		logger,
 		oracleClient,
@@ -245,6 +276,10 @@ func priceFeederCmdHandler(cmd *cobra.Command, args []string) error {
 		cfg.Healthchecks,
 		history,
 		cfg.ContractAdresses,
+		providerWeights,
+		cfg.Decimals,
+		cfg.Periods,
+		volumeDatabase,
 	)
 
 	telemetryCfg := telemetry.Config{}

@@ -11,6 +11,35 @@ read_timeout = "20s"
 verbose_cors = true
 write_timeout = "20s"
 
+[rpc]
+grpc_endpoint = "localhost:9090"
+rpc_timeout = "100ms"
+tmrpc_endpoint = "http://localhost:26657"
+
+[telemetry]
+enable_hostname = true
+enable_hostname_label = true
+enable_service_label = true
+enabled = true
+global_labels = [["chain-id", "kaiyo-1"]]
+service_name = "price-feeder"
+type = "prometheus"
+
+[account]
+address = "kujira..."
+chain_id = "kaiyo-1"
+validator = "kujiravaloper..."
+prefix = "kujira"
+# Optional
+fee_granter = "kujira..."
+
+[keyring]
+backend = "file"
+dir = "/home/<user>/.kujira"
+
+[[healthchecks]]
+url = "https://hc-ping.com/HEALTHCHECK-UUID"
+
 [[deviation_thresholds]]
 base = "USDT"
 threshold = "2"
@@ -18,6 +47,10 @@ threshold = "2"
 [[provider_min_overrides]]
 denoms = ["BTC"]
 providers = 5
+
+[contract_addresses.finv2]
+KUJIUSDC = "kujira14hj2tavq8fpesdwxxcu44rty3hh90vhujrvcmstl4zr3txmfvw9sl4e867"
+WINKUSK = "kujira1qxtd87qus6uzvqs4jv9r0j9ccd4yla42s6qag7y8fp7hhv68nzas6hqxgw"
 
 [[currency_pairs]]
 base = "USDT"
@@ -34,40 +67,6 @@ base = "BTC"
 quote = "USDT"
 providers = ["binance", "mexc", "huobi"]
 
-[account]
-address = "kujira..."
-chain_id = "kaiyo-1"
-validator = "kujiravaloper..."
-prefix = "kujira"
-# Optional
-fee_granter = "kujira..."
-
-[keyring]
-backend = "file"
-dir = "/home/<user>/.kujira"
-
-[rpc]
-grpc_endpoint = "localhost:9090"
-rpc_timeout = "100ms"
-tmrpc_endpoint = "http://localhost:26657"
-
-[telemetry]
-enable_hostname = true
-enable_hostname_label = true
-enable_service_label = true
-enabled = true
-global_labels = [["chain-id", "kaiyo-1"]]
-service_name = "price-feeder"
-type = "prometheus"
-
 [[provider_endpoints]]
-name = "binance"
-rest = "https://api1.binance.com"
-websocket = "stream.binance.com:9443"
-
-[[healthchecks]]
-url = "https://hc-ping.com/HEALTHCHECK-UUID"
-
-[contract_addresses.finv2]
-KUJIUSDC = "kujira14hj2tavq8fpesdwxxcu44rty3hh90vhujrvcmstl4zr3txmfvw9sl4e867"
-WINKUSK = "kujira1qxtd87qus6uzvqs4jv9r0j9ccd4yla42s6qag7y8fp7hhv68nzas6hqxgw"
+name = "osmosiv2"
+urls = ["https://some.alternate.url", "https://my-own-endpoi.nt"]

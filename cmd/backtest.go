@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
+
 	"price-feeder/oracle/derivative"
 	"price-feeder/oracle/types"
-	"time"
 
 	"github.com/spf13/cobra"
 )

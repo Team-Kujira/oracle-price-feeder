@@ -59,51 +59,82 @@ func NewBitmartProvider(
 		nil,
 		nil,
 	)
+
+	availablePairs, _ := provider.GetAvailablePairs()
+	provider.setPairs(pairs, availablePairs, currencyPairToBitmartSymbol)
+
 	go startPolling(provider, provider.endpoints.PollInterval, logger)
 	return provider, nil
 }
 
-func (p *BitmartProvider) Poll() error {
-	symbols := make(map[string]string, len(p.pairs))
-	for _, pair := range p.pairs {
-		symbols[pair.Join("_")] = pair.String()
-	}
-
-	content, err := p.httpGet("/spot/v2/ticker")
+func (p *BitmartProvider) getTickers() ([][]string, error) {
+	content, err := p.httpGet("/spot/quotation/v3/tickers")
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	var tickersResponse BitmartTickersResponse
-	err = json.Unmarshal(content, &tickersResponse)
+	var response struct {
+		Data [][]string `json:"data"`
+	}
+	err = json.Unmarshal(content, &response)
+	if err != nil {
+		return nil, err
+	}
+
+	return response.Data, nil
+}
+
+func (p *BitmartProvider) Poll() error {
+	tickers, err := p.getTickers()
 	if err != nil {
 		return err
 	}
 
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
+	now := time.Now()
+	for _, ticker := range tickers {
+		symbol := ticker[0]
+		price := strToDec(ticker[1])
 
-	for _, ticker := range tickersResponse.Data.Tickers {
-		symbol, ok := symbols[ticker.Symbol]
-		if !ok {
+		if !p.isPair(symbol) {
 			continue
 		}
 
-		p.tickers[symbol] = types.TickerPrice{
-			Price:  strToDec(ticker.Price),
-			Volume: strToDec(ticker.Volume),
-			Time:   time.UnixMilli(ticker.Time),
+		volume := strToDec(ticker[2])
+		_, found := p.inverse[symbol]
+		if found {
+			volume = strToDec(ticker[3])
+			if !volume.IsZero() {
+				volume = volume.Quo(price)
+			}
 		}
+
+		p.setTickerPrice(
+			symbol,
+			price,
+			volume,
+			now,
+		)
 	}
 	p.logger.Debug().Msg("updated tickers")
 	return nil
 }
 
 func (p *BitmartProvider) GetAvailablePairs() (map[string]struct{}, error) {
-	p.logger.Warn().Msg("available pairs query not implemented")
-	return nil, nil
+	tickers, err := p.getTickers()
+	if err != nil {
+		return nil, err
+	}
+
+	symbols := map[string]struct{}{}
+	for _, ticker := range tickers {
+		symbols[ticker[0]] = struct{}{}
+	}
+
+	return symbols, nil
 }
 
-func (p *BitmartProvider) SetPairs([]types.CurrencyPair) error {
-	return nil
+func currencyPairToBitmartSymbol(pair types.CurrencyPair) string {
+	return pair.Join("_")
 }

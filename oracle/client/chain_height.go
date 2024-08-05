@@ -4,14 +4,14 @@ import (
 	"context"
 	"time"
 
+	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/rs/zerolog"
-	tmrpcclient "github.com/tendermint/tendermint/rpc/client"
 )
 
 type ChainHeight struct {
 	Logger zerolog.Logger
 	ctx context.Context
-	rpc tmrpcclient.Client
+	rpc client.TendermintRPC
 	pollInterval time.Duration
 	height int64
 	err error
@@ -19,16 +19,10 @@ type ChainHeight struct {
 
 func NewChainHeight(
 	ctx context.Context,
-	rpc tmrpcclient.Client,
+	rpc client.TendermintRPC,
 	logger zerolog.Logger,
 	pollInterval time.Duration,
 ) (*ChainHeight, error) {
-	if !rpc.IsRunning() {
-		err := rpc.Start()
-		if err != nil {
-			return nil, err
-		}
-	}
 	c := &ChainHeight{
 		Logger: logger.With().Str("oracle_client", "chain_height").Logger(),
 		ctx: ctx,

@@ -36,44 +36,60 @@ var (
 	// SupportedProviders defines a lookup table of all the supported currency API
 	// providers.
 	SupportedProviders = map[provider.Name]struct{}{
-		provider.ProviderBybit:              {},
-		provider.ProviderBitfinex:           {},
-		provider.ProviderBitforex:           {},
-		provider.ProviderBkex:               {},
-		provider.ProviderBitmart:            {},
-		provider.ProviderBitstamp:           {},
-		provider.ProviderCamelotV2:          {},
-		provider.ProviderCamelotV3:          {},
-		provider.ProviderFin:                {},
-		provider.ProviderFinV2:              {},
-		provider.ProviderPoloniex:           {},
-		provider.ProviderPhemex:             {},
-		provider.ProviderLbank:              {},
-		provider.ProviderHitBtc:             {},
-		provider.ProviderKraken:             {},
-		provider.ProviderKucoin:             {},
-		provider.ProviderBinance:            {},
-		provider.ProviderBinanceUS:          {},
-		provider.ProviderOsmosis:            {},
-		provider.ProviderOsmosisV2:          {},
-		provider.ProviderOkx:                {},
-		provider.ProviderHuobi:              {},
-		provider.ProviderGate:               {},
-		provider.ProviderCoinbase:           {},
-		provider.ProviderBitget:             {},
-		provider.ProviderMexc:               {},
-		provider.ProviderCrypto:             {},
-		provider.ProviderCurve:              {},
-		provider.ProviderMock:               {},
-		provider.ProviderStride:             {},
-		provider.ProviderXt:                 {},
-		provider.ProviderIdxOsmosis:         {},
-		provider.ProviderPyth:               {},
-		provider.ProviderZero:               {},
-		provider.ProviderUniswapV3:          {},
+		provider.ProviderAstroportInjective: {},
 		provider.ProviderAstroportNeutron:   {},
 		provider.ProviderAstroportTerra2:    {},
-		provider.ProviderAstroportInjective: {},
+		provider.ProviderBinance:            {},
+		provider.ProviderBinanceUS:          {},
+		provider.ProviderBingx:              {},
+		provider.ProviderBitfinex:           {},
+		provider.ProviderBitforex:           {},
+		provider.ProviderBitget:             {},
+		provider.ProviderBitmart:            {},
+		provider.ProviderBitstamp:           {},
+		provider.ProviderBybit:              {},
+		provider.ProviderCamelotV2:          {},
+		provider.ProviderCamelotV3:          {},
+		provider.ProviderCoinbase:           {},
+		provider.ProviderCoinex:             {},
+		provider.ProviderCrypto:             {},
+		provider.ProviderCurve:              {},
+		provider.ProviderDexter:             {},
+		provider.ProviderFin:                {},
+		provider.ProviderFinV2:              {},
+		provider.ProviderGate:               {},
+		provider.ProviderHelix:              {},
+		provider.ProviderHitBtc:             {},
+		provider.ProviderHuobi:              {},
+		provider.ProviderIdxOsmosis:         {},
+		provider.ProviderKraken:             {},
+		provider.ProviderKucoin:             {},
+		provider.ProviderLbank:              {},
+		provider.ProviderMaya:               {},
+		provider.ProviderMexc:               {},
+		provider.ProviderMock:               {},
+		provider.ProviderOkx:                {},
+		provider.ProviderOsmosisV2:          {},
+		provider.ProviderPancakeV3Bsc:       {},
+		provider.ProviderPhemex:             {},
+		provider.ProviderPionex:             {},
+		provider.ProviderPoloniex:           {},
+		provider.ProviderPyth:               {},
+		provider.ProviderShade:              {},
+		provider.ProviderStride:             {},
+		provider.ProviderUniswapV3:          {},
+		provider.ProviderUnstake:            {},
+		provider.ProviderVelodromeV2:        {},
+		provider.ProviderWhitewhaleCmdx:     {},
+		provider.ProviderWhitewhaleHuahua:   {},
+		provider.ProviderWhitewhaleInj:      {},
+		provider.ProviderWhitewhaleJuno:     {},
+		provider.ProviderWhitewhaleLuna:     {},
+		provider.ProviderWhitewhaleLunc:     {},
+		provider.ProviderWhitewhaleSei:      {},
+		provider.ProviderWhitewhaleWhale:    {},
+		provider.ProviderXt:                 {},
+		provider.ProviderZero:               {},
 	}
 
 	SupportedDerivatives = map[string]struct{}{
@@ -88,24 +104,28 @@ var (
 type (
 	// Config defines all necessary price-feeder configuration parameters.
 	Config struct {
-		Server               Server                       `toml:"server"`
-		CurrencyPairs        []CurrencyPair               `toml:"currency_pairs" validate:"required,gt=0,dive,required"`
-		Deviations           []Deviation                  `toml:"deviation_thresholds"`
-		ProviderMinOverrides []ProviderMinOverrides       `toml:"provider_min_overrides"`
-		Account              Account                      `toml:"account" validate:"required,gt=0,dive,required"`
-		Keyring              Keyring                      `toml:"keyring" validate:"required,gt=0,dive,required"`
-		RPC                  RPC                          `toml:"rpc" validate:"required,gt=0,dive,required"`
-		Telemetry            Telemetry                    `toml:"telemetry"`
-		GasAdjustment        float64                      `toml:"gas_adjustment" validate:"required"`
-		GasPrices            string                       `toml:"gas_prices" validate:"required"`
-		ProviderTimeout      string                       `toml:"provider_timeout"`
-		ProviderEndpoints    []ProviderEndpoints          `toml:"provider_endpoints" validate:"dive"`
-		EnableServer         bool                         `toml:"enable_server"`
-		EnableVoter          bool                         `toml:"enable_voter"`
-		Healthchecks         []Healthchecks               `toml:"healthchecks" validate:"dive"`
-		HeightPollInterval   string                       `toml:"height_poll_interval"`
-		HistoryDb            string                       `toml:"history_db"`
-		ContractAdresses     map[string]map[string]string `toml:"contract_addresses"`
+		Server               Server                        `toml:"server"`
+		CurrencyPairs        []CurrencyPair                `toml:"currency_pairs" validate:"required,gt=0,dive,required"`
+		Deviations           []Deviation                   `toml:"deviation_thresholds"`
+		ProviderMinOverrides []ProviderMinOverrides        `toml:"provider_min_overrides"`
+		ProviderWeights      map[string]map[string]float64 `toml:"provider_weight"`
+		Account              Account                       `toml:"account" validate:"required,gt=0,dive,required"`
+		Keyring              Keyring                       `toml:"keyring" validate:"required,gt=0,dive,required"`
+		RPC                  RPC                           `toml:"rpc" validate:"required,gt=0,dive,required"`
+		Telemetry            Telemetry                     `toml:"telemetry"`
+		GasAdjustment        float64                       `toml:"gas_adjustment" validate:"required"`
+		GasPrices            string                        `toml:"gas_prices" validate:"required"`
+		ProviderTimeout      string                        `toml:"provider_timeout"`
+		ProviderEndpoints    []ProviderEndpoints           `toml:"provider_endpoints" validate:"dive"`
+		EnableServer         bool                          `toml:"enable_server"`
+		EnableVoter          bool                          `toml:"enable_voter"`
+		Healthchecks         []Healthchecks                `toml:"healthchecks" validate:"dive"`
+		HeightPollInterval   string                        `toml:"height_poll_interval"`
+		HistoryDb            string                        `toml:"history_db"`
+		ContractAdresses     map[string]map[string]string  `toml:"contract_addresses"`
+		Decimals             map[string]map[string]int     `toml:"decimals"`
+		Periods              map[string]map[string]int     `toml:"periods"`
+		UrlSets              map[string]UrlSet             `toml:"url_set"`
 	}
 
 	// Server defines the API server configuration.
@@ -203,10 +223,19 @@ type (
 	ProviderEndpoints struct {
 		Name          provider.Name `toml:"name" validate:"required"`
 		Urls          []string      `toml:"urls"`
+		UrlSet        string        `toml:"url_set"`
 		Websocket     string        `toml:"websocket"`
 		WebsocketPath string        `toml:"websocket_path"`
 		PollInterval  string        `toml:"poll_interval"`
-		Contracts     []string      `toml:"contracts"`
+		// Contracts     []string       `toml:"contracts"`
+		VolumeBlocks int            `toml:"volume_blocks"`
+		VolumePause  int            `toml:"volume_pause"`
+		Decimals     map[string]int `toml:"decimals"`
+		Periods      map[string]int
+	}
+
+	UrlSet struct {
+		Urls []string `toml:"urls"`
 	}
 )
 
@@ -223,9 +252,14 @@ func telemetryValidation(sl validator.StructLevel) {
 func endpointValidation(sl validator.StructLevel) {
 	endpoint := sl.Current().Interface().(ProviderEndpoints)
 
-	if len(endpoint.Name) < 1 || (len(endpoint.Urls) < 1 && len(endpoint.Websocket) < 1) {
-		sl.ReportError(endpoint, "endpoint", "Endpoint", "unsupportedEndpointType", "")
+	if len(endpoint.Name) < 1 {
+		sl.ReportError(endpoint, "name", "Name", "name is empty", "")
 	}
+
+	if len(endpoint.Urls) < 1 && len(endpoint.UrlSet) < 1 {
+		sl.ReportError(endpoint.Name, "urls", "Urls", "urls or url_set empty", "")
+	}
+
 	if _, ok := SupportedProviders[endpoint.Name]; !ok {
 		sl.ReportError(endpoint.Name, "name", "Name", "unsupportedEndpointProvider", "")
 	}
@@ -238,7 +272,9 @@ func (c Config) Validate() error {
 	return validate.Struct(c)
 }
 
-func (p ProviderEndpoints) ToEndpoint() (provider.Endpoint, error) {
+func (p ProviderEndpoints) ToEndpoint(
+	sets map[string]UrlSet,
+) (provider.Endpoint, error) {
 	var pollInterval time.Duration
 	if p.PollInterval != "" {
 		interval, err := time.ParseDuration(p.PollInterval)
@@ -248,12 +284,27 @@ func (p ProviderEndpoints) ToEndpoint() (provider.Endpoint, error) {
 		pollInterval = interval
 	}
 
+	urls := p.Urls
+	set, found := sets[p.UrlSet]
+	if found {
+		urls = set.Urls
+	}
+
+	if len(urls) == 0 {
+		err := fmt.Errorf("no urls provided for '%s'", p.Name)
+		return provider.Endpoint{}, err
+	}
+
 	e := provider.Endpoint{
 		Name:          p.Name,
-		Urls:          p.Urls,
+		Urls:          urls,
 		Websocket:     p.Websocket,
 		WebsocketPath: p.WebsocketPath,
 		PollInterval:  pollInterval,
+		VolumeBlocks:  p.VolumeBlocks,
+		VolumePause:   p.VolumePause,
+		Decimals:      p.Decimals,
+		Periods:       p.Periods,
 	}
 	return e, nil
 }

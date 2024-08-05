@@ -12,10 +12,11 @@ import (
 
 type (
 	PriceHistory struct {
-		db     *sql.DB
-		insert *sql.Stmt
-		query  *sql.Stmt
-		logger zerolog.Logger
+		db      *sql.DB
+		insert  *sql.Stmt
+		query   *sql.Stmt
+		cleanup *sql.Stmt
+		logger  zerolog.Logger
 	}
 )
 
@@ -33,7 +34,8 @@ func NewPriceHistory(path string, logger zerolog.Logger) (PriceHistory, error) {
 }
 
 func (p *PriceHistory) Init() error {
-	_, err := p.db.Exec(`CREATE TABLE IF NOT EXISTS crypto_ticker_prices(
+	_, err := p.db.Exec(`
+		CREATE TABLE IF NOT EXISTS crypto_ticker_prices(
         symbol TEXT NOT NULL,
         provider TEXT NOT NULL,
         time INT NOT NULL,
@@ -45,7 +47,15 @@ func (p *PriceHistory) Init() error {
 		p.logger.Error().Err(err).Msg("failed to create db table")
 		return err
 	}
-	insert, err := p.db.Prepare(`INSERT INTO crypto_ticker_prices(symbol, provider, time, price, volume)
+
+	_, err = p.db.Exec("VACUUM")
+	if err != nil {
+		p.logger.Error().Err(err).Msg("failed to vacuum database")
+		return err
+	}
+
+	insert, err := p.db.Prepare(`
+		INSERT INTO crypto_ticker_prices(symbol, provider, time, price, volume)
         SELECT ?, ?, ?, ?, ?
         WHERE NOT EXISTS (SELECT 1 FROM crypto_ticker_prices WHERE symbol = ? AND provider = ? AND time = ?)
     `)
@@ -53,7 +63,9 @@ func (p *PriceHistory) Init() error {
 		p.logger.Error().Err(err).Msg("failed to prepare sql insert statement")
 		return err
 	}
-	query, err := p.db.Prepare(`SELECT provider, time, price, volume FROM crypto_ticker_prices
+
+	query, err := p.db.Prepare(`
+		SELECT provider, time, price, volume FROM crypto_ticker_prices
         WHERE symbol = ? AND time BETWEEN ? AND ?
         ORDER BY time ASC
     `)
@@ -61,8 +73,19 @@ func (p *PriceHistory) Init() error {
 		p.logger.Error().Err(err).Msg("failed to prepare sql query statement")
 		return err
 	}
+
+	cleanup, err := p.db.Prepare(`
+		DELETE from crypto_ticker_prices
+		WHERE symbol = ? AND time < ?
+	`)
+	if err != nil {
+		p.logger.Error().Err(err).Msg("failed to prepare sql cleanup statement")
+	}
+
 	p.insert = insert
 	p.query = query
+	p.cleanup = cleanup
+
 	return nil
 }
 
@@ -88,11 +111,19 @@ func (p *PriceHistory) GetTickerPrices(
 	start time.Time,
 	end time.Time,
 ) (map[string][]types.TickerPrice, error) {
+	logger := p.logger.With().Str("symbol", symbol).Logger()
+
+	_, err := p.cleanup.Exec(symbol, start.Unix())
+	if err != nil {
+		logger.Error().
+			Err(err).
+			Msg("failed to remove old ticker prices")
+	}
+
 	rows, err := p.query.Query(symbol, start.Unix(), end.Unix())
 	if err != nil {
-		p.logger.Error().
+		logger.Error().
 			Err(err).
-			Str("pair", symbol).
 			Msg("failed to query stored ticker prices")
 		return nil, err
 	}
@@ -103,17 +134,15 @@ func (p *PriceHistory) GetTickerPrices(
 		var providerName, price, volume string
 		err := rows.Scan(&providerName, &epochTime, &price, &volume)
 		if err != nil {
-			p.logger.Error().
+			logger.Error().
 				Err(err).
-				Str("symbol", symbol).
 				Msg("failed to parse ticker query results")
 			return nil, err
 		}
 		ticker, err := types.NewTickerPrice(price, volume, time.Unix(epochTime, 0))
 		if err != nil {
-			p.logger.Error().
+			logger.Error().
 				Err(err).
-				Str("pair", symbol).
 				Msg("failed to create ticker")
 		}
 		providerTickers, ok := tickers[providerName]
@@ -125,9 +154,8 @@ func (p *PriceHistory) GetTickerPrices(
 	}
 	err = rows.Err()
 	if err != nil {
-		p.logger.Error().
+		logger.Error().
 			Err(err).
-			Str("symbol", symbol).
 			Msg("failed to read all stored tickers")
 		return nil, err
 	}

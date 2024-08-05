@@ -2,6 +2,7 @@ package derivative
 
 import (
 	"fmt"
+	"sort"
 	"time"
 
 	"price-feeder/oracle/history"
@@ -14,6 +15,7 @@ import (
 const (
 	twapMaxTimeDeltaSeconds      = int64(120)
 	twapMinHistoryPeriodFraction = 0.8
+	twapMaxPriceDeviation        = 0.1
 )
 
 type (
@@ -93,51 +95,113 @@ func Twap(
 	end time.Time,
 ) (sdk.Dec, int64, error) {
 	priceTotal := sdk.ZeroDec()
-	volumeTotal := sdk.ZeroDec()
 	timeTotal := int64(0)
 
 	period := end.Sub(start).Seconds()
 	minPeriod := int64(twapMinHistoryPeriodFraction * period)
 
-	var newStart time.Time
+	discardedTime := int64(0)
 
-	for i, ticker := range tickers {
+	threshold := sdk.MustNewDecFromStr(fmt.Sprintf("%f", twapMaxPriceDeviation))
+
+	filtered := []types.TickerPrice{}
+	for _, ticker := range tickers {
 		if ticker.Time.Before(start) {
 			continue
 		}
 		if ticker.Time.After(end) {
 			break
 		}
+
+		filtered = append(filtered, ticker)
+	}
+
+	tickers = filtered
+
+	median, err := weightedMedian(tickers)
+	if err != nil {
+		return sdk.Dec{}, 0, err
+	}
+
+	if median.IsZero() {
+		return sdk.Dec{}, 0, fmt.Errorf("median is 0")
+	}
+
+	for i, ticker := range tickers {
+
 		nextIndex := i + 1
-		var timeDelta int64
 		if nextIndex >= len(tickers) || tickers[nextIndex].Time.After(end) {
-			timeDelta = end.Unix() - ticker.Time.Unix()
-		} else {
-			timeDelta = tickers[nextIndex].Time.Unix() - ticker.Time.Unix()
+			break
 		}
 
+		timeDelta := tickers[nextIndex].Time.Unix() - ticker.Time.Unix()
+
 		if timeDelta > twapMaxTimeDeltaSeconds {
-			if nextIndex >= len(tickers) {
-				newStart = end
-			} else {
-				newStart = tickers[nextIndex].Time
-			}
+			discardedTime = discardedTime + timeDelta
+			continue
+		}
+
+		// check if price has a big spike
+		max := median.Add(median.Mul(threshold))
+		min := median.Sub(median.Mul(threshold))
+
+		if ticker.Price.GT(max) || ticker.Price.LT(min) {
+			// that's too much, ignore
+			continue
 		}
 
 		priceTotal = priceTotal.Add(ticker.Price.MulInt64(timeDelta))
-		volumeTotal = volumeTotal.Add(ticker.Volume)
 		timeTotal = timeTotal + timeDelta
 	}
 
-	if !newStart.IsZero() {
-		missing := newStart.Unix() - time.Now().Unix() + int64(period)
-		return sdk.Dec{}, missing, fmt.Errorf("not enough continuous history")
-	}
-
-	if timeTotal == 0 || timeTotal < minPeriod {
+	if timeTotal < minPeriod {
 		missing := minPeriod - timeTotal
-		return sdk.Dec{}, missing, fmt.Errorf("not enough history")
+		message := "not enough history"
+
+		if int64(period)-discardedTime < minPeriod {
+			message = "too much time gap in history"
+		}
+
+		return sdk.Dec{}, missing, fmt.Errorf(message)
 	}
 
 	return priceTotal.QuoInt64(timeTotal), 0, nil
+}
+
+func weightedMedian(tickers []types.TickerPrice) (sdk.Dec, error) {
+	type Price struct {
+		Price  sdk.Dec
+		Weight int64
+	}
+
+	if len(tickers) < 2 {
+		return sdk.ZeroDec(), nil
+	}
+
+	prices := []Price{}
+
+	for i := 1; i < len(tickers); i++ {
+		weight := tickers[i].Time.Unix() - tickers[i-1].Time.Unix()
+		prices = append(prices, Price{
+			Price:  tickers[i].Price,
+			Weight: weight,
+		})
+	}
+
+	sort.Slice(prices, func(i, j int) bool {
+		return prices[i].Price.LT(prices[j].Price)
+	})
+
+	// weighted median
+	total := tickers[len(tickers)-1].Time.Unix() - tickers[0].Time.Unix()
+	pivot := 0
+
+	for _, price := range prices {
+		pivot += int(price.Weight)
+		if pivot > int(total/2) {
+			return price.Price, nil
+		}
+	}
+
+	return sdk.ZeroDec(), nil
 }

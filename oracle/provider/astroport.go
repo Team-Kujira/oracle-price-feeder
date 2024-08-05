@@ -38,7 +38,7 @@ type (
 	AstroportProvider struct {
 		provider
 		contracts map[string]string
-		denoms    map[string]string
+		denoms    map[string]AstroportAsset
 	}
 
 	AstroportPairResponse struct {
@@ -50,11 +50,16 @@ type (
 	}
 
 	AstroportAsset struct {
-		NativeToken AstroportNativeToken `json:"native_token"`
+		NativeToken *AstroportNativeToken `json:"native_token,omitempty"`
+		Token       *AstroportToken       `json:"token,omitempty"`
 	}
 
 	AstroportNativeToken struct {
-		Denom string `json:"denom"`
+		Denom string `json:"denom,omitempty"`
+	}
+
+	AstroportToken struct {
+		ContractAddress string `json:"contract_addr,omitempty"`
 	}
 
 	AstroportSimulationQuery struct {
@@ -126,21 +131,23 @@ func (p *AstroportProvider) Poll() error {
 			continue
 		}
 
+		offerAsset, found := p.denoms[pair.Base]
+		if !found {
+			continue
+		}
+
+		askAsset, found := p.denoms[pair.Quote]
+		if !found {
+			continue
+		}
+
 		msg := AstroportSimulationQuery{
 			Simulation: AstroportSimulation{
 				OfferAsset: AstroportOfferAsset{
-					Info: AstroportAsset{
-						NativeToken: AstroportNativeToken{
-							Denom: p.denoms[pair.Base],
-						},
-					},
+					Info:   offerAsset,
 					Amount: amount,
 				},
-				AskAsset: AstroportAsset{
-					NativeToken: AstroportNativeToken{
-						Denom: p.denoms[pair.Quote],
-					},
-				},
+				AskAsset: askAsset,
 			},
 		}
 
@@ -172,6 +179,11 @@ func (p *AstroportProvider) Poll() error {
 
 		price := strToDec(simulationResponse.Data.Return).Quo(strToDec(amount))
 
+		_, found = p.pairs[pair.String()]
+		if !found {
+			price = floatToDec(1).Quo(price)
+		}
+
 		p.setTickerPrice(
 			symbol,
 			price,
@@ -187,8 +199,8 @@ func (p *AstroportProvider) GetAvailablePairs() (map[string]struct{}, error) {
 	return p.getAvailablePairsFromContracts()
 }
 
-func (p *AstroportProvider) getDenoms() map[string]string {
-	denoms := map[string]string{}
+func (p *AstroportProvider) getDenoms() map[string]AstroportAsset {
+	assets := map[string]AstroportAsset{}
 
 	for symbol, pair := range p.getAllPairs() {
 
@@ -222,9 +234,14 @@ func (p *AstroportProvider) getDenoms() map[string]string {
 			continue
 		}
 
-		denoms[pair.Base] = pairResponse.Data.AssetInfos[0].NativeToken.Denom
-		denoms[pair.Quote] = pairResponse.Data.AssetInfos[1].NativeToken.Denom
+		_, found := p.pairs[pair.String()]
+		if !found {
+			pair = pair.Swap()
+		}
+
+		assets[pair.Base] = pairResponse.Data.AssetInfos[0]
+		assets[pair.Quote] = pairResponse.Data.AssetInfos[1]
 	}
 
-	return denoms
+	return assets
 }

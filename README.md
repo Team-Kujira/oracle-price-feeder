@@ -2,25 +2,22 @@
 
 This is a standalone version of [Umee's fantastic work](https://github.com/umee-network/umee/tree/main/price-feeder) migrating [Terra's oracle-feeder](https://github.com/terra-money/oracle-feeder) app to Go, and integrating it more closely with the Cosmos SDK.
 
-## Changes
-
-- `exchange_rates` when broadcasting votes has been reverted to the Cosmos SDK denom string, as is used in Terra's Oracle module
-- `config.toml` supports an `account.prefix` property, to provide compatibility across multiple networks
-
----
-
 ## Providers
 
 The list of current supported providers:
 
+- [Astroport](https://astroport.fi/en)
 - [Binance](https://www.binance.com/en)
 - [BinanceUS](https://www.binance.us)
 - [Bitfinex](https://www.bitfinex.com)
 - [Bitget](https://www.bitget.com/en/)
-- [BKEX](https://www.bkex.com/)
+- [Bitmart](https://www.bitmart.com/en-US)
+- [Bitstamp](https://www.bitstamp.net)
 - [Bybit](https://www.bybit.com/en-US/)
+- [Camelot DEX](https://excalibur.exchange)
 - [Coinbase](https://www.coinbase.com/)
 - [Crypto.com](https://crypto.com/eea)
+- [Curve](https://curve.fi)
 - [FIN](https://fin.kujira.app)
 - [Gate.io](https://www.gate.io)
 - [HitBTC](https://hitbtc.com)
@@ -31,8 +28,12 @@ The list of current supported providers:
 - [MEXC](https://www.mexc.com/)
 - [Okx](https://www.okx.com/)
 - [Osmosis](https://app.osmosis.zone/)
+- [PancakeSwap (Ethereum)](https://pancakeswap.finance)
 - [Phemex](https://phemex.com)
 - [Poloniex](https://poloniex.com)
+- [Pyth](https://pyth.network)
+- [UniswapV3](https://app.uniswap.org)
+- [WhiteWhale](https://whitewhale.money)
 - [XT.COM](https://www.xt.com/en)
 
 ## Usage
@@ -45,27 +46,103 @@ More information on the keyring can be found [here](#keyring)
 Please see the [example configuration](config.example.toml) for more details.
 
 ```shell
-$ price-feeder /path/to/price_feeder_config.toml
+price-feeder /path/to/price_feeder_config.toml
 ```
 
+## Installation
+
+An extensive installation guide can be found [here](https://docs.kujira.app/validators/run-a-node/oracle-price-feeder).
+
 ## Configuration
-
-### `telemetry`
-
-A set of options for the application's telemetry, which is disabled by default. An in-memory sink is the default, but Prometheus is also supported. We use the [cosmos sdk telemetry package](https://github.com/cosmos/cosmos-sdk/blob/main/docs/core/telemetry.md).
-
-### `deviation`
-
-Deviation allows validators to set a custom amount of standard deviations around the median which is helpful if any providers become faulty. It should be noted that the default for this option is 1 standard deviation.
-
-### `provider_endpoints`
-
-The provider_endpoints option enables validators to setup their own API endpoints for a given provider.
 
 ### `server`
 
 The `server` section contains configuration pertaining to the API served by the
 `price-feeder` process such the listening address and various HTTP timeouts.
+
+### `rpc`
+
+The `rpc` section contains the Tendermint and Cosmos application gRPC endpoints.
+These endpoints are used to query for on-chain data that pertain to oracle
+functionality and for broadcasting signed pre-vote and vote oracle messages.
+
+### `telemetry`
+
+A set of options for the application's telemetry, which is disabled by default. An in-memory sink is the default, but Prometheus is also supported. We use the [cosmos sdk telemetry package](https://github.com/cosmos/cosmos-sdk/blob/main/docs/core/telemetry.md).
+
+### `account`
+
+The `account` section contains the oracle's feeder and validator account information.
+These are used to sign and populate data in pre-vote and vote oracle messages.
+
+### `keyring`
+
+The `keyring` section contains Keyring related material used to fetch the key pair
+associated with the oracle account that signs pre-vote and vote oracle messages.
+
+### `healthchecks`
+
+The `healthchecks` section defines optional healthcheck endpoints to ping on successful
+oracle votes. This provides a simple alerting solution which can integrate with a service
+like [healthchecks.io](https://healthchecks.io). It's recommended to configure additional
+monitoring since third-party services can be unreliable.
+
+### `deviation_thresholds`
+
+Deviation thresholds allow validators to set a custom amount of standard deviations around the median which is helpful if any providers become faulty. It should be noted that the default for this option is 1 standard deviation.
+
+```toml
+[[deviation_thresholds]]
+base = "USDT"
+threshold = "2"
+```
+
+### `provider_min_overrides`
+
+This option allows validators to set the minimum prices sources needed for specific assets. This might be necessary, if there are less than three providers available for a certain asset.
+
+```toml
+[[provider_min_overrides]]
+denoms = ["QCKUJI", "QCMNTA"]
+providers = 1
+```
+
+### `url_set`
+
+Url sets are named arrays of endpoint urls, that can be reused in endpoint configurations.
+
+```toml
+[url_set.rest_kujira]
+urls = [
+  "https://rest.cosmos.directory/kujira",
+]
+
+[[provider_endpoints]]
+name = "finv2"
+url_set = "rest_kujira"
+```
+
+### `provider_endpoints`
+
+The provider_endpoints option enables validators to setup their own API endpoints for a given provider.
+
+```toml
+[[provider_endpoints]]
+name = "finv2"
+urls = [
+  "https://rest.cosmos.directory/kujira",
+]
+```
+
+### `contract_addresses`
+
+The `contract_addresses` sections contain a mapping of base/denom pair to the pool addresses of supported decentralized exchanges.
+
+```toml
+[contract_addresses.finv2]
+KUJIUSDC = "kujira14hj2tavq8fpesdwxxcu44rty3hh90vhujrvcmstl4zr3txmfvw9sl4e867"
+MNTAUSDC = "kujira1ws9w7wl68prspv3rut3plv8249rm0ea0kk335swye3sl2slld4lqdmc0lv"
+```
 
 ### `currency_pairs`
 
@@ -79,46 +156,36 @@ as follows:
 ```toml
 [[currency_pairs]]
 base = "ATOM"
+quote = "USDT"
 providers = [
   "binance",
 ]
-quote = "USDT"
 
 [[currency_pairs]]
 base = "ATOM"
+quote = "USD"
 providers = [
   "kraken",
   "osmosis",
 ]
-quote = "USD"
 ```
 
 Providing multiple providers is beneficial in case any provider fails to return
-market data. Prices per exchange rate are submitted on-chain via pre-vote and
-vote messages using a time-weighted average price (TVWAP).
+market data or reports a price that deviates too much and should be considered wrong. Prices per exchange rate are submitted on-chain via pre-vote and
+vote messages using a volume-weighted average price (VWAP).
 
-### `account`
+### `provider_weight`
 
-The `account` section contains the oracle's feeder and validator account information.
-These are used to sign and populate data in pre-vote and vote oracle messages.
+Provider weight sets the volume for the given providers of a specific denom. This can be used manually set the impact of specific providers during the vwap calculation or create some kind of ordered failover mechanism.
 
-### `keyring`
+```toml
+[provider_weight.STATOM]
+provider1 = 100
+provider2 = 0.001
+provider3 = 0
+```
 
-The `keyring` section contains Keyring related material used to fetch the key pair
-associated with the oracle account that signs pre-vote and vote oracle messages.
-
-### `rpc`
-
-The `rpc` section contains the Tendermint and Cosmos application gRPC endpoints.
-These endpoints are used to query for on-chain data that pertain to oracle
-functionality and for broadcasting signed pre-vote and vote oracle messages.
-
-### `healthchecks`
-
-The `healthchecks` section defines optional healthcheck endpoints to ping on successful
-oracle votes. This provides a simple alerting solution which can integrate with a service
-like [healthchecks.io](https://healthchecks.io). It's recommended to configure additional
-monitoring since third-party services can be unreliable.
+In this example the resulting price will be following provider1 as long as it is available (100k times more weight than provider2). If provider1 fails, the resulting price will follow provider2, and if that fails it too, the resulting price is the one reported by provider3. All assuming the deviation of the all prices are within the configured range.
 
 ## Keyring
 

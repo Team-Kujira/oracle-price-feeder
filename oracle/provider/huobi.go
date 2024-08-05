@@ -119,5 +119,19 @@ func (p *HuobiProvider) GetAvailablePairs() (map[string]struct{}, error) {
 }
 
 func currencyPairToHuobiSymbol(pair types.CurrencyPair) string {
-	return strings.ToLower(pair.String())
+	mapping := map[string]string{
+		"AXL": "WAXL",
+	}
+
+	base, found := mapping[pair.Base]
+	if !found {
+		base = pair.Base
+	}
+
+	quote, found := mapping[pair.Quote]
+	if !found {
+		quote = pair.Quote
+	}
+
+	return strings.ToLower(base + quote)
 }

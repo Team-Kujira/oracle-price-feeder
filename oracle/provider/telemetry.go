@@ -107,3 +107,19 @@ func TelemetryProviderPrice(name Name, denom string, price float32, volume float
 	telemetry.SetGaugeWithLabels([]string{"provider", "price"}, price, labels)
 	telemetry.SetGaugeWithLabels([]string{"provider", "volume"}, volume, labels)
 }
+
+func TelemetryEvmMethod(chain, provider, method string) {
+	labels := []metrics.Label{
+		telemetry.NewLabel("chain", chain),
+		telemetry.NewLabel("provider", provider),
+		telemetry.NewLabel("method", method),
+	}
+
+	telemetry.IncrCounterWithLabels(
+		[]string{
+			"evm_calls",
+		},
+		float32(1),
+		labels,
+	)
+}
