@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"price-feeder/oracle/types"
@@ -86,7 +87,7 @@ func (p *HelixProvider) Poll() error {
 		p.setTickerPrice(
 			market.Market.Ticker,
 			strToDec(market.MidPriceAndTob.Price),
-			sdk.ZeroDec(),
+			sdk.OneDec(), // helix doesn't appear to report volume
 			timestamp,
 		)
 	}
@@ -108,7 +109,13 @@ func (p *HelixProvider) GetMarkets() ([]HelixMarket, error) {
 		return nil, err
 	}
 
-	return response.Markets, nil
+	var markets []HelixMarket
+	for _, market := range response.Markets {
+		market.Market.Ticker = strings.ToUpper(market.Market.Ticker)
+		markets = append(markets, market)
+	}
+
+	return markets, nil
 }
 
 func (p *HelixProvider) GetAvailablePairs() (map[string]struct{}, error) {
