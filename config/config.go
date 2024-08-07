@@ -119,6 +119,7 @@ type (
 		Decimals             map[string]map[string]int     `toml:"decimals"`
 		Periods              map[string]map[string]int     `toml:"periods"`
 		UrlSets              map[string]UrlSet             `toml:"url_set"`
+		Helix                Helix                         `toml:"helix"`
 	}
 
 	// Server defines the API server configuration.
@@ -229,6 +230,10 @@ type (
 
 	UrlSet struct {
 		Urls []string `toml:"urls"`
+	}
+
+	Helix struct {
+		TokenFile string `toml:"token_file"`
 	}
 )
 
