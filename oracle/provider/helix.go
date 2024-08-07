@@ -139,16 +139,19 @@ func (p *HelixProvider) Poll() error {
 			continue
 		}
 		var decimalDifference uint64
+		var multiplier sdk.Dec
 		if quoteToken.Decimals > baseToken.Decimals {
 			decimalDifference = quoteToken.Decimals - baseToken.Decimals
+			multiplier = sdk.NewDec(10).Power(decimalDifference)
+			rawPrice = rawPrice.Mul(invertDec(multiplier))
 		} else {
 			decimalDifference = baseToken.Decimals - quoteToken.Decimals
+			multiplier = sdk.NewDec(10).Power(decimalDifference)
+			rawPrice = rawPrice.Mul(multiplier)
 		}
-		multiplier := sdk.NewDec(10).Power(decimalDifference)
+
 		p.logger.Warn().Uint64("decimalDifference", decimalDifference).Str("ticker", market.Market.Ticker).
 			Msg("decimalDifference")
-
-		rawPrice = rawPrice.Mul(multiplier)
 
 		p.setTickerPrice(
 			market.Market.Ticker,
