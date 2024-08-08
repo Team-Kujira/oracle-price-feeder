@@ -44,6 +44,8 @@ type (
 		} `json:"market"`
 		MidPriceAndTob struct {
 			Price string `json:"mid_price"`
+			Buy   string `json:"best_buy_price"`
+			Sell  string `json:"best_sell_price"`
 		} `json:"mid_price_and_tob"`
 	}
 
@@ -128,6 +130,24 @@ func (p *HelixProvider) Poll() error {
 			p.logger.Info().Str("ticker", market.Market.Ticker).Msg("No Price available from Helix")
 			continue
 		}
+		buyPrice := strToDec(market.MidPriceAndTob.Buy)
+		if buyPrice.IsNil() {
+			p.logger.Info().Str("ticker", market.Market.Ticker).Msg("No Buy Price available from Helix")
+			continue
+		}
+		sellPrice := strToDec(market.MidPriceAndTob.Sell)
+		if sellPrice.IsNil() {
+			p.logger.Info().Str("ticker", market.Market.Ticker).Msg("No Sell Price available from Helix")
+			continue
+		}
+
+		// |((sell-buy)/sell)*100|
+		ratio := sellPrice.Sub(buyPrice).Quo(sellPrice).Mul(sdk.NewDec(100)).Abs()
+		if ratio.GT(sdk.NewDec(10)) {
+			p.logger.Warn().Str("ticker", market.Market.Ticker).Msg("buy/sell spread is larger than 10%. Skipping")
+			continue
+		}
+
 		baseToken, found := p.token[strings.ToUpper(market.Market.BaseDenom)]
 		if !found {
 			p.logger.Warn().Str("token", pair.Base).Str("denom", market.Market.BaseDenom).Msg("token not found in helix Token list")
@@ -149,9 +169,6 @@ func (p *HelixProvider) Poll() error {
 			multiplier = sdk.NewDec(10).Power(decimalDifference)
 			rawPrice = rawPrice.Mul(multiplier)
 		}
-
-		p.logger.Warn().Uint64("decimalDifference", decimalDifference).Str("ticker", market.Market.Ticker).
-			Msg("decimalDifference")
 
 		p.setTickerPrice(
 			market.Market.Ticker,
