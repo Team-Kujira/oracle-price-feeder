@@ -60,9 +60,10 @@ type Oracle struct {
 	periods              map[string]map[string]int
 	volumeDatabase       *sql.DB
 
-	mtx          sync.RWMutex
-	prices       map[string]sdk.Dec
-	healthchecks map[string]http.Client
+	mtx            sync.RWMutex
+	prices         map[string]sdk.Dec
+	healthchecks   map[string]http.Client
+	helixTokenFile string
 }
 
 func New(
@@ -82,6 +83,7 @@ func New(
 	decimals map[string]map[string]int,
 	periods map[string]map[string]int,
 	volumeDatabase *sql.DB,
+	helix config.Helix,
 ) *Oracle {
 	providerPairs := make(map[provider.Name][]types.CurrencyPair)
 	for _, pair := range currencyPairs {
@@ -125,6 +127,7 @@ func New(
 		decimals:             decimals,
 		periods:              periods,
 		volumeDatabase:       volumeDatabase,
+		helixTokenFile:       helix.TokenFile,
 	}
 }
 
@@ -178,7 +181,7 @@ func (o *Oracle) GetPrices() sdk.DecCoins {
 // SetPrices retrieves all the prices and candles from our set of providers as
 // determined in the config. If candles are available, uses TVWAP in order
 // to determine prices. If candles are not available, uses the most recent prices
-// with VWAP. Warns the the user of any missing prices, and filters out any faulty
+// with VWAP. Warns the user of any missing prices, and filters out any faulty
 // providers which do not report prices or candles within 2𝜎 of the others.
 func (o *Oracle) SetPrices(ctx context.Context) error {
 	g := new(errgroup.Group)
@@ -206,6 +209,7 @@ func (o *Oracle) SetPrices(ctx context.Context) error {
 				providerName,
 				o.logger,
 				endpoint,
+				o.helixTokenFile,
 				o.providerPairs[providerName]...,
 			)
 			if err != nil {
@@ -383,6 +387,7 @@ func NewProvider(
 	providerName provider.Name,
 	logger zerolog.Logger,
 	endpoint provider.Endpoint,
+	helixTokenFile string,
 	providerPairs ...types.CurrencyPair,
 ) (provider.Provider, error) {
 	endpoint.Name = providerName
@@ -431,7 +436,7 @@ func NewProvider(
 	case provider.ProviderGate:
 		return provider.NewGateProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderHelix:
-		return provider.NewHelixProvider(ctx, providerLogger, endpoint, providerPairs...)
+		return provider.NewHelixProvider(ctx, providerLogger, endpoint, helixTokenFile, providerPairs...)
 	case provider.ProviderHitBtc:
 		return provider.NewHitBtcProvider(ctx, providerLogger, endpoint, providerPairs...)
 	case provider.ProviderHuobi:

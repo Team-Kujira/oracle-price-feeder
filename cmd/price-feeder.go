@@ -234,6 +234,7 @@ func priceFeederCmdHandler(cmd *cobra.Command, args []string) error {
 		cfg.Decimals,
 		cfg.Periods,
 		volumeDatabase,
+		cfg.Helix,
 	)
 
 	telemetryCfg := telemetry.Config{}
