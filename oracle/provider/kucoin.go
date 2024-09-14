@@ -124,7 +124,8 @@ func (p *KucoinProvider) GetAvailablePairs() (map[string]struct{}, error) {
 
 func currencyPairToKucoinSymbol(pair types.CurrencyPair) string {
 	mapping := map[string]string{
-		"AXL": "WAXL",
+		"AXL":   "WAXL",
+		"MATIC": "POL",
 	}
 
 	base, found := mapping[pair.Base]

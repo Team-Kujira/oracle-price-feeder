@@ -128,5 +128,19 @@ func (p *OkxProvider) GetAvailablePairs() (map[string]struct{}, error) {
 }
 
 func currencyPairToOkxSymbol(pair types.CurrencyPair) string {
-	return pair.Join("-")
+	mapping := map[string]string{
+		"MATIC": "POL",
+	}
+
+	base, found := mapping[pair.Base]
+	if !found {
+		base = pair.Base
+	}
+
+	quote, found := mapping[pair.Quote]
+	if !found {
+		quote = pair.Quote
+	}
+
+	return base + "-" + quote
 }
