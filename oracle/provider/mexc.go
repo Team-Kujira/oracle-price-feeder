@@ -114,7 +114,8 @@ func (p *MexcProvider) GetAvailablePairs() (map[string]struct{}, error) {
 
 func currencyPairToMexcSymbol(pair types.CurrencyPair) string {
 	mapping := map[string]string{
-		"AXL": "WAXL",
+		"AXL":   "WAXL",
+		"MATIC": "POL",
 	}
 
 	base, found := mapping[pair.Base]

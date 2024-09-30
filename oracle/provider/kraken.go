@@ -176,10 +176,11 @@ func currencyPairToKrakenSymbol(pair types.CurrencyPair) string {
 		"USDJPY":  "ZUSDZJPY",
 	}
 	mapping := map[string]string{
-		"AXL":  "WAXL",
-		"BTC":  "XBT",
-		"LUNC": "LUNA",
-		"LUNA": "LUNA2",
+		"AXL":   "WAXL",
+		"BTC":   "XBT",
+		"LUNC":  "LUNA",
+		"LUNA":  "LUNA2",
+		"MATIC": "POL",
 	}
 
 	base, found := mapping[pair.Base]

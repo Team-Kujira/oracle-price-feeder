@@ -79,7 +79,7 @@ func NewBinanceProvider(
 	}
 
 	availablePairs, _ := provider.GetAvailablePairs()
-	provider.setPairs(pairs, availablePairs, nil)
+	provider.setPairs(pairs, availablePairs, currencyPairToBinanceSymbol)
 
 	go startPolling(provider, provider.endpoints.PollInterval, logger)
 	return provider, nil
@@ -139,4 +139,22 @@ func (p *BinanceProvider) GetAvailablePairs() (map[string]struct{}, error) {
 	}
 
 	return symbols, nil
+}
+
+func currencyPairToBinanceSymbol(pair types.CurrencyPair) string {
+	mapping := map[string]string{
+		"MATIC": "POL",
+	}
+
+	base, found := mapping[pair.Base]
+	if !found {
+		base = pair.Base
+	}
+
+	quote, found := mapping[pair.Quote]
+	if !found {
+		quote = pair.Quote
+	}
+
+	return base + quote
 }

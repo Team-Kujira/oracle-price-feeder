@@ -214,5 +214,19 @@ func (p *PhemexProvider) GetAvailablePairs() (map[string]struct{}, error) {
 }
 
 func currencyPairToPhemexSymbol(pair types.CurrencyPair) string {
-	return "s" + pair.String()
+	mapping := map[string]string{
+		"MATIC": "POL",
+	}
+
+	base, found := mapping[pair.Base]
+	if !found {
+		base = pair.Base
+	}
+
+	quote, found := mapping[pair.Quote]
+	if !found {
+		quote = pair.Quote
+	}
+
+	return "s" + base + quote
 }
