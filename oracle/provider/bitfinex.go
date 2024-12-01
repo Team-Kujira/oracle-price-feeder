@@ -134,8 +134,9 @@ func (p *BitfinexProvider) GetAvailablePairs() (map[string]struct{}, error) {
 
 func currencyPairToBitfinexSymbol(pair types.CurrencyPair) string {
 	mapping := map[string]string{
-		"LUNC": "LUNA",
-		"LUNA": "LUNA2",
+		"LUNC":  "LUNA",
+		"LUNA":  "LUNA2",
+		"MATIC": "POL",
 	}
 
 	base, found := mapping[pair.Base]

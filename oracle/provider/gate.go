@@ -114,7 +114,8 @@ func (p *GateProvider) GetAvailablePairs() (map[string]struct{}, error) {
 
 func currencyPairToGateSymbol(pair types.CurrencyPair) string {
 	mapping := map[string]string{
-		"AXL": "WAXL",
+		"AXL":   "WAXL",
+		"MATIC": "POL",
 	}
 
 	base, found := mapping[pair.Base]

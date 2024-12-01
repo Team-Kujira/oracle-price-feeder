@@ -123,5 +123,19 @@ func (p *LbankProvider) GetAvailablePairs() (map[string]struct{}, error) {
 }
 
 func currencyPairToLbankSymbol(pair types.CurrencyPair) string {
-	return strings.ToLower(pair.Join("_"))
+	mapping := map[string]string{
+		"MATIC": "POL",
+	}
+
+	base, found := mapping[pair.Base]
+	if !found {
+		base = pair.Base
+	}
+
+	quote, found := mapping[pair.Quote]
+	if !found {
+		quote = pair.Quote
+	}
+
+	return strings.ToLower(base + "_" + quote)
 }
