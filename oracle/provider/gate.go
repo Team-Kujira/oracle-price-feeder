@@ -116,6 +116,7 @@ func currencyPairToGateSymbol(pair types.CurrencyPair) string {
 	mapping := map[string]string{
 		"AXL":   "WAXL",
 		"MATIC": "POL",
+		"FTM":   "S",
 	}
 
 	base, found := mapping[pair.Base]
