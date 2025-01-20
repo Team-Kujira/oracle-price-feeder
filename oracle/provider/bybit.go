@@ -125,6 +125,7 @@ func (p *BybitProvider) GetAvailablePairs() (map[string]struct{}, error) {
 func currencyPairToBybitSymbol(pair types.CurrencyPair) string {
 	mapping := map[string]string{
 		"MATIC": "POL",
+		"FTM":   "S",
 	}
 
 	base, found := mapping[pair.Base]
