@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/shopspring/decimal"
 	"strconv"
 	"time"
 
@@ -99,7 +100,12 @@ func (p *UniswapV3Provider) Poll() error {
 			continue
 		}
 
-		sqrtx96 := strToDec(fmt.Sprintf("%v", decoded[0]))
+		// sqrtx96 := strToDec(fmt.Sprintf("%v", decoded[0]))
+		sqrtx96, err := decimal.NewFromString(fmt.Sprintf("%v", decoded[0]))
+		if err != nil {
+			p.logger.Err(err).Msg("failed to parse sqrtx96")
+			return err
+		}
 
 		base := pair.Base
 		quote := pair.Quote
@@ -122,7 +128,13 @@ func (p *UniswapV3Provider) Poll() error {
 				Msg("no decimals found")
 		}
 
-		price := sqrtx96.Power(2).Quo(sdk.NewDec(2).Power(192))
+		// price := sqrtx96.Power(2).Quo(sdk.NewDec(2).Power(192))
+		two := decimal.NewFromInt(2)
+		price, err := sdk.NewDecFromStr(sqrtx96.Pow(two).Div(two.Pow(decimal.NewFromInt(192))).String())
+		if err != nil {
+			p.logger.Err(err).Msg("failed to convert sqrtx96 decimal")
+			return err
+		}
 
 		var diff uint64
 		if decimalsBase >= decimalsQuote {
