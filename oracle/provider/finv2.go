@@ -130,7 +130,7 @@ func (p *FinV2Provider) Poll() error {
 			high = base
 		}
 
-		if high.GT(low.Mul(floatToDec(1.1))) {
+		if high.GT(low.Mul(floatToDec(1.25))) {
 			spread := high.Sub(low).Quo(low)
 			p.logger.Error().
 				Str("spread", spread.String()).
