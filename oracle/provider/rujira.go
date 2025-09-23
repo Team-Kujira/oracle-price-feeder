@@ -55,15 +55,13 @@ func (p *RujiraProvider) Poll() error {
 		return err
 	}
 
-	var response struct {
-		Tickers []struct {
-			BaseVolume string `json:"base_volume"`
-			TickerId   string `json:"ticker_id"`
-			LastPrice  string `json:"last_price"`
-		}
+	var tickers []struct {
+		BaseVolume string `json:"base_volume"`
+		TickerId   string `json:"ticker_id"`
+		LastPrice  string `json:"last_price"`
 	}
 
-	err = json.Unmarshal(content, &response)
+	err = json.Unmarshal(content, &tickers)
 	if err != nil {
 		return err
 	}
@@ -73,7 +71,7 @@ func (p *RujiraProvider) Poll() error {
 
 	timestamp := time.Now()
 
-	for _, ticker := range response.Tickers {
+	for _, ticker := range tickers {
 		if ticker.TickerId != "LQDY_USDC" {
 			continue
 		}
