@@ -74,6 +74,7 @@ const (
 	ProviderPionex             Name = "pionex"
 	ProviderPoloniex           Name = "poloniex"
 	ProviderPyth               Name = "pyth"
+	ProviderRujira             Name = "rujira"
 	ProviderShade              Name = "shade"
 	ProviderStride             Name = "stride"
 	ProviderUniswapV3          Name = "uniswapv3"
@@ -717,6 +718,8 @@ func (e *Endpoint) SetDefaults() {
 		defaults = poloniexDefaultEndpoints
 	case ProviderPyth:
 		defaults = pythDefaultEndpoints
+	case ProviderRujira:
+		defaults = rujiraDefaultEndpoints
 	case ProviderShade:
 		defaults = shadeDefaultEndpoints
 	case ProviderUniswapV3:

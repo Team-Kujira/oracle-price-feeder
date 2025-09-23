@@ -75,6 +75,7 @@ var (
 		provider.ProviderPionex:             {},
 		provider.ProviderPoloniex:           {},
 		provider.ProviderPyth:               {},
+		provider.ProviderRujira:             {},
 		provider.ProviderShade:              {},
 		provider.ProviderStride:             {},
 		provider.ProviderUniswapV3:          {},
