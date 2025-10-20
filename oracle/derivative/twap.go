@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	twapMaxTimeDeltaSeconds      = int64(120)
-	twapMinHistoryPeriodFraction = 0.8
+	twapMaxTimeDeltaSeconds      = int64(200)
+	twapMinHistoryPeriodFraction = 0.7
 	twapMaxPriceDeviation        = 0.1
 )
 
@@ -52,7 +52,7 @@ func (d *TwapDerivative) GetPrices(symbol string) (map[string]types.TickerPrice,
 		return nil, fmt.Errorf("pair not configured")
 	}
 
-	start := now.Add(-period)
+	start := now.Add(-period * 2)
 	tickers, err := d.history.GetTickerPrices(symbol, start, now)
 	if err != nil {
 		d.logger.Error().
