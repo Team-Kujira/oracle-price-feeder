@@ -877,6 +877,10 @@ func (p *provider) setTickerPrice(
 		return
 	}
 
+	if volume.IsNil() {
+		volume = sdk.ZeroDec()
+	}
+
 	if volume.IsZero() {
 		p.logger.Debug().
 			Str("symbol", symbol).
