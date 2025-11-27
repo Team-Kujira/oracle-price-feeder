@@ -190,7 +190,7 @@ In this example the resulting price will be following provider1 as long as it is
 ## Keyring
 
 Our keyring must be set up to sign transactions before running the price feeder.
-Additional info on the different keyring modes is available [here](https://docs.cosmos.network/master/run-node/keyring.html).
+Additional info on the different keyring modes is available [here](https://docs.cosmos.network/sdk/v0.53/user/run-node/keyring).
 **Please note that the `test` and `memory` modes are only for testing purposes.**
 **Do not use these modes for running the price feeder against mainnet.**
 
